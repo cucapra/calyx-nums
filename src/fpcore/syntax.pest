@@ -1,0 +1,163 @@
+WHITESPACE  = _{ " " | "\t" | NEWLINE }
+COMMENT     = _{ ";" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+
+open    = _{ "(" }
+close   = _{ ")" }
+
+file = { SOI ~ FPCore* ~ EOI }
+
+FPCore = {
+      open
+    ~ "FPCore"
+    ~ symbol_opt
+    ~ argument_list
+    ~ property*
+    ~ expr
+    ~ close
+}
+
+symbol_opt      = { symbol? }
+argument_list   = { open ~ argument* ~ close }
+
+dimension   = { number | symbol }
+annotation  = { "!" ~ property* }
+
+argument = {
+      symbol
+    | (open ~ annotation ~ symbol ~ dimension* ~ close)
+    | (open ~ symbol ~ dimension+ ~ close)
+}
+
+binder      = { "[" ~ symbol ~ expr ~ "]" }
+update_rule = { "[" ~ symbol ~ expr ~ expr ~ "]" }
+condition   = { "[" ~ symbol ~ expr ~ "]" }
+
+rules       = { update_rule* }
+conditions  = { condition* }
+
+if_kwd      = { "if" }
+let_kwd     = @{ "let" ~ "*"? }
+while_kwd   = @{ "while" ~ "*"? }
+for_kwd     = @{ "for" ~ "*"? }
+
+tensor_kwd      = { "tensor" }
+tensor_star_kwd = { "tensor*" }
+
+cast_kwd    = { "cast" }
+array_kwd   = { "array" }
+
+expr = {
+      constant
+    | number
+    | symbol
+    | (open ~ if_kwd ~ expr ~ expr ~ expr ~ close)
+    | (open ~ let_kwd ~ open ~ binder* ~ close ~ expr ~ close)
+    | (open ~ while_kwd ~ expr ~ open ~ rules ~ close ~ expr ~ close)
+    | (open ~ for_kwd ~ open ~ conditions ~ close
+        ~ open ~ rules ~ close ~ expr ~ close)
+    | (open ~ tensor_star_kwd ~ open ~ conditions ~ close
+        ~ open ~ rules ~ close ~ expr ~ close)
+    | (open ~ tensor_kwd ~ open ~ conditions ~ close ~ expr ~ close)
+    | (open ~ cast_kwd ~ expr ~ close)
+    | (open ~ array_kwd ~ expr* ~ close)
+    | (open ~ annotation ~ expr ~ close)
+    | (open ~ operation ~ expr+ ~ close)
+}
+
+number = {
+      rational
+    | decnum
+    | hexnum
+    | (open ~ "digits" ~ decnum ~ decnum ~ decnum ~ close)
+}
+
+property_name   = ${ ":" ~ symbol }
+property        = { property_name ~ data }
+
+data = {
+      string
+    | binder
+    | expr
+    | (open ~ data* ~ close)
+}
+
+pm_opt      = { "+" | "-" | "" }
+dot         = { "." }
+dec_digits  = @{ ASCII_DIGIT+ }
+hex_digits  = @{ ASCII_HEX_DIGIT+ }
+nonzero     = @{ "0"* ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+
+rational = ${
+    pm_opt ~ dec_digits ~ "/" ~ nonzero
+}
+
+dec_mantissa = ${ dec_digits ~ (dot ~ dec_digits)? | dot ~ dec_digits }
+hex_mantissa = ${ hex_digits ~ (dot ~ hex_digits)? | dot ~ hex_digits }
+
+exponent = ${ pm_opt ~ dec_digits }
+
+decnum = ${
+      pm_opt
+    ~ dec_mantissa
+    ~ ("e" ~ exponent)?
+}
+
+hexnum = ${
+      pm_opt
+    ~ "0x"
+    ~ hex_mantissa
+    ~ ("p" ~ exponent)?
+}
+
+special_char = {
+      "~" | "!" | "@" | "$" | "%" | "^" | "&" | "*" | "_"
+    | "-" | "+" | "=" | "<" | ">" | "." | "?" | "/" | ":"
+}
+
+symbol = @{
+      (ASCII_ALPHA | special_char)
+    ~ (ASCII_ALPHANUMERIC | special_char)*
+}
+
+escape      = @{ "\\" ~ ("\"" | "\\") }
+printable   = @{
+    '\x20'..'\x21' | '\x23'..'\x5b' | '\x5d'..'\x7e' | "\t" | NEWLINE | escape
+}
+
+string = ${ "\"" ~ printable* ~ "\"" }
+
+mathematical_op = {
+      "nearbyint" | "remainder" | "copysign" | "lgamma" | "tgamma"
+    | "acosh"     | "asinh"     | "atan2"    | "atanh"  | "expm1"
+    | "floor"     | "hypot"     | "log10"    | "log1p"  | "round"
+    | "trunc"     | "acos"      | "asin"     | "atan"   | "cbrt"
+    | "ceil"      | "cosh"      | "erfc"     | "exp2"   | "fabs"
+    | "fdim"      | "fmax"      | "fmin"     | "fmod"   | "log2"
+    | "sinh"      | "sqrt"      | "tanh"     | "cos"    | "erf"
+    | "exp"       | "fma"       | "log"      | "pow"    | "sin"
+    | "tan"       | "*"         | "+"        | "-"      | "/"
+}
+
+testing_op = {
+      "isfinite" | "isnormal" | "signbit" | "isinf" | "isnan"
+    | "and"      | "not"      | "!="      | "<="    | "=="
+    | ">="       | "or"       | "<"       | ">"
+}
+
+tensor_op = {
+    "size" | "dim" | "ref"
+}
+
+operation = { mathematical_op | testing_op | tensor_op }
+
+mathematical_const = {
+      "M_2_SQRTPI" | "INFINITY" | "SQRT1_2" | "LOG10E" | "M_1_PI"
+    | "M_2_PI"     | "LOG2E"    | "SQRT2"   | "LN10"   | "PI_2"
+    | "PI_4"       | "LN2"      | "NAN"     | "PI"     | "E"
+}
+
+boolean_const = {
+    "FALSE" | "TRUE"
+}
+
+constant = { mathematical_const | boolean_const }
