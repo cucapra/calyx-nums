@@ -7,6 +7,10 @@ pub struct Opts {
     /// input FPCore benchmark
     #[argh(positional)]
     pub file: PathBuf,
+
+    /// output file
+    #[argh(option, short = 'o')]
+    pub output: Option<PathBuf>,
 }
 
 impl Opts {
