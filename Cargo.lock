@@ -40,7 +40,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "calyxlibm"
+name = "calyx-nums"
 version = "0.1.0"
 dependencies = [
  "argh",

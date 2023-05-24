@@ -1,7 +1,8 @@
-use calyxlibm::fpcore::FPCoreParser;
-use calyxlibm::opts::Opts;
 use std::fs::{self, File};
 use std::io::{self, Write};
+
+use calyx_nums::fpcore::FPCoreParser;
+use calyx_nums::opts::Opts;
 
 fn main() -> io::Result<()> {
     let opts = Opts::parse();
