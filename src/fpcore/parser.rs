@@ -328,28 +328,28 @@ impl FPCoreParser {
         ))
     }
 
-    fn mathematical_op(input: Node) -> ParseResult<String> {
-        Ok(input.as_str().to_owned())
+    fn mathematical_op(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
-    fn testing_op(input: Node) -> ParseResult<String> {
-        Ok(input.as_str().to_owned())
+    fn testing_op(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
-    fn tensor_op(input: Node) -> ParseResult<String> {
-        Ok(input.as_str().to_owned())
+    fn tensor_op(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
     fn operation(input: Node) -> ParseResult<ast::Operation> {
         Ok(match_nodes!(input.into_children();
-            [mathematical_op(name)] => ast::Operation::Math(name),
-            [testing_op(name)] => ast::Operation::Test(name),
-            [tensor_op(name)] => ast::Operation::Tensor(name),
+            [mathematical_op(name)] => ast::Operation::Math(name.parse().unwrap()),
+            [testing_op(name)] => ast::Operation::Test(name.parse().unwrap()),
+            [tensor_op(name)] => ast::Operation::Tensor(name.parse().unwrap()),
         ))
     }
 
-    fn mathematical_const(input: Node) -> ParseResult<String> {
-        Ok(input.as_str().to_owned())
+    fn mathematical_const(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
     fn boolean_const(input: Node) -> ParseResult<&str> {
@@ -358,7 +358,7 @@ impl FPCoreParser {
 
     fn constant(input: Node) -> ParseResult<ast::Constant> {
         Ok(match_nodes!(input.into_children();
-            [mathematical_const(name)] => ast::Constant::Math(name),
+            [mathematical_const(name)] => ast::Constant::Math(name.parse().unwrap()),
             [boolean_const(name)] => ast::Constant::Bool(match name {
                 "TRUE" => true,
                 "FALSE" => false,

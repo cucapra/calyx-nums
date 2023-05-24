@@ -1,5 +1,7 @@
 //! Abstract syntax for FPCore.
 
+pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
+
 /// An FPCore benchmark.
 #[derive(Debug)]
 pub struct BenchmarkDef {
@@ -179,13 +181,13 @@ pub struct Symbol(pub String);
 
 #[derive(Debug)]
 pub enum Operation {
-    Math(String),
-    Test(String),
-    Tensor(String),
+    Math(MathOp),
+    Test(TestOp),
+    Tensor(TensorOp),
 }
 
 #[derive(Debug)]
 pub enum Constant {
-    Math(String),
+    Math(MathConst),
     Bool(bool),
 }
