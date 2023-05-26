@@ -35,7 +35,7 @@ impl FPCoreParser {
                 name,
                 args,
                 props: props.collect(),
-                body
+                body,
             },
         ))
     }
@@ -76,7 +76,7 @@ impl FPCoreParser {
             },
             [symbol(var), dimension(dims)..] => ast::ArgumentDef::Sized {
                 var,
-                dims: dims.collect()
+                dims: dims.collect(),
             },
         ))
     }
@@ -90,14 +90,14 @@ impl FPCoreParser {
     fn update_rule(input: Node) -> ParseResult<ast::UpdateRule> {
         Ok(match_nodes!(input.into_children();
             [symbol(var), expr(init), expr(update)] => ast::UpdateRule {
-                var, init, update,
+                var, init, update
             },
         ))
     }
 
     fn condition(input: Node) -> ParseResult<ast::Condition> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(val)] => ast::Condition { var, val, },
+            [symbol(var), expr(val)] => ast::Condition { var, val },
         ))
     }
 
@@ -197,11 +197,11 @@ impl FPCoreParser {
     fn number(input: Node) -> ParseResult<ast::Number> {
         Ok(match_nodes!(input.into_children();
             [rational(rational)] => ast::Number::Rational(rational),
-            [decnum(dec)] => ast::Number::Dec(dec),
-            [hexnum(hex)] => ast::Number::Hex(hex),
-            [decnum(mantissa), decnum(exponent), decnum(base)] => ast::Number::Digits(
-                ast::Digits { mantissa, exponent, base }
-            ),
+            [decnum(rational)] => ast::Number::Rational(rational),
+            [hexnum(rational)] => ast::Number::Rational(rational),
+            [decnum(mantissa), decnum(exponent), decnum(base)] => ast::Number::Digits {
+                mantissa, exponent, base
+            },
         ))
     }
 
@@ -228,10 +228,10 @@ impl FPCoreParser {
         ))
     }
 
-    fn pm_opt(input: Node) -> ParseResult<bool> {
+    fn pm_opt(input: Node) -> ParseResult<ast::Sign> {
         Ok(match input.as_str() {
-            "-" => true,
-            _ => false,
+            "-" => ast::Sign::Neg,
+            _ => ast::Sign::NonNeg,
         })
     }
 
@@ -239,74 +239,66 @@ impl FPCoreParser {
         Ok(())
     }
 
-    fn dec_digits(input: Node) -> ParseResult<String> {
-        Ok(input.as_str().to_owned())
+    fn dec_digits(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
-    fn hex_digits(input: Node) -> ParseResult<String> {
-        Ok(input.as_str().to_owned())
+    fn hex_digits(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
-    fn nonzero(input: Node) -> ParseResult<String> {
-        Ok(input.as_str().to_owned())
+    fn nonzero(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
     fn rational(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
-            [pm_opt(negative), dec_digits(numerator), nonzero(denominator)] =>
-                ast::Rational { negative, numerator, denominator, },
+            [pm_opt(sign), dec_digits(numerator), nonzero(denominator)] =>
+                ast::Rational::from_ratio_str(sign, numerator, denominator, 10).unwrap(),
         ))
     }
 
-    fn dec_mantissa(input: Node) -> ParseResult<(String, String)> {
+    fn dec_mantissa(input: Node) -> ParseResult<(&str, &str)> {
         Ok(match_nodes!(input.into_children();
             [dec_digits(integer)] =>
-                (integer, String::from("0")),
+                (integer, "0"),
             [dec_digits(integer), dot(_), dec_digits(fraction)] =>
                 (integer, fraction),
             [dot(_), dec_digits(fraction)] =>
-                (String::from("0"), fraction),
+                ("0", fraction),
         ))
     }
 
-    fn hex_mantissa(input: Node) -> ParseResult<(String, String)> {
+    fn hex_mantissa(input: Node) -> ParseResult<(&str, &str)> {
         Ok(match_nodes!(input.into_children();
             [hex_digits(integer)] =>
-                (integer, String::from("0")),
+                (integer, "0"),
             [hex_digits(integer), dot(_), hex_digits(fraction)] =>
                 (integer, fraction),
             [dot(_), hex_digits(fraction)] =>
-                (String::from("0"), fraction),
+                ("0", fraction),
         ))
     }
 
-    fn exponent(input: Node) -> ParseResult<ast::Exponent> {
+    fn exponent(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
+    }
+
+    fn decnum(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
-            [pm_opt(negative), dec_digits(exponent)] => ast::Exponent {
-                negative, exponent,
-            },
+            [pm_opt(sign), dec_mantissa((integer, fraction)), exponent(exponent)] =>
+                ast::Rational::from_scientific_str(sign, integer, fraction, 10, 10, exponent).unwrap(),
+            [pm_opt(sign), dec_mantissa((integer, fraction))] =>
+                ast::Rational::from_fixed_point_str(sign, integer, fraction, 10).unwrap(),
         ))
     }
 
-    fn decnum(input: Node) -> ParseResult<ast::DecNum> {
+    fn hexnum(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
-            [pm_opt(negative), dec_mantissa((integer, fraction)), exponent(exponent)] => ast::DecNum {
-                negative, integer, fraction, exponent: Some(exponent),
-            },
-            [pm_opt(negative), dec_mantissa((integer, fraction))] => ast::DecNum {
-                negative, integer, fraction, exponent: None,
-            },
-        ))
-    }
-
-    fn hexnum(input: Node) -> ParseResult<ast::HexNum> {
-        Ok(match_nodes!(input.into_children();
-            [pm_opt(negative), hex_mantissa((integer, fraction)), exponent(exponent)] => ast::HexNum {
-                negative, integer, fraction, exponent: Some(exponent),
-            },
-            [pm_opt(negative), hex_mantissa((integer, fraction))] => ast::HexNum {
-                negative, integer, fraction, exponent: None,
-            },
+            [pm_opt(sign), hex_mantissa((integer, fraction)), exponent(exponent)] =>
+                ast::Rational::from_scientific_str(sign, integer, fraction, 16, 2, exponent).unwrap(),
+            [pm_opt(sign), hex_mantissa((integer, fraction))] =>
+                ast::Rational::from_fixed_point_str(sign, integer, fraction, 16).unwrap(),
         ))
     }
 

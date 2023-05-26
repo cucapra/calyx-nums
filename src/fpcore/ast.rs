@@ -1,6 +1,7 @@
 //! Abstract syntax for FPCore.
 
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
+pub use super::literals::{Rational, Sign};
 
 /// An FPCore benchmark.
 #[derive(Debug)]
@@ -110,54 +111,11 @@ pub enum Expression {
 #[derive(Debug)]
 pub enum Number {
     Rational(Rational),
-    Dec(DecNum),
-    Hex(HexNum),
-    Digits(Digits),
-}
-
-#[derive(Debug)]
-pub struct Rational {
-    pub negative: bool,
-    /// Decimal digits of the numerator.
-    pub numerator: String,
-    /// Decimal digits of the denominator (not all zero).
-    pub denominator: String,
-}
-
-#[derive(Debug)]
-pub struct Exponent {
-    pub negative: bool,
-    /// Decimal digits of the exponent.
-    pub exponent: String,
-}
-
-#[derive(Debug)]
-pub struct DecNum {
-    pub negative: bool,
-    /// Decimal digits of the integer part.
-    pub integer: String,
-    /// Decimal digits of the fractional part.
-    pub fraction: String,
-    /// Exponent of an optional multiplier (with an implicit base of 10).
-    pub exponent: Option<Exponent>,
-}
-
-#[derive(Debug)]
-pub struct HexNum {
-    pub negative: bool,
-    /// Hexadecimal digits of the integer part.
-    pub integer: String,
-    /// Hexadecimal digits of the fractional part.
-    pub fraction: String,
-    /// Exponent of an optional multiplier (with an implicit base of 2).
-    pub exponent: Option<Exponent>,
-}
-
-#[derive(Debug)]
-pub struct Digits {
-    pub mantissa: DecNum,
-    pub exponent: DecNum,
-    pub base: DecNum,
+    Digits {
+        mantissa: Rational,
+        exponent: Rational,
+        base: Rational,
+    },
 }
 
 #[derive(Debug)]
