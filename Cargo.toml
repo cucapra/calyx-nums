@@ -5,6 +5,9 @@ edition = "2021"
 
 [dependencies]
 argh = "0.1.10"
+calyx-frontend = "0.2.1"
+calyx-ir = "0.2.1"
+calyx-utils = "0.2.1"
 num = "0.4.0"
 pest = "2.0"
 pest_consume = "1.1.3"

@@ -1,5 +1,7 @@
 //! Abstract syntax for FPCore.
 
+use calyx_utils::Id;
+
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
 pub use super::literals::{Rational, Sign};
 
@@ -135,7 +137,7 @@ pub enum Data {
 }
 
 #[derive(Debug)]
-pub struct Symbol(pub String);
+pub struct Symbol(pub(super) Id);
 
 #[derive(Debug)]
 pub enum Operation {
@@ -148,4 +150,20 @@ pub enum Operation {
 pub enum Constant {
     Math(MathConst),
     Bool(bool),
+}
+
+impl Symbol {
+    pub fn as_str(&self) -> &str {
+        self.0.as_ref()
+    }
+
+    pub fn as_id(&self) -> Id {
+        self.0
+    }
+}
+
+impl std::fmt::Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }

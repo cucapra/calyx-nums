@@ -303,7 +303,7 @@ impl FPCoreParser {
     }
 
     fn symbol(input: Node) -> ParseResult<ast::Symbol> {
-        Ok(ast::Symbol(input.as_str().to_owned()))
+        Ok(ast::Symbol(input.as_str().into()))
     }
 
     fn printable(input: Node) -> ParseResult<&str> {
