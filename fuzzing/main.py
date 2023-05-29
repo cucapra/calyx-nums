@@ -68,14 +68,17 @@ def test_bench(
 
         return result['memories']['mem'][0]
 
-def format_diagnostic(benchmark: FPCore, got: Any, expected: int):
+def format_diagnostic(
+    benchmark: FPCore, vals: list[int], got: Any, expected: int
+):
     return (
         '  ---\n'
         '  FPCore: {core}\n'
+        '  args: {args}\n'
         '  got: {got}\n'
         '  expected: {expected}\n'
         '  ...'
-    ).format(core=benchmark, got=got, expected=expected)
+    ).format(core=benchmark, args=vals, got=got, expected=expected)
 
 def main():
     parser = argparse.ArgumentParser(description='FPCore fuzzer.')
@@ -159,7 +162,7 @@ def main():
             print(f'ok - {interp}')
         else:
             print('ok' if comp == interp else 'not ok')
-            print(format_diagnostic(bench, comp, interp))
+            print(format_diagnostic(bench, bench_vals, comp, interp))
 
 if __name__ == '__main__':
     main()
