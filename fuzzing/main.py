@@ -57,7 +57,9 @@ def test_bench(
         comp_result.check_returncode()
 
         bench = comp_result.stdout
-        main = harness('anonymous', args, width)
+        comb = f'comb component {benchmark.name}' in bench
+
+        main = harness(benchmark.name, comb, args, width)
 
         sim_result = simulate(f'{bench}\n{main}', data)
         sim_result.check_returncode()
@@ -134,7 +136,13 @@ def main():
         bench_args = [f'x{i}' for i in range(args.argc)]
         bench_vals = [random.randint(0, args.lit_max) for _ in range(args.argc)]
 
-        bench = random_fpcore(bench_args, args.size, args.lit_max, args.width)
+        bench = random_fpcore(
+            'benchmark',
+            bench_args,
+            args.size,
+            args.lit_max,
+            args.width
+        )
 
         comp = test_bench(
             bench,
@@ -144,6 +152,7 @@ def main():
             args.nums_exec,
             args.lib_path
         )
+
         interp = bench.interp(bench_vals)
 
         if comp == interp and not args.verbose:

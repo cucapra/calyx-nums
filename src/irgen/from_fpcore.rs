@@ -2,7 +2,6 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use calyx_frontend::NumAttr;
 use calyx_ir::{self as ir, build_assignments};
 use calyx_utils::{CalyxResult, Error, NameGenerator};
 use num::bigint::TryFromBigIntError;
@@ -207,24 +206,12 @@ fn compile_benchmark(
         ast::Symbol::as_id,
     );
 
-    let mut done_port = ir::PortDef {
-        name: "done".into(),
-        width: 1,
+    let mut ports = vec![ir::PortDef {
+        name: "out".into(),
+        width,
         direction: ir::Direction::Output,
         attributes: Default::default(),
-    };
-
-    done_port.attributes.insert(NumAttr::Done, 0);
-
-    let mut ports = vec![
-        done_port,
-        ir::PortDef {
-            name: "out".into(),
-            width,
-            direction: ir::Direction::Output,
-            attributes: Default::default(),
-        },
-    ];
+    }];
 
     ports.extend(def.args.iter().map(|arg| match arg {
         ast::ArgumentDef::Id(id) => ir::PortDef {
@@ -245,23 +232,18 @@ fn compile_benchmark(
 
     let (port, control) = compile_expression(&def.body, width, &mut builder)?;
 
-    let mut assigns = vec![builder.build_assignment(
+    let assigns = vec![builder.build_assignment(
         builder.component.signature.borrow().get("out"),
         port,
         ir::Guard::True,
     )];
 
-    if let ir::Control::Empty(_) = control {
-        let one = builder.add_constant(1, 1);
-        let signature = &builder.component.signature;
-
-        assigns.extend(build_assignments!(builder;
-            signature["done"] = ? one["out"];
-        ));
-    }
+    let is_comb = matches!(control, ir::Control::Empty(_));
 
     builder.add_continuous_assignments(assigns);
     builder.component.control = Rc::new(RefCell::new(control));
+
+    component.is_comb = is_comb;
 
     Ok(component)
 }

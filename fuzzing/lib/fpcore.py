@@ -2,7 +2,7 @@ import math
 import operator
 import random
 from dataclasses import dataclass
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Optional
 
 class Expr:
     def interp(self, context: dict[str, int]) -> int:
@@ -49,6 +49,7 @@ class Operation(Expr):
 
 @dataclass
 class FPCore:
+    name: Optional[str]
     args: list[str]
     body: Expr
 
@@ -56,9 +57,10 @@ class FPCore:
         return self.body.interp(dict(zip(self.args, args)))
 
     def __str__(self) -> str:
+        name = '' if self.name is None else self.name
         args = ' '.join(self.args)
 
-        return f'(FPCore ({args}) {self.body})'
+        return f'(FPCore {name}({args}) {self.body})'
 
 def _wrap(fn: Callable[..., int], width: int):
     return lambda *args: fn(*args) & ((1 << width) - 1)
@@ -84,7 +86,9 @@ def random_expr(vars: list[str], lpi: float, lmax: int, width: int) -> Expr:
     else:
         return random_op(vars, lpi, lmax, width)
 
-def random_fpcore(args: list[str], lpi: float, lmax: int, width: int) -> FPCore:
+def random_fpcore(
+    name: Optional[str], args: list[str], lpi: float, lmax: int, width: int
+) -> FPCore:
     body = random_expr(args, lpi, lmax, width)
 
-    return FPCore(args, body)
+    return FPCore(name, args, body)
