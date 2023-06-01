@@ -1,3 +1,4 @@
+mod conv;
 mod from_fpcore;
 pub mod stdlib;
 
