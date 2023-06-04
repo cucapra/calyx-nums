@@ -66,8 +66,8 @@ expr = {
 
 number = {
       rational
-    | decnum
     | hexnum
+    | decnum
     | (open ~ "digits" ~ decnum ~ decnum ~ decnum ~ close)
 }
 
