@@ -1,5 +1,7 @@
 //! Numeric literals.
 
+use std::fmt;
+
 use num::bigint::{BigInt, BigUint, ParseBigIntError};
 use num::rational::Ratio;
 use num::traits::{Num, Pow, Zero};
@@ -77,6 +79,15 @@ impl Rational {
             Sign::NonNeg => false,
             Sign::Neg => true,
         }
+    }
+}
+
+impl fmt::Display for Rational {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_negative() {
+            write!(f, "-")?
+        }
+        write!(f, "{}", self.value)
     }
 }
 

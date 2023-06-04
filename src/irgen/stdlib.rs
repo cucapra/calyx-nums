@@ -1,39 +1,12 @@
 //! Standard library primitive declarations.
 
-pub enum Parameters<'a> {
-    Bitnum {
-        width: &'a str,
-    },
-    FixedPoint {
-        width: &'a str,
-        int_width: &'a str,
-        frac_width: &'a str,
-    },
-}
+use smallvec::{smallvec, SmallVec};
 
-impl<'a> Parameters<'a> {
-    const fn bitnum_default() -> Self {
-        Self::Bitnum { width: "WIDTH" }
-    }
+use crate::format::Format;
 
-    const fn fixed_point_default() -> Self {
-        Self::FixedPoint {
-            width: "WIDTH",
-            int_width: "INT_WIDTH",
-            frac_width: "FRAC_WIDTH",
-        }
-    }
-
-    pub const fn build_bitnum_params(width: u64) -> [u64; 1] {
-        [width]
-    }
-
-    pub const fn build_fixed_point_params(
-        width: u64,
-        int_width: u64,
-    ) -> [u64; 3] {
-        [width, int_width, width - int_width]
-    }
+pub enum Parameters {
+    Bitnum,
+    FixedPoint,
 }
 
 pub enum Arguments<'a> {
@@ -79,8 +52,21 @@ pub struct Primitive<'a> {
     pub name: &'a str,
     pub prefix_hint: &'a str,
     pub signature: Signature<'a>,
-    pub params: Parameters<'a>,
+    pub params: Parameters,
     pub is_comb: bool,
+}
+
+impl<'a> Primitive<'a> {
+    pub fn build_params(&self, format: &Format) -> SmallVec<[u64; 3]> {
+        match self.params {
+            Parameters::Bitnum => smallvec![format.width],
+            Parameters::FixedPoint => smallvec![
+                format.width,
+                format.width - format.frac_width,
+                format.frac_width
+            ],
+        }
+    }
 }
 
 pub mod compile {
@@ -92,7 +78,7 @@ pub mod compile {
         name: "std_add",
         prefix_hint: "add",
         signature: Signature::binary_default(),
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: true,
     };
 }
@@ -106,7 +92,7 @@ pub mod core {
         name: "std_sub",
         prefix_hint: "sub",
         signature: Signature::binary_default(),
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: true,
     };
 }
@@ -120,7 +106,7 @@ pub mod binary_operators {
         name: "std_fp_add",
         prefix_hint: "add",
         signature: Signature::binary_default(),
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: true,
     };
 
@@ -128,7 +114,7 @@ pub mod binary_operators {
         name: "std_fp_sub",
         prefix_hint: "sub",
         signature: Signature::binary_default(),
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: true,
     };
 
@@ -136,7 +122,7 @@ pub mod binary_operators {
         name: "std_fp_mult_pipe",
         prefix_hint: "mul",
         signature: Signature::binary_default(),
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: false,
     };
 
@@ -147,7 +133,7 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_remainder",
         },
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: false,
     };
 
@@ -158,7 +144,7 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_quotient",
         },
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: false,
     };
 
@@ -166,7 +152,7 @@ pub mod binary_operators {
         name: "std_fp_sadd",
         prefix_hint: "add",
         signature: Signature::binary_default(),
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: true,
     };
 
@@ -174,7 +160,7 @@ pub mod binary_operators {
         name: "std_fp_ssub",
         prefix_hint: "sub",
         signature: Signature::binary_default(),
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: true,
     };
 
@@ -182,7 +168,7 @@ pub mod binary_operators {
         name: "std_fp_smult_pipe",
         prefix_hint: "mul",
         signature: Signature::binary_default(),
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: false,
     };
 
@@ -193,7 +179,7 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_remainder",
         },
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: false,
     };
 
@@ -204,7 +190,7 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_quotient",
         },
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: false,
     };
 
@@ -212,7 +198,7 @@ pub mod binary_operators {
         name: "std_mult_pipe",
         prefix_hint: "mul",
         signature: Signature::binary_default(),
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: false,
     };
 
@@ -223,7 +209,7 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_remainder",
         },
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: false,
     };
 
@@ -234,15 +220,31 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_quotient",
         },
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: false,
+    };
+
+    pub const STD_SADD: Primitive = Primitive {
+        name: "std_sadd",
+        prefix_hint: "add",
+        signature: Signature::binary_default(),
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_SSUB: Primitive = Primitive {
+        name: "std_ssub",
+        prefix_hint: "sub",
+        signature: Signature::binary_default(),
+        params: Parameters::Bitnum,
+        is_comb: true,
     };
 
     pub const STD_SMULT_PIPE: Primitive = Primitive {
         name: "std_smult_pipe",
         prefix_hint: "mul",
         signature: Signature::binary_default(),
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: false,
     };
 
@@ -253,7 +255,7 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_remainder",
         },
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: false,
     };
 
@@ -264,7 +266,7 @@ pub mod binary_operators {
             args: Arguments::binary_default(),
             output: "out_quotient",
         },
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: false,
     };
 }
@@ -278,7 +280,7 @@ pub mod math {
         name: "fp_sqrt",
         prefix_hint: "sqrt",
         signature: Signature::unary_default(),
-        params: Parameters::fixed_point_default(),
+        params: Parameters::FixedPoint,
         is_comb: false,
     };
 
@@ -286,7 +288,7 @@ pub mod math {
         name: "sqrt",
         prefix_hint: "sqrt",
         signature: Signature::unary_default(),
-        params: Parameters::bitnum_default(),
+        params: Parameters::Bitnum,
         is_comb: false,
     };
 }

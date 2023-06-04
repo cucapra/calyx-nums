@@ -37,7 +37,7 @@ fn main() -> CalyxResult<()> {
 
     let lib = ir::LibrarySignatures::from(workspace.externs);
 
-    let ctx = irgen::compile_fpcore(&benchmarks, opts.width, lib)?;
+    let ctx = irgen::compile_fpcore(&benchmarks, &opts.format, lib)?;
 
     let mut out: Box<dyn Write> = if let Some(path) = opts.output {
         Box::new(File::create(path)?)

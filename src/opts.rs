@@ -1,6 +1,8 @@
 use argh::FromArgs;
 use std::path::PathBuf;
 
+use crate::format::Format;
+
 /// Calyx back end for FPCore.
 #[derive(FromArgs)]
 pub struct Opts {
@@ -16,9 +18,9 @@ pub struct Opts {
     #[argh(option, short = 'o')]
     pub output: Option<PathBuf>,
 
-    /// word size
-    #[argh(option, default = "32")]
-    pub width: u64,
+    /// global numeric format
+    #[argh(option, default = "Default::default()")]
+    pub format: Format,
 }
 
 impl Opts {

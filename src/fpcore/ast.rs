@@ -1,6 +1,7 @@
 //! Abstract syntax for FPCore.
 
 use calyx_utils::Id;
+use std::fmt;
 
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
 pub use super::literals::{Rational, Sign};
@@ -162,8 +163,8 @@ impl Symbol {
     }
 }
 
-impl std::fmt::Display for Symbol {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }

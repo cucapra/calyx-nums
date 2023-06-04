@@ -126,6 +126,7 @@ dependencies = [
  "pest",
  "pest_consume",
  "pest_derive",
+ "smallvec",
 ]
 
 [[package]]

@@ -4,9 +4,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use calyx_ir::{self as ir, build_assignments};
 use calyx_utils::{CalyxResult, Error, NameGenerator};
-use num::bigint::TryFromBigIntError;
 
-use super::stdlib::{self, Arguments, Parameters, Primitive};
+use super::stdlib::{self, Arguments, Primitive};
+use crate::format::Format;
 use crate::fpcore::ast;
 
 /// Prefix for generated groups.
@@ -15,32 +15,34 @@ const GROUP_PREFIX: &str = "grp";
 /// Prefix for components generated from anonymous FPCores.
 const ANONYMOUS_PREFIX: &str = "anonymous";
 
-fn get_literal_val(num: &ast::Number) -> CalyxResult<u64> {
-    match num {
-        ast::Number::Rational(rational) => {
-            // Assuming simple constants for now
-            assert!(!rational.is_negative());
-            assert!(rational.value.is_integer());
-
-            rational.value.to_integer().try_into().map_err(
-                |err: TryFromBigIntError<_>| {
-                    Error::misc(format!(
-                        "Constant value {} cannot fit in 64 bits",
-                        err.into_original()
-                    ))
-                },
-            )
-        }
+fn get_constant_value(num: &ast::Number, format: &Format) -> CalyxResult<u64> {
+    let rational = match num {
+        ast::Number::Rational(rational) => rational,
         ast::Number::Digits { .. } => unimplemented!(),
-    }
+    };
+
+    let conv = if format.is_signed {
+        ast::Rational::to_fixed_point
+    } else {
+        ast::Rational::to_unsigned_fixed_point
+    };
+
+    conv(rational, format.width, format.frac_width).ok_or_else(|| {
+        Error::misc(format!(
+            "Constant value {} is not representable in the given format",
+            rational
+        ))
+    })
 }
 
 fn compile_number(
     num: &ast::Number,
-    width: u64,
+    format: &Format,
     builder: &mut ir::Builder,
 ) -> CalyxResult<ir::RRC<ir::Port>> {
-    let cell = builder.add_constant(get_literal_val(num)?, width);
+    let val = get_constant_value(num, format)?;
+
+    let cell = builder.add_constant(val, format.width);
     let port = cell.borrow().get("out");
 
     Ok(port)
@@ -59,40 +61,109 @@ fn get_symbol(
         .ok_or_else(|| Error::misc(format!("Undefined symbol `{id}`")))
 }
 
-fn get_primitive_operation(op: &ast::Operation) -> &Primitive {
+fn get_primitive_adder(
+    fixed_point: bool,
+    signed: bool,
+) -> &'static Primitive<'static> {
+    match (fixed_point, signed) {
+        (false, false) => &stdlib::compile::STD_ADD,
+        (false, true) => &stdlib::binary_operators::STD_SADD,
+        (true, false) => &stdlib::binary_operators::STD_FP_ADD,
+        (true, true) => &stdlib::binary_operators::STD_FP_SADD,
+    }
+}
+
+fn get_primitive_subtractor(
+    fixed_point: bool,
+    signed: bool,
+) -> &'static Primitive<'static> {
+    match (fixed_point, signed) {
+        (false, false) => &stdlib::core::STD_SUB,
+        (false, true) => &stdlib::binary_operators::STD_SSUB,
+        (true, false) => &stdlib::binary_operators::STD_FP_SUB,
+        (true, true) => &stdlib::binary_operators::STD_FP_SSUB,
+    }
+}
+
+fn get_primitive_multiplier(
+    fixed_point: bool,
+    signed: bool,
+) -> &'static Primitive<'static> {
+    match (fixed_point, signed) {
+        (false, false) => &stdlib::binary_operators::STD_MULT_PIPE,
+        (false, true) => &stdlib::binary_operators::STD_SMULT_PIPE,
+        (true, false) => &stdlib::binary_operators::STD_FP_MULT_PIPE,
+        (true, true) => &stdlib::binary_operators::STD_FP_SMULT_PIPE,
+    }
+}
+
+fn get_primitive_divider(
+    fixed_point: bool,
+    signed: bool,
+) -> &'static Primitive<'static> {
+    match (fixed_point, signed) {
+        (false, false) => &stdlib::binary_operators::STD_DIV_PIPE_QUOTIENT,
+        (false, true) => &stdlib::binary_operators::STD_SDIV_PIPE_QUOTIENT,
+        (true, false) => &stdlib::binary_operators::STD_FP_DIV_PIPE_QUOTIENT,
+        (true, true) => &stdlib::binary_operators::STD_FP_SDIV_PIPE_QUOTIENT,
+    }
+}
+
+fn get_primitive_operation(
+    op: &ast::Operation,
+    format: &Format,
+) -> &'static Primitive<'static> {
+    let is_fixed_point = format.frac_width != 0;
+
     match op {
         ast::Operation::Math(op) => match op {
-            ast::MathOp::Add => &stdlib::compile::STD_ADD,
-            ast::MathOp::Sub => &stdlib::core::STD_SUB,
-            ast::MathOp::Mul => &stdlib::binary_operators::STD_MULT_PIPE,
-            ast::MathOp::Div => {
-                &stdlib::binary_operators::STD_DIV_PIPE_QUOTIENT
+            ast::MathOp::Add => {
+                get_primitive_adder(is_fixed_point, format.is_signed)
             }
-            ast::MathOp::Sqrt => &stdlib::math::STD_SQRT,
+            ast::MathOp::Sub => {
+                get_primitive_subtractor(is_fixed_point, format.is_signed)
+            }
+            ast::MathOp::Mul => {
+                get_primitive_multiplier(is_fixed_point, format.is_signed)
+            }
+            ast::MathOp::Div => {
+                get_primitive_divider(is_fixed_point, format.is_signed)
+            }
+            ast::MathOp::Sqrt => {
+                if format.is_signed {
+                    log::debug!("Using sqrt with a signed format");
+                }
+
+                match is_fixed_point {
+                    false => &stdlib::math::STD_SQRT,
+                    true => &stdlib::math::STD_FP_SQRT,
+                }
+            }
             _ => unimplemented!(),
         },
-        _ => unimplemented!(),
+        ast::Operation::Test(_) => unimplemented!(),
+        ast::Operation::Tensor(_) => unimplemented!(),
     }
 }
 
 fn compile_operation(
     op: &ast::Operation,
     args: &[ast::Expression],
-    width: u64,
+    format: &Format,
     builder: &mut ir::Builder,
 ) -> CalyxResult<(ir::RRC<ir::Port>, ir::Control)> {
-    let prim_decl = get_primitive_operation(op);
+    let prim_decl = get_primitive_operation(op, format);
 
     let (arg_ports, arg_ctrl): (Vec<_>, Vec<_>) = itertools::process_results(
         args.iter()
-            .map(|arg| compile_expression(arg, width, builder)),
+            .map(|arg| compile_expression(arg, format, builder)),
         |iter| iter.unzip(),
     )?;
 
     let prim = builder.add_primitive(
         prim_decl.prefix_hint,
         prim_decl.name,
-        &Parameters::build_bitnum_params(width),
+        &prim_decl.build_params(format),
     );
 
     let mut assigns = match prim_decl.signature.args {
@@ -178,18 +249,18 @@ fn compile_operation(
 
 fn compile_expression(
     expr: &ast::Expression,
-    width: u64,
+    format: &Format,
     builder: &mut ir::Builder,
 ) -> CalyxResult<(ir::RRC<ir::Port>, ir::Control)> {
     match expr {
         ast::Expression::Num(num) => {
-            Ok((compile_number(num, width, builder)?, ir::Control::empty()))
+            Ok((compile_number(num, format, builder)?, ir::Control::empty()))
         }
         ast::Expression::Id(id) => {
             Ok((get_symbol(id, builder.component)?, ir::Control::empty()))
         }
         ast::Expression::Op(op, args) => {
-            compile_operation(op, args, width, builder)
+            compile_operation(op, args, format, builder)
         }
         _ => unimplemented!(),
     }
@@ -197,7 +268,7 @@ fn compile_expression(
 
 fn compile_benchmark(
     def: &ast::BenchmarkDef,
-    width: u64,
+    format: &Format,
     lib: &ir::LibrarySignatures,
     name_gen: &mut NameGenerator,
 ) -> CalyxResult<ir::Component> {
@@ -208,7 +279,7 @@ fn compile_benchmark(
 
     let mut ports = vec![ir::PortDef {
         name: "out".into(),
-        width,
+        width: format.width,
         direction: ir::Direction::Output,
         attributes: Default::default(),
     }];
@@ -216,7 +287,7 @@ fn compile_benchmark(
     ports.extend(def.args.iter().map(|arg| match arg {
         ast::ArgumentDef::Id(id) => ir::PortDef {
             name: id.as_id(),
-            width,
+            width: format.width,
             direction: ir::Direction::Input,
             attributes: Default::default(),
         },
@@ -230,7 +301,7 @@ fn compile_benchmark(
     let mut component = ir::Component::new(name, ports, false, None);
     let mut builder = ir::Builder::new(&mut component, lib);
 
-    let (port, control) = compile_expression(&def.body, width, &mut builder)?;
+    let (port, control) = compile_expression(&def.body, format, &mut builder)?;
 
     let assigns = vec![builder.build_assignment(
         builder.component.signature.borrow().get("out"),
@@ -250,7 +321,7 @@ fn compile_benchmark(
 
 pub fn compile_fpcore(
     defs: &[ast::BenchmarkDef],
-    width: u64,
+    format: &Format,
     math_lib: ir::LibrarySignatures,
 ) -> CalyxResult<ir::Context> {
     let mut name_gen = NameGenerator::with_prev_defined_names(
@@ -261,7 +332,7 @@ pub fn compile_fpcore(
 
     let comps: Vec<_> = defs
         .iter()
-        .map(|def| compile_benchmark(def, width, &math_lib, &mut name_gen))
+        .map(|def| compile_benchmark(def, format, &math_lib, &mut name_gen))
         .collect::<CalyxResult<_>>()?;
 
     Ok(ir::Context {

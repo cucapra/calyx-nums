@@ -25,7 +25,7 @@ def compile(file: Path, width: int, nums: Path, lib: Path):
     return subprocess.run([
         nums,
         file,
-        '--width', str(width),
+        '--format', f'UQ{width}.0',
         '--lib-path', lib
     ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, encoding='utf-8')
 
