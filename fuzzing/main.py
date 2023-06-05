@@ -7,25 +7,26 @@ from pathlib import Path
 from typing import Any
 
 from lib.fpcore import FPCore, random_fpcore
+from lib.fxp import FixedPoint, QFormat
 from lib.harness import harness
 
-def format_data(data: list[int], width: int):
+def format_data(data: list[FixedPoint], fmt: QFormat):
     return json.dumps({
         'mem': {
-            'data': data,
+            'data': [x.bits for x in data],
             'format': {
                 'numeric_type': 'bitnum',
                 'is_signed': False,
-                'width': width
+                'width': fmt.width
             }
         }
     })
 
-def compile(file: Path, width: int, nums: Path, lib: Path):
+def compile(file: Path, fmt: QFormat, nums: Path, lib: Path):
     return subprocess.run([
         nums,
         file,
-        '--format', f'UQ{width}.0',
+        '--format', str(fmt),
         '--lib-path', lib
     ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, encoding='utf-8')
 
@@ -39,10 +40,10 @@ def simulate(futil: str, data: Path):
     ], stdout=subprocess.PIPE, input=futil, encoding='utf-8')
 
 def test_bench(
-    benchmark: FPCore,
+    benchmark: FPCore[FixedPoint],
     args: list[str],
-    vals: list[int],
-    width: int,
+    vals: list[FixedPoint],
+    fmt: QFormat,
     nums: Path,
     lib: Path
 ):
@@ -51,15 +52,15 @@ def test_bench(
         data = Path(tmp, 'dat.json')
 
         core.write_text(str(benchmark))
-        data.write_text(format_data(vals, width))
+        data.write_text(format_data(vals, fmt))
 
-        comp_result = compile(core, width, nums, lib)
+        comp_result = compile(core, fmt, nums, lib)
         comp_result.check_returncode()
 
         bench = comp_result.stdout
         comb = f'comb component {benchmark.name}' in bench
 
-        main = harness(benchmark.name, comb, args, width)
+        main = harness(benchmark.name or 'anonymous', comb, args, fmt.width)
 
         sim_result = simulate(f'{bench}\n{main}', data)
         sim_result.check_returncode()
@@ -69,16 +70,23 @@ def test_bench(
         return result['memories']['mem'][0]
 
 def format_diagnostic(
-    benchmark: FPCore, vals: list[int], got: Any, expected: int
+    benchmark: FPCore[FixedPoint],
+    vals: list[FixedPoint],
+    fmt: QFormat,
+    got: Any,
+    expected: int
 ):
+    args = ', '.join(map(hex, vals))
+
     return (
         '  ---\n'
         '  FPCore: {core}\n'
-        '  args: {args}\n'
+        '  args: [{args}]\n'
+        '  format: {fmt}\n'
         '  got: {got}\n'
         '  expected: {expected}\n'
         '  ...'
-    ).format(core=benchmark, args=vals, got=got, expected=expected)
+    ).format(core=benchmark, args=args, fmt=fmt, got=got, expected=expected)
 
 def main():
     parser = argparse.ArgumentParser(description='FPCore fuzzer.')
@@ -104,7 +112,7 @@ def main():
         default=10,
         help='number of benchmarks to generate'
     )
-    parser.add_argument('--width', type=int, default=32, help='word size')
+    parser.add_argument('--format', default='UQ32.0', help='numeric format')
     parser.add_argument(
         '--argc',
         type=int,
@@ -118,12 +126,6 @@ def main():
         help='target size for the generated benchmarks'
     )
     parser.add_argument(
-        '--lit-max',
-        type=int,
-        default=64,
-        help='maximum value for generated literals'
-    )
-    parser.add_argument(
         '-v',
         '--verbose',
         action='store_true',
@@ -132,37 +134,35 @@ def main():
 
     args = parser.parse_args()
 
+    fmt = QFormat(args.format)
+
     print('TAP version 14')
     print(f'1..{args.trials}')
 
     for _ in range(args.trials):
         bench_args = [f'x{i}' for i in range(args.argc)]
-        bench_vals = [random.randint(0, args.lit_max) for _ in range(args.argc)]
+        bench_vals = [
+            fmt.decode(random.getrandbits(fmt.width)) for _ in range(args.argc)
+        ]
 
-        bench = random_fpcore(
-            'benchmark',
-            bench_args,
-            args.size,
-            args.lit_max,
-            args.width
-        )
+        bench = random_fpcore('benchmark', bench_args, args.size, fmt)
 
         comp = test_bench(
             bench,
             bench_args,
             bench_vals,
-            args.width,
+            fmt,
             args.nums_exec,
             args.lib_path
         )
 
-        interp = bench.interp(bench_vals)
+        interp = bench.interp(bench_vals).bits
 
         if comp == interp and not args.verbose:
             print(f'ok - {interp}')
         else:
             print('ok' if comp == interp else 'not ok')
-            print(format_diagnostic(bench, bench_vals, comp, interp))
+            print(format_diagnostic(bench, bench_vals, fmt, comp, interp))
 
 if __name__ == '__main__':
     main()
