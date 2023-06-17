@@ -6,6 +6,8 @@ use std::process::{Command, Stdio};
 use std::string::FromUtf8Error;
 use std::{fmt, thread};
 
+use crate::fpcore::ast;
+
 /// Invokes Sollya with the given command.
 pub fn sollya<S>(cmd: &[u8], args: &[S]) -> Result<String, SollyaError>
 where
@@ -115,5 +117,80 @@ impl From<io::Error> for SollyaError {
 impl From<FromUtf8Error> for SollyaError {
     fn from(_: FromUtf8Error) -> Self {
         SollyaError::Utf8
+    }
+}
+
+/// A built-in function recognized by Sollya.
+#[derive(Clone, Copy, Debug)]
+#[rustfmt::skip]
+pub enum SollyaFunction {
+    Sin,  Cos,   Tan,  Sinh,  Cosh,  Tanh,
+    ASin, ACos,  ATan, ASinh, ACosh, ATanh,
+    Exp,  ExpM1, Log,  Log2,  Log10, Log1P,
+    Sqrt, Erf,   ErfC,
+}
+
+impl SollyaFunction {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SollyaFunction::Sin => "sin",
+            SollyaFunction::Cos => "cos",
+            SollyaFunction::Tan => "tan",
+            SollyaFunction::Sinh => "sinh",
+            SollyaFunction::Cosh => "cosh",
+            SollyaFunction::Tanh => "tanh",
+            SollyaFunction::ASin => "asin",
+            SollyaFunction::ACos => "acos",
+            SollyaFunction::ATan => "atan",
+            SollyaFunction::ASinh => "asinh",
+            SollyaFunction::ACosh => "acosh",
+            SollyaFunction::ATanh => "atanh",
+            SollyaFunction::Exp => "exp",
+            SollyaFunction::ExpM1 => "expm1",
+            SollyaFunction::Log => "log",
+            SollyaFunction::Log2 => "log2",
+            SollyaFunction::Log10 => "log10",
+            SollyaFunction::Log1P => "log1p",
+            SollyaFunction::Sqrt => "sqrt",
+            SollyaFunction::Erf => "erf",
+            SollyaFunction::ErfC => "erfc",
+        }
+    }
+}
+
+impl fmt::Display for SollyaFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl TryFrom<ast::MathOp> for SollyaFunction {
+    type Error = ();
+
+    fn try_from(value: ast::MathOp) -> Result<Self, Self::Error> {
+        match value {
+            ast::MathOp::Sin => Ok(SollyaFunction::Sin),
+            ast::MathOp::Cos => Ok(SollyaFunction::Cos),
+            ast::MathOp::Tan => Ok(SollyaFunction::Tan),
+            ast::MathOp::Sinh => Ok(SollyaFunction::Sinh),
+            ast::MathOp::Cosh => Ok(SollyaFunction::Cosh),
+            ast::MathOp::Tanh => Ok(SollyaFunction::Tanh),
+            ast::MathOp::ASin => Ok(SollyaFunction::ASin),
+            ast::MathOp::ACos => Ok(SollyaFunction::ACos),
+            ast::MathOp::ATan => Ok(SollyaFunction::ATan),
+            ast::MathOp::ASinh => Ok(SollyaFunction::ASinh),
+            ast::MathOp::ACosh => Ok(SollyaFunction::ACosh),
+            ast::MathOp::ATanh => Ok(SollyaFunction::ATanh),
+            ast::MathOp::Exp => Ok(SollyaFunction::Exp),
+            ast::MathOp::ExpM1 => Ok(SollyaFunction::ExpM1),
+            ast::MathOp::Log => Ok(SollyaFunction::Log),
+            ast::MathOp::Log2 => Ok(SollyaFunction::Log2),
+            ast::MathOp::Log10 => Ok(SollyaFunction::Log10),
+            ast::MathOp::Log1P => Ok(SollyaFunction::Log1P),
+            ast::MathOp::Sqrt => Ok(SollyaFunction::Sqrt),
+            ast::MathOp::Erf => Ok(SollyaFunction::Erf),
+            ast::MathOp::ErfC => Ok(SollyaFunction::ErfC),
+            _ => Err(()),
+        }
     }
 }
