@@ -109,15 +109,14 @@ hexnum = ${
     ~ ("p" ~ exponent)?
 }
 
-special_char = {
+special_char = _{
       "~" | "!" | "@" | "$" | "%" | "^" | "&" | "*" | "_"
     | "-" | "+" | "=" | "<" | ">" | "." | "?" | "/" | ":"
 }
 
-symbol = @{
-      (ASCII_ALPHA | special_char)
-    ~ (ASCII_ALPHANUMERIC | special_char)*
-}
+symbol_start    = _{ ASCII_ALPHA | special_char }
+symbol_continue = _{ ASCII_ALPHANUMERIC | special_char }
+symbol          = @{ symbol_start ~ symbol_continue* }
 
 escape      = @{ "\\" ~ ("\"" | "\\") }
 printable   = @{
@@ -148,7 +147,7 @@ tensor_op = {
     "size" | "dim" | "ref"
 }
 
-operation = { mathematical_op | testing_op | tensor_op }
+operation = ${ (mathematical_op | testing_op | tensor_op) ~ !symbol_continue }
 
 mathematical_const = {
       "M_2_SQRTPI" | "INFINITY" | "SQRT1_2" | "LOG10E" | "M_1_PI"
@@ -160,4 +159,4 @@ boolean_const = {
     "FALSE" | "TRUE"
 }
 
-constant = { mathematical_const | boolean_const }
+constant = ${ (mathematical_const | boolean_const) ~ !symbol_continue }
