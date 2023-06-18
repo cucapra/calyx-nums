@@ -2,9 +2,22 @@
 
 use num::{BigUint, CheckedSub, One, Zero};
 
+use crate::format::Format;
 use crate::fpcore::ast::Rational;
 
 impl Rational {
+    /// Computes the fixed-point representation of `self` in the given format.
+    pub fn to_format<T>(&self, format: &Format) -> Option<T>
+    where
+        T: TryFrom<BigUint> + Zero,
+    {
+        if format.is_signed {
+            self.to_fixed_point(format.width, format.frac_width)
+        } else {
+            self.to_unsigned_fixed_point(format.width, format.frac_width)
+        }
+    }
+
     /// Computes the unsigned fixed-point representation of `self`.
     pub fn to_unsigned_fixed_point<T: TryFrom<BigUint>>(
         &self,

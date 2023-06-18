@@ -21,13 +21,7 @@ fn get_constant_value(num: &ast::Number, format: &Format) -> CalyxResult<u64> {
         ast::Number::Digits { .. } => unimplemented!(),
     };
 
-    let conv = if format.is_signed {
-        ast::Rational::to_fixed_point
-    } else {
-        ast::Rational::to_unsigned_fixed_point
-    };
-
-    conv(rational, format.width, format.frac_width).ok_or_else(|| {
+    rational.to_format(format).ok_or_else(|| {
         Error::misc(format!(
             "Constant value {} is not representable in the given format",
             rational
