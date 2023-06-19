@@ -1,7 +1,11 @@
 //! Parser for FPCore.
 
+use std::str::FromStr;
+
+use pest::error::{Error, ErrorVariant};
+use pest_consume::{match_nodes, Parser};
+
 use super::ast;
-use pest_consume::{match_nodes, Error, Parser};
 
 #[derive(Parser)]
 #[grammar = "fpcore/syntax.pest"]
@@ -25,11 +29,11 @@ impl FPCoreParser {
 
     fn file(input: Node) -> ParseResult<Vec<ast::BenchmarkDef>> {
         Ok(match_nodes!(input.into_children();
-            [FPCore(benchmarks).., EOI(_)] => benchmarks.collect(),
+            [fpcore(benchmarks).., EOI(_)] => benchmarks.collect(),
         ))
     }
 
-    fn FPCore(input: Node) -> ParseResult<ast::BenchmarkDef> {
+    fn fpcore(input: Node) -> ParseResult<ast::BenchmarkDef> {
         Ok(match_nodes!(input.into_children();
             [symbol_opt(name), argument_list(args), property(props).., expr(body)] => ast::BenchmarkDef {
                 name,
@@ -57,12 +61,6 @@ impl FPCoreParser {
         Ok(match_nodes!(input.into_children();
             [number(num)] => ast::Dimension::Num(num),
             [symbol(id)] => ast::Dimension::Id(id),
-        ))
-    }
-
-    fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {
-        Ok(match_nodes!(input.into_children();
-            [property(props)..] => props.collect(),
         ))
     }
 
@@ -145,6 +143,10 @@ impl FPCoreParser {
         Ok(())
     }
 
+    fn bang_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
     fn expr(input: Node) -> ParseResult<ast::Expression> {
         Ok(match_nodes!(input.into_children();
             [number(num)] => ast::Expression::Num(num),
@@ -205,6 +207,56 @@ impl FPCoreParser {
         ))
     }
 
+    fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {
+        Ok(match_nodes!(input.into_children();
+            [bang_kwd(_), property(props)..] => props.collect(),
+        ))
+    }
+
+    fn name_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn description_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn cite_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn precision_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn round_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn overflow_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn pre_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn spec_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn alt_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn math_lib_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn example_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
     fn property_name(input: Node) -> ParseResult<ast::Symbol> {
         Ok(match_nodes!(input.into_children();
             [symbol(name)] => name,
@@ -213,19 +265,79 @@ impl FPCoreParser {
 
     fn property(input: Node) -> ParseResult<ast::Property> {
         Ok(match_nodes!(input.into_children();
-            [property_name(name), data(data)] => ast::Property {
-                name, data,
-            },
+            [name_kwd(_), string(name)] =>
+                ast::Property::Name(name),
+            [description_kwd(_), string(description)] =>
+                ast::Property::Description(description),
+            [cite_kwd(_), symbol(symbols)..] =>
+                ast::Property::Cite(symbols.collect()),
+            [precision_kwd(_), precision(precision)] =>
+                ast::Property::Precision(precision),
+            [round_kwd(_), rounding(round)] =>
+                ast::Property::Round(round.parse().unwrap()),
+            [overflow_kwd(_), overflow(overflow)] =>
+                ast::Property::Overflow(overflow.parse().unwrap()),
+            [pre_kwd(_), expr(pre)] =>
+                ast::Property::Pre(pre),
+            [spec_kwd(_), expr(spec)] =>
+                ast::Property::Spec(spec),
+            [alt_kwd(_), expr(alt)] =>
+                ast::Property::Alt(alt),
+            [math_lib_kwd(_), symbol(lib)] =>
+                ast::Property::MathLib(lib),
+            [example_kwd(_), binder(binders)..] =>
+                ast::Property::Example(binders.collect()),
+            [property_name(name), data(data)] =>
+                ast::Property::Unknown(name, data),
         ))
     }
 
     fn data(input: Node) -> ParseResult<ast::Data> {
         Ok(match_nodes!(input.into_children();
+            [symbol(id)] => ast::Data::Symbol(id),
+            [number(num)] => ast::Data::Num(num),
             [string(s)] => ast::Data::Str(s),
-            [binder(binder)] => ast::Data::Binder(binder),
-            [expr(expression)] => ast::Data::Expr(expression),
             [data(data)..] => ast::Data::List(data.collect()),
         ))
+    }
+
+    fn float(input: Node) -> ParseResult<(u32, u32)> {
+        Ok(match_nodes!(input.into_children();
+            [e, nbits] => (parse_node(&e)?, parse_node(&nbits)?),
+        ))
+    }
+
+    fn posit(input: Node) -> ParseResult<(u32, u32)> {
+        Ok(match_nodes!(input.into_children();
+            [es, nbits] => (parse_node(&es)?, parse_node(&nbits)?),
+        ))
+    }
+
+    fn fixed(input: Node) -> ParseResult<(i32, u32)> {
+        Ok(match_nodes!(input.into_children();
+            [scale, nbits] => (parse_node(&scale)?, parse_node(&nbits)?),
+        ))
+    }
+
+    fn precision_shorthand(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
+    }
+
+    fn precision(input: Node) -> ParseResult<ast::Precision> {
+        Ok(match_nodes!(input.into_children();
+            [float((e, nbits))] => ast::Precision::Float { e, nbits },
+            [posit((es, nbits))] => ast::Precision::Posit { es, nbits },
+            [fixed((scale, nbits))] => ast::Precision::Fixed { scale, nbits },
+            [precision_shorthand(s)] => ast::Precision::from_shorthand(s).unwrap(),
+        ))
+    }
+
+    fn rounding(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
+    }
+
+    fn overflow(input: Node) -> ParseResult<&str> {
+        Ok(input.as_str())
     }
 
     fn pm_opt(input: Node) -> ParseResult<ast::Sign> {
@@ -358,4 +470,19 @@ impl FPCoreParser {
             }),
         ))
     }
+}
+
+fn parse_node<T>(input: &Node) -> ParseResult<T>
+where
+    T: FromStr,
+    T::Err: ToString,
+{
+    input.as_str().parse().map_err(|err: T::Err| {
+        Error::new_from_span(
+            ErrorVariant::CustomError {
+                message: err.to_string(),
+            },
+            input.as_span(),
+        )
+    })
 }

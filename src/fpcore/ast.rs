@@ -1,10 +1,14 @@
 //! Abstract syntax for FPCore.
 
-use calyx_utils::Id;
 use std::fmt;
+
+use calyx_utils::Id;
 
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
 pub use super::literals::{Rational, Sign};
+pub use super::metadata::{
+    Data, OverflowMode, Precision, Property, RoundingMode,
+};
 
 /// An FPCore benchmark.
 #[derive(Debug)]
@@ -121,33 +125,17 @@ pub enum Number {
     },
 }
 
-#[derive(Debug)]
-pub struct Property {
-    pub name: Symbol,
-    pub data: Data,
-}
-
-/// Property metadata.
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum Data {
-    Str(String),
-    Binder(Binder),
-    Expr(Expression),
-    List(Vec<Data>),
-}
-
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Symbol(pub(super) Id);
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Operation {
     Math(MathOp),
     Test(TestOp),
     Tensor(TensorOp),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Constant {
     Math(MathConst),
     Bool(bool),

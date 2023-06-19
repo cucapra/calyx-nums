@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[rustfmt::skip]
 pub enum MathOp {
     Add,   Sub,      Mul,       Div,    FAbs,
@@ -71,7 +71,7 @@ impl FromStr for MathOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[rustfmt::skip]
 pub enum TestOp {
     Lt,    Gt,    Leq,      Geq,     Eq,
@@ -103,7 +103,7 @@ impl FromStr for TestOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[rustfmt::skip]
 pub enum TensorOp {
     Dim, Size, Ref,
@@ -122,7 +122,7 @@ impl FromStr for TensorOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
 pub enum MathConst {

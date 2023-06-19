@@ -289,7 +289,7 @@ fn compile_benchmark(
     }));
 
     for prop in &def.props {
-        log::warn!("Ignoring property `{}`", prop.name);
+        log::warn!("Ignoring property `{}`", prop.name());
     }
 
     let mut component = ir::Component::new(name, ports, false, None);

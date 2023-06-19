@@ -4,9 +4,9 @@ COMMENT     = _{ ";" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 open    = _{ "(" }
 close   = _{ ")" }
 
-file = { SOI ~ FPCore* ~ EOI }
+file = { SOI ~ fpcore* ~ EOI }
 
-FPCore = {
+fpcore = {
       open
     ~ "FPCore"
     ~ symbol_opt
@@ -19,8 +19,7 @@ FPCore = {
 symbol_opt      = { symbol? }
 argument_list   = { open ~ argument* ~ close }
 
-dimension   = { number | symbol }
-annotation  = { "!" ~ property* }
+dimension = { number | symbol }
 
 argument = {
       symbol
@@ -35,16 +34,15 @@ condition   = { "[" ~ symbol ~ expr ~ "]" }
 rules       = { update_rule* }
 conditions  = { condition* }
 
-if_kwd      = { "if" }
-let_kwd     = @{ "let" ~ "*"? }
-while_kwd   = @{ "while" ~ "*"? }
-for_kwd     = @{ "for" ~ "*"? }
-
-tensor_kwd      = { "tensor" }
-tensor_star_kwd = { "tensor*" }
-
-cast_kwd    = { "cast" }
-array_kwd   = { "array" }
+if_kwd          = @{ "if"           ~ !symbol_continue }
+let_kwd         = @{ "let" ~ "*"?   ~ !symbol_continue }
+while_kwd       = @{ "while" ~ "*"? ~ !symbol_continue }
+for_kwd         = @{ "for" ~ "*"?   ~ !symbol_continue }
+tensor_kwd      = @{ "tensor"       ~ !symbol_continue }
+tensor_star_kwd = @{ "tensor*"      ~ !symbol_continue }
+cast_kwd        = @{ "cast"         ~ !symbol_continue }
+array_kwd       = @{ "array"        ~ !symbol_continue }
+bang_kwd        = @{ "!"            ~ !symbol_continue }
 
 expr = {
       constant
@@ -71,14 +69,68 @@ number = {
     | (open ~ "digits" ~ decnum ~ decnum ~ decnum ~ close)
 }
 
-property_name   = ${ ":" ~ symbol }
-property        = { property_name ~ data }
+annotation = { bang_kwd ~ property* }
+
+name_kwd        = @{ ":name"            ~ !symbol_continue }
+description_kwd = @{ ":description"     ~ !symbol_continue }
+cite_kwd        = @{ ":cite"            ~ !symbol_continue }
+precision_kwd   = @{ ":precision"       ~ !symbol_continue }
+round_kwd       = @{ ":round"           ~ !symbol_continue }
+overflow_kwd    = @{ ":overflow"        ~ !symbol_continue }
+pre_kwd         = @{ ":pre"             ~ !symbol_continue }
+spec_kwd        = @{ ":spec"            ~ !symbol_continue }
+alt_kwd         = @{ ":alt"             ~ !symbol_continue }
+math_lib_kwd    = @{ ":math-library"    ~ !symbol_continue }
+example_kwd     = @{ ":example"         ~ !symbol_continue }
+
+reserved_prop = _{
+      "math-library" | "description" | "precision" | "overflow"
+    | "example"      | "round"       | "cite"      | "name"
+    | "spec"         | "alt"         | "pre"
+}
+
+property_name = ${ ":" ~ !(reserved_prop ~ !symbol_continue) ~ symbol }
+
+property = {
+      (name_kwd ~ string)
+    | (description_kwd ~ string)
+    | (cite_kwd ~ open ~ symbol* ~ close)
+    | (precision_kwd ~ precision)
+    | (round_kwd ~ rounding)
+    | (overflow_kwd ~ overflow)
+    | (pre_kwd ~ expr)
+    | (spec_kwd ~ expr)
+    | (alt_kwd ~ expr)
+    | (math_lib_kwd ~ symbol)
+    | (example_kwd ~ open ~ binder* ~ close)
+    | (property_name ~ data)
+}
 
 data = {
       string
-    | binder
-    | expr
+    | number
+    | symbol
     | (open ~ data* ~ close)
+}
+
+float = { open ~ "float" ~ dec_digits ~ dec_digits ~ close }
+posit = { open ~ "posit" ~ dec_digits ~ dec_digits ~ close }
+fixed = { open ~ "fixed" ~ exponent ~ dec_digits ~ close }
+
+precision_shorthand = {
+      "binary128" | "binary256" | "binary16" | "binary32" | "binary64"
+    | "integer"   | "posit16"   | "posit32"  | "posit64"  | "posit8"
+    | "real"
+}
+
+precision = { float | posit | fixed | precision_shorthand }
+
+rounding = {
+    "nearestAway" | "nearestEven" | "toNegative" | "toPositive" | "toZero"
+}
+
+overflow = {
+    "infinity" | "clamp" | "wrap"
 }
 
 pm_opt      = { "+" | "-" | "" }
@@ -87,27 +139,15 @@ dec_digits  = @{ ASCII_DIGIT+ }
 hex_digits  = @{ ASCII_HEX_DIGIT+ }
 nonzero     = @{ "0"* ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 
-rational = ${
-    pm_opt ~ dec_digits ~ "/" ~ nonzero
-}
+rational = ${ pm_opt ~ dec_digits ~ "/" ~ nonzero }
 
 dec_mantissa = ${ dec_digits ~ (dot ~ dec_digits)? | dot ~ dec_digits }
 hex_mantissa = ${ hex_digits ~ (dot ~ hex_digits)? | dot ~ hex_digits }
 
 exponent = ${ pm_opt ~ dec_digits }
 
-decnum = ${
-      pm_opt
-    ~ dec_mantissa
-    ~ ("e" ~ exponent)?
-}
-
-hexnum = ${
-      pm_opt
-    ~ "0x"
-    ~ hex_mantissa
-    ~ ("p" ~ exponent)?
-}
+decnum = ${ pm_opt ~ dec_mantissa ~ (^"e" ~ exponent)? }
+hexnum = ${ pm_opt ~ ^"0x" ~ hex_mantissa ~ (^"p" ~ exponent)? }
 
 special_char = _{
       "~" | "!" | "@" | "$" | "%" | "^" | "&" | "*" | "_"
@@ -147,7 +187,9 @@ tensor_op = {
     "size" | "dim" | "ref"
 }
 
-operation = ${ (mathematical_op | testing_op | tensor_op) ~ !symbol_continue }
+operation = ${
+    (mathematical_op | testing_op | tensor_op) ~ !symbol_continue
+}
 
 mathematical_const = {
       "M_2_SQRTPI" | "INFINITY" | "SQRT1_2" | "LOG10E" | "M_1_PI"
@@ -159,4 +201,6 @@ boolean_const = {
     "FALSE" | "TRUE"
 }
 
-constant = ${ (mathematical_const | boolean_const) ~ !symbol_continue }
+constant = ${
+    (mathematical_const | boolean_const) ~ !symbol_continue
+}
