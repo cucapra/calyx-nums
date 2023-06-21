@@ -16,9 +16,9 @@ const GROUP_PREFIX: &str = "grp";
 const ANONYMOUS_PREFIX: &str = "anonymous";
 
 fn get_constant_value(num: &ast::Number, format: &Format) -> CalyxResult<u64> {
-    let rational = match num {
-        ast::Number::Rational(rational) => rational,
-        ast::Number::Digits { .. } => unimplemented!(),
+    let rational = match &num.kind {
+        ast::NumKind::Rational(rational) => rational,
+        ast::NumKind::Digits { .. } => unimplemented!(),
     };
 
     rational.to_format(format).ok_or_else(|| {
@@ -26,6 +26,7 @@ fn get_constant_value(num: &ast::Number, format: &Format) -> CalyxResult<u64> {
             "Constant value {} is not representable in the given format",
             rational
         ))
+        .with_pos(num)
     })
 }
 
@@ -43,16 +44,16 @@ fn compile_number(
 }
 
 fn get_symbol(
-    id: &ast::Symbol,
+    sym: &ast::Symbol,
     comp: &ir::Component,
 ) -> CalyxResult<ir::RRC<ir::Port>> {
     // We don't support let bindings (or any other sort of bindings) yet, so all
     // symbols must refer to ports in the component signature.
     let signature = comp.signature.borrow();
 
-    signature
-        .find(id.as_id())
-        .ok_or_else(|| Error::misc(format!("Undefined symbol `{id}`")))
+    signature.find(sym.id).ok_or_else(|| {
+        Error::misc(format!("Undefined symbol `{}`", sym.id)).with_pos(sym)
+    })
 }
 
 fn get_primitive_adder(
@@ -109,8 +110,8 @@ fn get_primitive_operation(
 ) -> &'static Primitive<'static> {
     let is_fixed_point = format.frac_width != 0;
 
-    match op {
-        ast::Operation::Math(op) => match op {
+    match op.kind {
+        ast::OpKind::Math(op) => match op {
             ast::MathOp::Add => {
                 get_primitive_adder(is_fixed_point, format.is_signed)
             }
@@ -135,8 +136,8 @@ fn get_primitive_operation(
             }
             _ => unimplemented!(),
         },
-        ast::Operation::Test(_) => unimplemented!(),
-        ast::Operation::Tensor(_) => unimplemented!(),
+        ast::OpKind::Test(_) => unimplemented!(),
+        ast::OpKind::Tensor(_) => unimplemented!(),
     }
 }
 
@@ -170,9 +171,10 @@ fn compile_operation(
                 )]
             } else {
                 return Err(Error::misc(format!(
-                    "Operation {op:?} expects 1 argument, got {}",
+                    "Operation expects 1 argument, got {}",
                     arg_ports.len()
-                )));
+                ))
+                .with_pos(op));
             }
         }
         Arguments::Binary {
@@ -194,9 +196,10 @@ fn compile_operation(
                 ]
             } else {
                 return Err(Error::misc(format!(
-                    "Operation {op:?} expects 2 arguments, got {}",
+                    "Operation expects 2 arguments, got {}",
                     arg_ports.len()
-                )));
+                ))
+                .with_pos(op));
             }
         }
     };
@@ -246,14 +249,14 @@ fn compile_expression(
     format: &Format,
     builder: &mut ir::Builder,
 ) -> CalyxResult<(ir::RRC<ir::Port>, ir::Control)> {
-    match expr {
-        ast::Expression::Num(num) => {
+    match &expr.kind {
+        ast::ExprKind::Num(num) => {
             Ok((compile_number(num, format, builder)?, ir::Control::empty()))
         }
-        ast::Expression::Id(id) => {
-            Ok((get_symbol(id, builder.component)?, ir::Control::empty()))
+        ast::ExprKind::Id(sym) => {
+            Ok((get_symbol(sym, builder.component)?, ir::Control::empty()))
         }
-        ast::Expression::Op(op, args) => {
+        ast::ExprKind::Op(op, args) => {
             compile_operation(op, args, format, builder)
         }
         _ => unimplemented!(),
@@ -266,10 +269,10 @@ fn compile_benchmark(
     lib: &ir::LibrarySignatures,
     name_gen: &mut NameGenerator,
 ) -> CalyxResult<ir::Component> {
-    let name = def.name.as_ref().map_or_else(
-        || name_gen.gen_name(ANONYMOUS_PREFIX),
-        ast::Symbol::as_id,
-    );
+    let name = def
+        .name
+        .as_ref()
+        .map_or_else(|| name_gen.gen_name(ANONYMOUS_PREFIX), |sym| sym.id);
 
     let mut ports = vec![ir::PortDef {
         name: "out".into(),
@@ -279,8 +282,8 @@ fn compile_benchmark(
     }];
 
     ports.extend(def.args.iter().map(|arg| match arg {
-        ast::ArgumentDef::Id(id) => ir::PortDef {
-            name: id.as_id(),
+        ast::ArgumentDef::Id(sym) => ir::PortDef {
+            name: sym.id,
             width: format.width,
             direction: ir::Direction::Input,
             attributes: Default::default(),
@@ -320,7 +323,7 @@ pub fn compile_fpcore(
 ) -> CalyxResult<ir::Context> {
     let mut name_gen = NameGenerator::with_prev_defined_names(
         defs.iter()
-            .filter_map(|def| def.name.as_ref().map(|id| id.as_id()))
+            .filter_map(|def| def.name.as_ref().map(|sym| sym.id))
             .collect(),
     );
 

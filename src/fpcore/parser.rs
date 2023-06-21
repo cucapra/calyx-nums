@@ -2,24 +2,32 @@
 
 use std::str::FromStr;
 
+use calyx_utils::{FileIdx, GPosIdx, GlobalPositionTable};
 use pest::error::{Error, ErrorVariant};
 use pest_consume::{match_nodes, Parser};
 
-use super::ast;
+use super::{ast, metadata};
 
 #[derive(Parser)]
 #[grammar = "fpcore/syntax.pest"]
 pub struct FPCoreParser;
 
 impl FPCoreParser {
-    pub fn parse_file(src: &str) -> ParseResult<Vec<ast::BenchmarkDef>> {
-        let nodes = FPCoreParser::parse(Rule::file, src)?;
+    pub fn parse_file(
+        name: String,
+        src: String,
+    ) -> ParseResult<Vec<ast::BenchmarkDef>> {
+        let file = GlobalPositionTable::as_mut().add_file(name, src);
+        let src = GlobalPositionTable::as_ref().get_source(file);
+
+        let nodes = FPCoreParser::parse_with_userdata(Rule::file, src, file)?;
+
         FPCoreParser::file(nodes.single()?)
     }
 }
 
 type ParseResult<T> = Result<T, Error<Rule>>;
-type Node<'i> = pest_consume::Node<'i, Rule, ()>;
+type Node<'i> = pest_consume::Node<'i, Rule, FileIdx>;
 
 #[pest_consume::parser]
 impl FPCoreParser {
@@ -46,7 +54,7 @@ impl FPCoreParser {
 
     fn symbol_opt(input: Node) -> ParseResult<Option<ast::Symbol>> {
         Ok(match_nodes!(input.into_children();
-            [symbol(id)] => Some(id),
+            [symbol(sym)] => Some(sym),
             [] => None,
         ))
     }
@@ -60,7 +68,7 @@ impl FPCoreParser {
     fn dimension(input: Node) -> ParseResult<ast::Dimension> {
         Ok(match_nodes!(input.into_children();
             [number(num)] => ast::Dimension::Num(num),
-            [symbol(id)] => ast::Dimension::Id(id),
+            [symbol(sym)] => ast::Dimension::Id(sym),
         ))
     }
 
@@ -148,63 +156,71 @@ impl FPCoreParser {
     }
 
     fn expr(input: Node) -> ParseResult<ast::Expression> {
-        Ok(match_nodes!(input.into_children();
-            [number(num)] => ast::Expression::Num(num),
-            [constant(constant)] => ast::Expression::Const(constant),
-            [symbol(id)] => ast::Expression::Id(id),
+        let span = intern_span(&input);
+
+        let kind = match_nodes!(input.into_children();
+            [number(num)] => ast::ExprKind::Num(num),
+            [constant(constant)] => ast::ExprKind::Const(constant),
+            [symbol(sym)] => ast::ExprKind::Id(sym),
             [operation(op), expr(expressions)..] =>
-                ast::Expression::Op(op, expressions.collect()),
-            [if_kwd(_), expr(cond), expr(if_true), expr(if_false)] => ast::Expression::If {
+                ast::ExprKind::Op(op, expressions.collect()),
+            [if_kwd(_), expr(cond), expr(if_true), expr(if_false)] => ast::ExprKind::If {
                 cond: Box::new(cond),
                 if_true: Box::new(if_true),
                 if_false: Box::new(if_false),
             },
-            [let_kwd(sequential), binder(binders).., expr(body)] => ast::Expression::Let {
+            [let_kwd(sequential), binder(binders).., expr(body)] => ast::ExprKind::Let {
                 binders: binders.collect(),
                 body: Box::new(body),
                 sequential,
             },
-            [while_kwd(sequential), expr(cond), rules(rules), expr(body)] => ast::Expression::While {
+            [while_kwd(sequential), expr(cond), rules(rules), expr(body)] => ast::ExprKind::While {
                 cond: Box::new(cond),
                 rules,
                 body: Box::new(body),
                 sequential,
             },
-            [for_kwd(sequential), conditions(conditions), rules(rules), expr(body)] => ast::Expression::For {
+            [for_kwd(sequential), conditions(conditions), rules(rules), expr(body)] => ast::ExprKind::For {
                 conditions,
                 rules,
                 body: Box::new(body),
                 sequential,
             },
-            [tensor_kwd(_), conditions(conditions), expr(body)] => ast::Expression::Tensor {
+            [tensor_kwd(_), conditions(conditions), expr(body)] => ast::ExprKind::Tensor {
                 conditions,
                 body: Box::new(body),
             },
-            [tensor_star_kwd(_), conditions(conditions), rules(rules), expr(body)] => ast::Expression::TensorStar {
+            [tensor_star_kwd(_), conditions(conditions), rules(rules), expr(body)] => ast::ExprKind::TensorStar {
                 conditions,
                 rules,
                 body: Box::new(body),
             },
             [cast_kwd(_), expr(body)] =>
-                ast::Expression::Cast(Box::new(body)),
+                ast::ExprKind::Cast(Box::new(body)),
             [array_kwd(_), expr(elems)..] =>
-                ast::Expression::Array(elems.collect()),
-            [annotation(props), expr(body)] => ast::Expression::Annotation {
+                ast::ExprKind::Array(elems.collect()),
+            [annotation(props), expr(body)] => ast::ExprKind::Annotation {
                 props,
                 body: Box::new(body),
             },
-        ))
+        );
+
+        Ok(ast::Expression { kind, span })
     }
 
     fn number(input: Node) -> ParseResult<ast::Number> {
-        Ok(match_nodes!(input.into_children();
-            [rational(rational)] => ast::Number::Rational(rational),
-            [decnum(rational)] => ast::Number::Rational(rational),
-            [hexnum(rational)] => ast::Number::Rational(rational),
-            [decnum(mantissa), decnum(exponent), decnum(base)] => ast::Number::Digits {
+        let span = intern_span(&input);
+
+        let kind = match_nodes!(input.into_children();
+            [rational(rational)] => ast::NumKind::Rational(rational),
+            [decnum(rational)] => ast::NumKind::Rational(rational),
+            [hexnum(rational)] => ast::NumKind::Rational(rational),
+            [decnum(mantissa), decnum(exponent), decnum(base)] => ast::NumKind::Digits {
                 mantissa, exponent, base
             },
-        ))
+        );
+
+        Ok(ast::Number { kind, span })
     }
 
     fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {
@@ -292,12 +308,12 @@ impl FPCoreParser {
         ))
     }
 
-    fn data(input: Node) -> ParseResult<ast::Data> {
+    fn data(input: Node) -> ParseResult<metadata::Data> {
         Ok(match_nodes!(input.into_children();
-            [symbol(id)] => ast::Data::Symbol(id),
-            [number(num)] => ast::Data::Num(num),
-            [string(s)] => ast::Data::Str(s),
-            [data(data)..] => ast::Data::List(data.collect()),
+            [symbol(sym)] => metadata::Data::Symbol(sym),
+            [number(num)] => metadata::Data::Num(num),
+            [string(s)] => metadata::Data::Str(s),
+            [data(data)..] => metadata::Data::List(data.collect()),
         ))
     }
 
@@ -323,12 +339,12 @@ impl FPCoreParser {
         Ok(input.as_str())
     }
 
-    fn precision(input: Node) -> ParseResult<ast::Precision> {
+    fn precision(input: Node) -> ParseResult<metadata::Precision> {
         Ok(match_nodes!(input.into_children();
-            [float((e, nbits))] => ast::Precision::Float { e, nbits },
-            [posit((es, nbits))] => ast::Precision::Posit { es, nbits },
-            [fixed((scale, nbits))] => ast::Precision::Fixed { scale, nbits },
-            [precision_shorthand(s)] => ast::Precision::from_shorthand(s).unwrap(),
+            [float((e, nbits))] => metadata::Precision::Float { e, nbits },
+            [posit((es, nbits))] => metadata::Precision::Posit { es, nbits },
+            [fixed((scale, nbits))] => metadata::Precision::Fixed { scale, nbits },
+            [precision_shorthand(s)] => metadata::Precision::from_shorthand(s).unwrap(),
         ))
     }
 
@@ -415,7 +431,10 @@ impl FPCoreParser {
     }
 
     fn symbol(input: Node) -> ParseResult<ast::Symbol> {
-        Ok(ast::Symbol(input.as_str().into()))
+        Ok(ast::Symbol {
+            id: input.as_str().into(),
+            span: intern_span(&input),
+        })
     }
 
     fn printable(input: Node) -> ParseResult<&str> {
@@ -445,11 +464,15 @@ impl FPCoreParser {
     }
 
     fn operation(input: Node) -> ParseResult<ast::Operation> {
-        Ok(match_nodes!(input.into_children();
-            [mathematical_op(name)] => ast::Operation::Math(name.parse().unwrap()),
-            [testing_op(name)] => ast::Operation::Test(name.parse().unwrap()),
-            [tensor_op(name)] => ast::Operation::Tensor(name.parse().unwrap()),
-        ))
+        let span = intern_span(&input);
+
+        let kind = match_nodes!(input.into_children();
+            [mathematical_op(name)] => ast::OpKind::Math(name.parse().unwrap()),
+            [testing_op(name)] => ast::OpKind::Test(name.parse().unwrap()),
+            [tensor_op(name)] => ast::OpKind::Tensor(name.parse().unwrap()),
+        );
+
+        Ok(ast::Operation { kind, span })
     }
 
     fn mathematical_const(input: Node) -> ParseResult<&str> {
@@ -485,4 +508,14 @@ where
             input.as_span(),
         )
     })
+}
+
+fn intern_span(input: &Node) -> GPosIdx {
+    let span = input.as_span();
+
+    GPosIdx(GlobalPositionTable::as_mut().add_pos(
+        *input.user_data(),
+        span.start(),
+        span.end(),
+    ))
 }

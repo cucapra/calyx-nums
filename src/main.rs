@@ -18,17 +18,13 @@ fn main() -> CalyxResult<()> {
         .target(env_logger::Target::Stderr)
         .init();
 
+    let path = opts.file.to_string_lossy();
     let file = fs::read_to_string(&opts.file)?;
 
-    let benchmarks = FPCoreParser::parse_file(&file).map_err(|err| {
-        let path = opts.file.to_string_lossy();
-
-        Error::misc(format!(
-            "Failed to parse `{}`:\n{}",
-            path,
-            err.with_path(&path)
-        ))
-    })?;
+    let benchmarks =
+        FPCoreParser::parse_file(path.to_string(), file).map_err(|err| {
+            Error::misc(format!("Syntax error:\n{}", err.with_path(&path)))
+        })?;
 
     let workspace = Workspace::construct(
         &Some(opts.lib_path.join(irgen::stdlib::math::IMPORT)),

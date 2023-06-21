@@ -1,14 +1,10 @@
 //! Abstract syntax for FPCore.
 
-use std::fmt;
-
-use calyx_utils::Id;
+use calyx_utils::{GPosIdx, Id, WithPos};
 
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
 pub use super::literals::{Rational, Sign};
-pub use super::metadata::{
-    Data, OverflowMode, Precision, Property, RoundingMode,
-};
+pub use super::metadata::Property;
 
 /// An FPCore benchmark.
 #[derive(Debug)]
@@ -70,7 +66,7 @@ pub struct Condition {
 }
 
 #[derive(Debug)]
-pub enum Expression {
+pub enum ExprKind {
     Num(Number),
     Const(Constant),
     Id(Symbol),
@@ -114,9 +110,14 @@ pub enum Expression {
     },
 }
 
-/// A numeric literal.
 #[derive(Debug)]
-pub enum Number {
+pub struct Expression {
+    pub kind: ExprKind,
+    pub span: GPosIdx,
+}
+
+#[derive(Debug)]
+pub enum NumKind {
     Rational(Rational),
     Digits {
         mantissa: Rational,
@@ -125,14 +126,30 @@ pub enum Number {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Symbol(pub(super) Id);
+/// A numeric literal.
+#[derive(Debug)]
+pub struct Number {
+    pub kind: NumKind,
+    pub span: GPosIdx,
+}
+
+#[derive(Debug)]
+pub struct Symbol {
+    pub id: Id,
+    pub span: GPosIdx,
+}
 
 #[derive(Clone, Copy, Debug)]
-pub enum Operation {
+pub enum OpKind {
     Math(MathOp),
     Test(TestOp),
     Tensor(TensorOp),
+}
+
+#[derive(Debug)]
+pub struct Operation {
+    pub kind: OpKind,
+    pub span: GPosIdx,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -141,18 +158,26 @@ pub enum Constant {
     Bool(bool),
 }
 
-impl Symbol {
-    pub fn as_str(&self) -> &str {
-        self.0.as_ref()
-    }
-
-    pub fn as_id(&self) -> Id {
-        self.0
+impl WithPos for Expression {
+    fn copy_span(&self) -> GPosIdx {
+        self.span
     }
 }
 
-impl fmt::Display for Symbol {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+impl WithPos for Number {
+    fn copy_span(&self) -> GPosIdx {
+        self.span
+    }
+}
+
+impl WithPos for Symbol {
+    fn copy_span(&self) -> GPosIdx {
+        self.span
+    }
+}
+
+impl WithPos for Operation {
+    fn copy_span(&self) -> GPosIdx {
+        self.span
     }
 }

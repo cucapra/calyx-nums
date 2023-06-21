@@ -3,7 +3,7 @@
 pub mod ast;
 mod constants;
 mod literals;
-mod metadata;
+pub mod metadata;
 mod parser;
 
 pub use parser::FPCoreParser;

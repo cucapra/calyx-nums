@@ -57,7 +57,7 @@ impl Property {
             Property::Alt(_) => "alt",
             Property::MathLib(_) => "math-library",
             Property::Example(_) => "example",
-            Property::Unknown(name, _) => name.as_str(),
+            Property::Unknown(name, _) => name.id.as_ref(),
         }
     }
 }
