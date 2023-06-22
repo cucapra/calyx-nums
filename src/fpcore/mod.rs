@@ -5,5 +5,7 @@ mod constants;
 mod literals;
 pub mod metadata;
 mod parser;
+pub mod visitor;
 
 pub use parser::FPCoreParser;
+pub use visitor::Visitor;
