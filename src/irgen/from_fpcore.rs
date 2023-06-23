@@ -16,15 +16,10 @@ const GROUP_PREFIX: &str = "grp";
 const ANONYMOUS_PREFIX: &str = "anonymous";
 
 fn get_constant_value(num: &ast::Number, format: &Format) -> CalyxResult<u64> {
-    let rational = match &num.kind {
-        ast::NumKind::Rational(rational) => rational,
-        ast::NumKind::Digits { .. } => unimplemented!(),
-    };
-
-    rational.to_format(format).ok_or_else(|| {
+    num.val.to_format(format).ok_or_else(|| {
         Error::misc(format!(
             "Constant value {} is not representable in the given format",
-            rational
+            num.val
         ))
         .with_pos(num)
     })

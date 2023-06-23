@@ -73,7 +73,25 @@ impl Rational {
         })
     }
 
-    /// Returns true if the number is negative.
+    /// Create a `Rational` from a triple of decimal integers `(m, e, b)`
+    /// representing the value `m * b^e`. The exponent may be signed.
+    pub fn from_digits(
+        sign: Sign,
+        mantissa: &str,
+        exponent: &str,
+        base: &str,
+    ) -> Result<Rational, ParseBigIntError> {
+        let mantissa = BigUint::from_str_radix(mantissa, 10)?;
+        let exponent = BigInt::from_str_radix(exponent, 10)?;
+        let base = BigUint::from_str_radix(base, 10)?;
+
+        Ok(Rational {
+            sign,
+            value: Ratio::from(mantissa) * Ratio::from(base).pow(exponent),
+        })
+    }
+
+    /// Returns `true` if the number is negative.
     pub fn is_negative(&self) -> bool {
         match self.sign {
             Sign::NonNeg => false,

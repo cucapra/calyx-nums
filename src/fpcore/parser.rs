@@ -155,6 +155,10 @@ impl FPCoreParser {
         Ok(())
     }
 
+    fn digits_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
     fn expr(input: Node) -> ParseResult<ast::Expression> {
         let span = intern_span(&input);
 
@@ -211,16 +215,15 @@ impl FPCoreParser {
     fn number(input: Node) -> ParseResult<ast::Number> {
         let span = intern_span(&input);
 
-        let kind = match_nodes!(input.into_children();
-            [rational(rational)] => ast::NumKind::Rational(rational),
-            [decnum(rational)] => ast::NumKind::Rational(rational),
-            [hexnum(rational)] => ast::NumKind::Rational(rational),
-            [decnum(mantissa), decnum(exponent), decnum(base)] => ast::NumKind::Digits {
-                mantissa, exponent, base
-            },
+        let val = match_nodes!(input.into_children();
+            [rational(rational)] => rational,
+            [decnum(rational)] => rational,
+            [hexnum(rational)] => rational,
+            [digits_kwd(_), mantissa((sign, mantissa)), exponent(exponent), dec_digits(base)] =>
+                ast::Rational::from_digits(sign, mantissa, exponent, base).unwrap(),
         );
 
-        Ok(ast::Number { kind, span })
+        Ok(ast::Number { val, span })
     }
 
     fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {
@@ -405,6 +408,12 @@ impl FPCoreParser {
                 (integer, fraction),
             [dot(_), hex_digits(fraction)] =>
                 ("0", fraction),
+        ))
+    }
+
+    fn mantissa(input: Node) -> ParseResult<(ast::Sign, &str)> {
+        Ok(match_nodes!(input.into_children();
+            [pm_opt(sign), dec_digits(digits)] => (sign, digits),
         ))
     }
 

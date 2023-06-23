@@ -43,6 +43,7 @@ tensor_star_kwd = @{ "tensor*"      ~ !symbol_continue }
 cast_kwd        = @{ "cast"         ~ !symbol_continue }
 array_kwd       = @{ "array"        ~ !symbol_continue }
 bang_kwd        = @{ "!"            ~ !symbol_continue }
+digits_kwd      = @{ "digits"       ~ !symbol_continue }
 
 expr = {
       constant
@@ -66,7 +67,7 @@ number = {
       rational
     | hexnum
     | decnum
-    | (open ~ "digits" ~ decnum ~ decnum ~ decnum ~ close)
+    | (open ~ digits_kwd ~ mantissa ~ exponent ~ dec_digits ~ close)
 }
 
 annotation = { bang_kwd ~ property* }
@@ -144,6 +145,7 @@ rational = ${ pm_opt ~ dec_digits ~ "/" ~ nonzero }
 dec_mantissa = ${ dec_digits ~ (dot ~ dec_digits)? | dot ~ dec_digits }
 hex_mantissa = ${ hex_digits ~ (dot ~ hex_digits)? | dot ~ hex_digits }
 
+mantissa = ${ pm_opt ~ dec_digits }
 exponent = ${ pm_opt ~ dec_digits }
 
 decnum = ${ pm_opt ~ dec_mantissa ~ (^"e" ~ exponent)? }

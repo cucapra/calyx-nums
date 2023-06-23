@@ -116,20 +116,10 @@ pub struct Expression {
     pub span: GPosIdx,
 }
 
-#[derive(Debug)]
-pub enum NumKind {
-    Rational(Rational),
-    Digits {
-        mantissa: Rational,
-        exponent: Rational,
-        base: Rational,
-    },
-}
-
 /// A numeric literal.
 #[derive(Debug)]
 pub struct Number {
-    pub kind: NumKind,
+    pub val: Rational,
     pub span: GPosIdx,
 }
 
