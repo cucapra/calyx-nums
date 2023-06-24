@@ -57,7 +57,7 @@ fn parse_dyadic(s: &str) -> Result<Rational, ParseBigIntError> {
 
     let sign = match iter.peeking_next(|&c| c == '-' || c == '+') {
         Some('-') => Sign::Neg,
-        _ => Sign::NonNeg,
+        _ => Sign::Pos,
     };
 
     let rest = iter.as_str();

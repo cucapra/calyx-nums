@@ -215,7 +215,7 @@ impl FPCoreParser {
     fn number(input: Node) -> ParseResult<ast::Number> {
         let span = intern_span(&input);
 
-        let val = match_nodes!(input.into_children();
+        let rational = match_nodes!(input.into_children();
             [rational(rational)] => rational,
             [decnum(rational)] => rational,
             [hexnum(rational)] => rational,
@@ -223,7 +223,7 @@ impl FPCoreParser {
                 ast::Rational::from_digits(sign, mantissa, exponent, base).unwrap(),
         );
 
-        Ok(ast::Number { val, span })
+        Ok(ast::Number { rational, span })
     }
 
     fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {
@@ -362,7 +362,7 @@ impl FPCoreParser {
     fn pm_opt(input: Node) -> ParseResult<ast::Sign> {
         Ok(match input.as_str() {
             "-" => ast::Sign::Neg,
-            _ => ast::Sign::NonNeg,
+            _ => ast::Sign::Pos,
         })
     }
 

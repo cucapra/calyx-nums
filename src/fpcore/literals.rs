@@ -6,14 +6,14 @@ use num::bigint::{BigInt, BigUint, ParseBigIntError};
 use num::rational::Ratio;
 use num::traits::{Num, Pow, Zero};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sign {
-    NonNeg,
+    Pos,
     Neg,
 }
 
 /// An arbitrary-precision rational number.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rational {
     pub sign: Sign,
     pub value: Ratio<BigUint>,
@@ -94,9 +94,14 @@ impl Rational {
     /// Returns `true` if the number is negative.
     pub fn is_negative(&self) -> bool {
         match self.sign {
-            Sign::NonNeg => false,
+            Sign::Pos => false,
             Sign::Neg => true,
         }
+    }
+
+    /// Returns `true` if the number is zero.
+    pub fn is_zero(&self) -> bool {
+        self.value.is_zero()
     }
 }
 

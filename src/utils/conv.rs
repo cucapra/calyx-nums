@@ -87,19 +87,19 @@ mod tests {
     #[test]
     fn unsigned_fixed_point_conversion() {
         assert_eq!(
-            rational_from_dec(Sign::NonNeg, "42", "125")
+            rational_from_dec(Sign::Pos, "42", "125")
                 .to_unsigned_fixed_point::<u32>(32, 16)
                 .unwrap(),
             2760704
         );
         assert_eq!(
-            rational_from_dec(Sign::NonNeg, "1", "14404296875")
+            rational_from_dec(Sign::Pos, "1", "14404296875")
                 .to_unsigned_fixed_point::<u32>(32, 31)
                 .unwrap(),
             2456813568
         );
         assert_eq!(
-            rational_from_dec(Sign::NonNeg, "0", "0")
+            rational_from_dec(Sign::Pos, "0", "0")
                 .to_unsigned_fixed_point::<u32>(32, 16)
                 .unwrap(),
             0
@@ -109,28 +109,28 @@ mod tests {
     #[test]
     fn unsigned_fixed_point_conversion_widths() {
         assert_eq!(
-            rational_from_dec(Sign::NonNeg, "42", "125")
+            rational_from_dec(Sign::Pos, "42", "125")
                 .to_unsigned_fixed_point::<u64>(32, 2),
             None
         );
         assert_eq!(
-            rational_from_dec(Sign::NonNeg, "1", "1")
+            rational_from_dec(Sign::Pos, "1", "1")
                 .to_unsigned_fixed_point::<u64>(64, 32),
             None
         );
         assert_eq!(
-            rational_from_dec(Sign::NonNeg, "65536", "0")
+            rational_from_dec(Sign::Pos, "65536", "0")
                 .to_unsigned_fixed_point::<u64>(32, 16),
             None
         );
         assert_eq!(
-            Rational::new(Sign::NonNeg, One::one(), 0x100000000u64.into())
+            Rational::new(Sign::Pos, One::one(), 0x100000000u64.into())
                 .to_unsigned_fixed_point::<u32>(32, 32)
                 .unwrap(),
             1
         );
         assert_eq!(
-            Rational::new(Sign::NonNeg, 0xffffffffu32.into(), One::one())
+            Rational::new(Sign::Pos, 0xffffffffu32.into(), One::one())
                 .to_unsigned_fixed_point::<u32>(32, 0)
                 .unwrap(),
             0xffffffff
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn unsigned_fixed_point_conversion_target_type() {
         assert_eq!(
-            Rational::new(Sign::NonNeg, 0x100000000u64.into(), One::one())
+            Rational::new(Sign::Pos, 0x100000000u64.into(), One::one())
                 .to_unsigned_fixed_point::<u32>(64, 0),
             None
         );
@@ -186,8 +186,7 @@ mod tests {
             None
         );
         assert_eq!(
-            rational_from_dec(Sign::NonNeg, "0", "5")
-                .to_fixed_point::<u32>(1, 1),
+            rational_from_dec(Sign::Pos, "0", "5").to_fixed_point::<u32>(1, 1),
             None
         );
         assert_eq!(
