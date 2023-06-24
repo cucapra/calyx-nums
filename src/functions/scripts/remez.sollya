@@ -1,0 +1,21 @@
+// Usage: sollya remez.sollya --args <fn> <left> <right> <count> <frac-width>
+
+dieonerrormode = on!;
+display = dyadic!;
+
+f = parse(__argv[0]);
+l = parse(__argv[1]);
+r = parse(__argv[2]);
+c = parse(__argv[3]);
+w = parse(__argv[4]);
+
+stride = (r - l) / c;
+
+for i from 0 to c - 1 do {
+    x = l + stride * i;
+    y = x + stride;
+
+    print(coeff(fpminimax(f, 0, [|w|], [x;y], fixed, absolute), 0));
+};
+
+quit;
