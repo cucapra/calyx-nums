@@ -1,6 +1,9 @@
 # Rust
 /target
 
+# Python
+__pycache__
+
 # IDE files
 .vscode
 
