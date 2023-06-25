@@ -276,6 +276,14 @@ impl FPCoreParser {
         Ok(())
     }
 
+    fn domain_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
+    fn impl_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
     fn property_name(input: Node) -> ParseResult<ast::Symbol> {
         Ok(match_nodes!(input.into_children();
             [symbol(name)] => name,
@@ -306,6 +314,12 @@ impl FPCoreParser {
                 ast::Property::MathLib(lib),
             [example_kwd(_), binder(binders)..] =>
                 ast::Property::Example(binders.collect()),
+            [domain_kwd(_), number(left), number(right)] =>
+                ast::Property::CalyxDomain(metadata::CalyxDomain {
+                    left, right
+                }),
+            [impl_kwd(_), strategy(strategy)] =>
+                ast::Property::CalyxImpl(strategy),
             [property_name(name), data(data)] =>
                 ast::Property::Unknown(name, data),
         ))
@@ -357,6 +371,25 @@ impl FPCoreParser {
 
     fn overflow(input: Node) -> ParseResult<&str> {
         Ok(input.as_str())
+    }
+
+    fn lut(input: Node) -> ParseResult<u32> {
+        match_nodes!(input.into_children();
+            [size] => parse_node(&size),
+        )
+    }
+
+    fn poly(input: Node) -> ParseResult<(u32, u32)> {
+        Ok(match_nodes!(input.into_children();
+            [degree, size] => (parse_node(&degree)?, parse_node(&size)?),
+        ))
+    }
+
+    fn strategy(input: Node) -> ParseResult<metadata::CalyxImpl> {
+        Ok(match_nodes!(input.into_children();
+            [lut(lut_size)] => metadata::CalyxImpl::Lut { lut_size },
+            [poly((degree, lut_size))] => metadata::CalyxImpl::Poly { degree, lut_size },
+        ))
     }
 
     fn pm_opt(input: Node) -> ParseResult<ast::Sign> {

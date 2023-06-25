@@ -83,11 +83,14 @@ spec_kwd        = @{ ":spec"            ~ !symbol_continue }
 alt_kwd         = @{ ":alt"             ~ !symbol_continue }
 math_lib_kwd    = @{ ":math-library"    ~ !symbol_continue }
 example_kwd     = @{ ":example"         ~ !symbol_continue }
+domain_kwd      = @{ ":calyx-domain"    ~ !symbol_continue }
+impl_kwd        = @{ ":calyx-impl"      ~ !symbol_continue }
 
 reserved_prop = _{
-      "math-library" | "description" | "precision" | "overflow"
-    | "example"      | "round"       | "cite"      | "name"
-    | "spec"         | "alt"         | "pre"
+      "calyx-domain" | "math-library" | "description" | "calyx-impl"
+    | "precision"    | "overflow"     | "example"     | "round"
+    | "cite"         | "name"         | "spec"        | "alt"
+    | "pre"
 }
 
 property_name = ${ ":" ~ !(reserved_prop ~ !symbol_continue) ~ symbol }
@@ -104,6 +107,8 @@ property = {
     | (alt_kwd ~ expr)
     | (math_lib_kwd ~ symbol)
     | (example_kwd ~ open ~ binder* ~ close)
+    | (domain_kwd ~ open ~ number ~ number ~ close)
+    | (impl_kwd ~ strategy)
     | (property_name ~ data)
 }
 
@@ -133,6 +138,11 @@ rounding = {
 overflow = {
     "infinity" | "clamp" | "wrap"
 }
+
+lut     = { open ~ "lut" ~ dec_digits ~ close }
+poly    = { open ~ "poly" ~ dec_digits ~ dec_digits ~ close }
+
+strategy = { lut | poly }
 
 pm_opt      = { "+" | "-" | "" }
 dot         = { "." }

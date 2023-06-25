@@ -29,6 +29,10 @@ pub enum Property {
     MathLib(Symbol),
     /// Example input.
     Example(Vec<Binder>),
+    /// Input domain for generated math functions.
+    CalyxDomain(CalyxDomain),
+    /// Implementation strategy for generated math functions.
+    CalyxImpl(CalyxImpl),
     /// Unknown property.
     Unknown(Symbol, Data),
 }
@@ -57,6 +61,8 @@ impl Property {
             Property::Alt(_) => "alt",
             Property::MathLib(_) => "math-library",
             Property::Example(_) => "example",
+            Property::CalyxDomain(_) => "calyx-domain",
+            Property::CalyxImpl(_) => "calyx-impl",
             Property::Unknown(name, _) => name.id.as_ref(),
         }
     }
@@ -134,4 +140,18 @@ impl FromStr for OverflowMode {
             _ => Err(()),
         }
     }
+}
+
+/// An input domain for a function.
+#[derive(Debug)]
+pub struct CalyxDomain {
+    pub left: Number,
+    pub right: Number,
+}
+
+/// An implementation strategy and its parameters.
+#[derive(Clone, Copy, Debug)]
+pub enum CalyxImpl {
+    Lut { lut_size: u32 },
+    Poly { degree: u32, lut_size: u32 },
 }
