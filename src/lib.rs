@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod format;
 pub mod fpcore;
 pub mod functions;

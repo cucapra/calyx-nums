@@ -1,5 +1,7 @@
 //! Abstract syntax for FPCore.
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
 use calyx_utils::{GPosIdx, Id, WithPos};
 
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
@@ -113,6 +115,7 @@ pub enum ExprKind {
 #[derive(Debug)]
 pub struct Expression {
     pub kind: ExprKind,
+    pub uid: NodeId,
     pub span: GPosIdx,
 }
 
@@ -146,6 +149,20 @@ pub struct Operation {
 pub enum Constant {
     Math(MathConst),
     Bool(bool),
+}
+
+/// Uniquely identifies an AST node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct NodeId(u32);
+
+impl NodeId {
+    /// Creates a new identifier that is distinct from all previously created
+    /// identifiers.
+    pub fn new() -> NodeId {
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+
+        NodeId(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
 }
 
 impl WithPos for Expression {

@@ -209,7 +209,11 @@ impl FPCoreParser {
             },
         );
 
-        Ok(ast::Expression { kind, span })
+        Ok(ast::Expression {
+            kind,
+            uid: ast::NodeId::new(),
+            span,
+        })
     }
 
     fn number(input: Node) -> ParseResult<ast::Number> {
