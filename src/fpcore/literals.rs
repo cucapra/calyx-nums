@@ -12,8 +12,8 @@ pub enum Sign {
     Neg,
 }
 
-/// An arbitrary-precision rational number.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// An arbitrary-precision rational number with signed zeros.
+#[derive(Clone, Debug)]
 pub struct Rational {
     pub sign: Sign,
     pub value: Ratio<BigUint>,
