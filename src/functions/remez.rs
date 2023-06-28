@@ -10,8 +10,8 @@ use crate::format::Format;
 use crate::fpcore::ast::{Rational, Sign};
 use crate::utils::sollya::{self, SollyaFunction};
 
-/// Constructs a table of values approximating `f` over the interval `[left,
-/// right]`.
+/// Constructs a table of values approximating `f` over the interval
+/// `[left, right]`.
 ///
 /// The interval is subdivided at evenly-spaced breakpoints, with the number of
 /// subintervals given by `size`. Each value is computed so as to minimize the
