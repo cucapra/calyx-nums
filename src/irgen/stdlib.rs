@@ -14,12 +14,12 @@ pub enum Arguments<'a> {
     Binary { left: &'a str, right: &'a str },
 }
 
-impl<'a> Arguments<'a> {
-    const fn unary_default() -> Self {
+impl Arguments<'_> {
+    pub const fn unary_default() -> Self {
         Self::Unary { input: "in" }
     }
 
-    const fn binary_default() -> Self {
+    pub const fn binary_default() -> Self {
         Self::Binary {
             left: "left",
             right: "right",
@@ -32,15 +32,15 @@ pub struct Signature<'a> {
     pub output: &'a str,
 }
 
-impl<'a> Signature<'a> {
-    const fn unary_default() -> Self {
+impl Signature<'_> {
+    pub const fn unary_default() -> Self {
         Self {
             args: Arguments::unary_default(),
             output: "out",
         }
     }
 
-    const fn binary_default() -> Self {
+    pub const fn binary_default() -> Self {
         Self {
             args: Arguments::binary_default(),
             output: "out",
@@ -56,7 +56,7 @@ pub struct Primitive<'a> {
     pub is_comb: bool,
 }
 
-impl<'a> Primitive<'a> {
+impl Primitive<'_> {
     pub fn build_params(&self, format: &Format) -> SmallVec<[u64; 3]> {
         match self.params {
             Parameters::Bitnum => smallvec![format.width],

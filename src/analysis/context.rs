@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Index;
 
 use calyx_utils::{CalyxResult, Error};
 
@@ -11,7 +12,7 @@ pub struct Context<'ast> {
 }
 
 pub struct ContextResolution<'ast> {
-    pub map: HashMap<ast::NodeId, Context<'ast>>,
+    map: HashMap<ast::NodeId, Context<'ast>>,
 }
 
 impl<'ast> ContextResolution<'ast> {
@@ -28,6 +29,14 @@ impl<'ast> ContextResolution<'ast> {
         builder.visit_benchmarks(defs)?;
 
         Ok(builder.result)
+    }
+}
+
+impl<'ast> Index<ast::NodeId> for ContextResolution<'ast> {
+    type Output = Context<'ast>;
+
+    fn index(&self, index: ast::NodeId) -> &Self::Output {
+        &self.map[&index]
     }
 }
 
