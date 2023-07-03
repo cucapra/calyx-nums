@@ -1,9 +1,9 @@
-import math
 import re
 from dataclasses import dataclass
 from fixedpoint import FixedPoint
+from typing import Any
 
-FXP_MODE = {
+MODE = {
     'overflow': 'wrap',
     'rounding': 'down',
     'overflow_alert': 'ignore',
@@ -11,19 +11,18 @@ FXP_MODE = {
     'implicit_cast_alert': 'error'
 }
 
-@dataclass(init=False, repr=False)
+@dataclass
 class QFormat:
     int_width: int
     frac_width: int
     is_signed: bool
 
-    def __init__(self, format: str) -> None:
+    @classmethod
+    def parse(cls, format: str):
         if match := re.match(r'^(U)?Q(\d+).(\d+)$', format):
             u, m, n = match.groups()
 
-            self.int_width = int(m)
-            self.frac_width = int(n)
-            self.is_signed = u is None
+            return cls(int(m), int(n), u is None)
         else:
             raise RuntimeError('Invalid format')
 
@@ -31,13 +30,13 @@ class QFormat:
     def width(self) -> int:
         return self.int_width + self.frac_width
 
-    def decode(self, bits: int) -> FixedPoint:
+    def decode(self, bits: int, mode: dict[str, Any] = MODE) -> FixedPoint:
         return FixedPoint(
             hex(bits),
             signed=self.is_signed,
             m=self.int_width,
             n=self.frac_width,
-            **FXP_MODE
+            **mode
         )
 
     def cast(self, x: FixedPoint) -> FixedPoint:
@@ -49,9 +48,3 @@ class QFormat:
         prefix = 'UQ'[self.is_signed:]
 
         return f'{prefix}{self.int_width}.{self.frac_width}'
-
-def sqrt(x: FixedPoint) -> FixedPoint:
-    new = FixedPoint(x)
-    new.from_str(hex(math.isqrt(x.bits << x.n)))
-
-    return new

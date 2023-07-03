@@ -3,8 +3,8 @@ import random
 from dataclasses import dataclass
 from typing import Callable, Generic, Iterable, Optional, SupportsFloat, TypeVar
 
-from . import fxp
-from .fxp import FixedPoint, QFormat
+import libm.fixed as fixed
+from libm.qformat import FixedPoint, QFormat
 
 Fxp = FixedPoint
 Num = TypeVar('Num', bound=SupportsFloat)
@@ -81,7 +81,7 @@ def random_op(vars: list[str], lpi: float, fmt: QFormat) -> Operation[Fxp]:
         ('+', _wrap(operator.add, fmt), 2),
         ('-', _wrap(operator.sub, fmt), 2),
         ('*', _wrap(operator.mul, fmt), 2),
-        ('sqrt', fxp.sqrt, 1),
+        ('sqrt', fixed.sqrt, 1),
     ))
 
     args = [random_expr(vars, lpi / arity, fmt) for _ in range(arity)]

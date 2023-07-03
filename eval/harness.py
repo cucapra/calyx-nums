@@ -1,10 +1,14 @@
 import calyx.builder as cb
 
-def harness(comp_name: str, comb: bool, args: list[str], width: int) -> str:
+def single(
+    comp_name: str, comb: bool, args: list[str], mem_name: str, width: int
+) -> str:
     top_level = cb.Builder()
     main = top_level.component('main')
 
-    mem = main.mem_d1('mem', width, len(args), len(args).bit_length(), True)
+    argc = len(args)
+
+    mem = main.mem_d1(mem_name, width, argc, argc.bit_length(), True)
     bench = main.comp_instance('bench', comp_name, False)
     write = main.group('write')
 
@@ -21,18 +25,18 @@ def harness(comp_name: str, comb: bool, args: list[str], width: int) -> str:
         with write:
             bench[arg] = tmp.out
 
-        main.control += read.as_enable()
+        main.control += read
 
     with write:
         if not comb:
-            bench.go = cb.const(1, 1)
+            bench.go = cb.HI
 
         mem.addr0 = 0
         mem.write_data = bench.out
         mem.write_en = 1 if comb else bench.done @ 1
         write.done = mem.done
 
-    main.control += write.as_enable()
+    main.control += write
 
     top_level.program.imports = []  # Suppress imports
 

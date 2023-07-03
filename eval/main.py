@@ -3,14 +3,14 @@ import json
 import random
 import subprocess
 import tempfile
+from fixedpoint import FixedPoint
 from pathlib import Path
-from typing import Any
 
-from lib.fpcore import FPCore, random_fpcore
-from lib.fxp import FixedPoint, QFormat
-from lib.harness import harness
+import harness
+from fpcore.ast import FPCore, random_fpcore
+from libm.qformat import QFormat
 
-def format_data(data: list[FixedPoint], fmt: QFormat):
+def format_data(data: list[FixedPoint], fmt: QFormat) -> str:
     return json.dumps({
         'mem': {
             'data': [x.bits for x in data],
@@ -28,7 +28,7 @@ def compile(file: Path, fmt: QFormat, nums: Path, lib: Path):
         file,
         '--format', str(fmt),
         '--lib-path', lib
-    ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, encoding='utf-8')
+    ], check=True, stdout=subprocess.PIPE, encoding='utf-8')
 
 def simulate(futil: str, data: Path):
     return subprocess.run([
@@ -37,16 +37,15 @@ def simulate(futil: str, data: Path):
         '--to', 'dat',
         '--through', 'icarus-verilog',
         '-s', 'verilog.data', data
-    ], stdout=subprocess.PIPE, input=futil, encoding='utf-8')
+    ], check=True, stdout=subprocess.PIPE, input=futil, encoding='utf-8')
 
 def test_bench(
     benchmark: FPCore[FixedPoint],
-    args: list[str],
     vals: list[FixedPoint],
     fmt: QFormat,
     nums: Path,
     lib: Path
-):
+) -> int:
     with tempfile.TemporaryDirectory() as tmp:
         core = Path(tmp, 'bench.fpcore')
         data = Path(tmp, 'dat.json')
@@ -55,27 +54,31 @@ def test_bench(
         data.write_text(format_data(vals, fmt))
 
         comp_result = compile(core, fmt, nums, lib)
-        comp_result.check_returncode()
 
         bench = comp_result.stdout
         comb = f'comb component {benchmark.name}' in bench
 
-        main = harness(benchmark.name or 'anonymous', comb, args, fmt.width)
+        main = harness.single(
+            benchmark.name or 'anonymous',
+            comb,
+            benchmark.args,
+            'mem',
+            fmt.width
+        )
 
-        sim_result = simulate(f'{bench}\n{main}', data)
-        sim_result.check_returncode()
+        sim_result = simulate(bench + main, data)
 
         result = json.loads(sim_result.stdout)
 
-        return result['memories']['mem'][0]
+        return int(result['memories']['mem'][0])
 
 def format_diagnostic(
     benchmark: FPCore[FixedPoint],
     vals: list[FixedPoint],
     fmt: QFormat,
-    got: Any,
-    expected: int
-):
+    got: FixedPoint,
+    expected: FixedPoint
+) -> str:
     args = ', '.join(map(hex, vals))
 
     return (
@@ -83,8 +86,8 @@ def format_diagnostic(
         '  FPCore: {core}\n'
         '  args: [{args}]\n'
         '  format: {fmt}\n'
-        '  got: {got}\n'
-        '  expected: {expected}\n'
+        '  got: {got:#x}\n'
+        '  expected: {expected:#x}\n'
         '  ...'
     ).format(core=benchmark, args=args, fmt=fmt, got=got, expected=expected)
 
@@ -112,7 +115,12 @@ def main():
         default=10,
         help='number of benchmarks to generate'
     )
-    parser.add_argument('--format', default='UQ32.0', help='numeric format')
+    parser.add_argument(
+        '-f',
+        '--format',
+        default='UQ32.0',
+        help='numeric format'
+    )
     parser.add_argument(
         '--argc',
         type=int,
@@ -134,35 +142,37 @@ def main():
 
     args = parser.parse_args()
 
-    fmt = QFormat(args.format)
+    fmt = QFormat.parse(args.format)
 
     print('TAP version 14')
     print(f'1..{args.trials}')
 
-    for _ in range(args.trials):
-        bench_args = [f'x{i}' for i in range(args.argc)]
-        bench_vals = [
-            fmt.decode(random.getrandbits(fmt.width)) for _ in range(args.argc)
-        ]
+    try:
+        for _ in range(args.trials):
+            bench_args = [f'x{i}' for i in range(args.argc)]
+            bench_vals = [
+                fmt.decode(random.getrandbits(fmt.width)) for _ in range(args.argc)
+            ]
 
-        bench = random_fpcore('benchmark', bench_args, args.size, fmt)
+            bench = random_fpcore('benchmark', bench_args, args.size, fmt)
 
-        comp = test_bench(
-            bench,
-            bench_args,
-            bench_vals,
-            fmt,
-            args.nums_exec,
-            args.lib_path
-        )
+            comp = fmt.decode(test_bench(
+                bench,
+                bench_vals,
+                fmt,
+                args.nums_exec,
+                args.lib_path
+            ))
 
-        interp = bench.interp(bench_vals).bits
+            interp = bench.interp(bench_vals)
 
-        if comp == interp and not args.verbose:
-            print(f'ok - {interp}')
-        else:
-            print('ok' if comp == interp else 'not ok')
-            print(format_diagnostic(bench, bench_vals, fmt, comp, interp))
+            if comp == interp and not args.verbose:
+                print(f'ok - {interp:#x}')
+            else:
+                print('ok' if comp == interp else 'not ok')
+                print(format_diagnostic(bench, bench_vals, fmt, comp, interp))
+    except Exception as e:
+        print('Bail out!', e)
 
 if __name__ == '__main__':
     main()
