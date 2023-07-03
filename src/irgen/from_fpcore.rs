@@ -181,9 +181,7 @@ fn compile_operation(
                 lookup::signature(context.format),
             );
 
-            const SIGNATURE: Signature<'_> = Signature::unary_default();
-
-            (cell, &SIGNATURE, true)
+            (cell, &Signature::UNARY_DEFAULT, true)
         };
 
     let mut assigns = match signature.args {
