@@ -1,16 +1,15 @@
-import operator
-import random
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Callable, Generic, Iterable, Optional, SupportsFloat, TypeVar
+from itertools import chain
+from typing import Generic, Optional, SupportsFloat, TypeVar
 
-import libm.fixed as fixed
-from libm.qformat import FixedPoint, QFormat
-
-Fxp = FixedPoint
 Num = TypeVar('Num', bound=SupportsFloat)
 
+Ctx = dict[str, Num]
+Lib = dict[str, Callable[..., Num]]
+
 class Expr(Generic[Num]):
-    def interp(self, context: dict[str, Num]) -> Num:
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
         raise NotImplementedError
 
     def __str__(self) -> str:
@@ -20,8 +19,8 @@ class Expr(Generic[Num]):
 class Symbol(Expr[Num]):
     id: str
 
-    def interp(self, context: dict[str, Num]) -> Num:
-        return context[self.id]
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
+        return libm['cast'](context[self.id])
 
     def __str__(self) -> str:
         return self.id
@@ -30,8 +29,8 @@ class Symbol(Expr[Num]):
 class Number(Expr[Num]):
     val: Num
 
-    def interp(self, context: dict[str, Num]) -> Num:
-        return self.val
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
+        return libm['cast'](self.val)
 
     def __str__(self) -> str:
         return float(self.val).hex()
@@ -39,13 +38,12 @@ class Number(Expr[Num]):
 @dataclass
 class Operation(Expr[Num]):
     op: str
-    impl: Callable[..., Num]
     args: list[Expr[Num]]
 
-    def interp(self, context: dict[str, Num]) -> Num:
-        args = [arg.interp(context) for arg in self.args]
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
+        args = [arg.interp(context, libm) for arg in self.args]
 
-        return self.impl(*args)
+        return libm[self.op](*args)
 
     def __str__(self) -> str:
         args = ' '.join(map(str, self.args))
@@ -53,53 +51,39 @@ class Operation(Expr[Num]):
         return f'({self.op} {args})'
 
 @dataclass
+class Property(Generic[Num]):
+    name: str
+    data: Expr[Num]
+
+    def __str__(self) -> str:
+        return f'{self.name} {self.data}'
+
+@dataclass
+class Annotation(Expr[Num]):
+    props: list[Property[Num]]
+    body: Expr[Num]
+
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
+        return self.body.interp(context, libm)
+
+    def __str__(self) -> str:
+        props = ' '.join(map(str, self.props))
+
+        return f'(! {props} {self.body})'
+
+@dataclass
 class FPCore(Generic[Num]):
     name: Optional[str]
     args: list[str]
+    props: list[Property[Num]]
     body: Expr[Num]
 
-    def interp(self, args: Iterable[Num]) -> Num:
-        return self.body.interp(dict(zip(self.args, args)))
+    def interp(self, args: Iterable[Num], libm: Lib[Num]) -> Num:
+        return self.body.interp(dict(zip(self.args, args)), libm)
 
     def __str__(self) -> str:
         name = '' if self.name is None else self.name
         args = ' '.join(self.args)
+        props = ' '.join(chain(map(str, self.props), ('',)))
 
-        return f'(FPCore {name}({args}) {self.body})'
-
-def random_sym(vars: list[str]) -> Symbol[Fxp]:
-    return Symbol(random.choice(vars))
-
-def random_num(fmt: QFormat) -> Number[Fxp]:
-    return Number(fmt.decode(random.getrandbits(fmt.width)))
-
-def _wrap(fn: Callable[..., Fxp], fmt: QFormat):
-    return lambda *args: fmt.cast(fn(*args))
-
-def random_op(vars: list[str], lpi: float, fmt: QFormat) -> Operation[Fxp]:
-    op, impl, arity = random.choice((
-        ('+', _wrap(operator.add, fmt), 2),
-        ('-', _wrap(operator.sub, fmt), 2),
-        ('*', _wrap(operator.mul, fmt), 2),
-        ('sqrt', fixed.sqrt, 1),
-    ))
-
-    args = [random_expr(vars, lpi / arity, fmt) for _ in range(arity)]
-
-    return Operation(op, impl, args)
-
-def random_expr(vars: list[str], lpi: float, fmt: QFormat) -> Expr[Fxp]:
-    if random.random() < 1 / lpi:
-        if random.getrandbits(1):
-            return random_sym(vars)
-        else:
-            return random_num(fmt)
-    else:
-        return random_op(vars, lpi, fmt)
-
-def random_fpcore(
-    name: Optional[str], args: list[str], lpi: float, fmt: QFormat
-) -> FPCore[Fxp]:
-    body = random_expr(args, lpi, fmt)
-
-    return FPCore(name, args, body)
+        return f'(FPCore {name}({args}) {props}{self.body})'

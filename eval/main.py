@@ -7,7 +7,9 @@ from fixedpoint import FixedPoint
 from pathlib import Path
 
 import harness
-from fpcore.ast import FPCore, random_fpcore
+from fpcore.ast import FPCore
+from fpcore.rand import random_fpcore
+from libm.fixed import FIXED
 from libm.qformat import QFormat
 
 def format_data(data: list[FixedPoint], fmt: QFormat) -> str:
@@ -143,6 +145,7 @@ def main():
     args = parser.parse_args()
 
     fmt = QFormat.parse(args.format)
+    dist = lambda: fmt.decode(random.getrandbits(fmt.width))
 
     print('TAP version 14')
     print(f'1..{args.trials}')
@@ -150,11 +153,9 @@ def main():
     try:
         for _ in range(args.trials):
             bench_args = [f'x{i}' for i in range(args.argc)]
-            bench_vals = [
-                fmt.decode(random.getrandbits(fmt.width)) for _ in range(args.argc)
-            ]
+            bench_vals = [dist() for _ in range(args.argc)]
 
-            bench = random_fpcore('benchmark', bench_args, args.size, fmt)
+            bench = random_fpcore('benchmark', bench_args, args.size, dist)
 
             comp = fmt.decode(test_bench(
                 bench,
@@ -164,7 +165,7 @@ def main():
                 args.lib_path
             ))
 
-            interp = bench.interp(bench_vals)
+            interp = bench.interp(bench_vals, FIXED)
 
             if comp == interp and not args.verbose:
                 print(f'ok - {interp:#x}')
