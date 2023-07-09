@@ -44,6 +44,15 @@ class QFormat:
 
         return x
 
+    def cast_float(self, x: float, mode: dict[str, Any] = MODE) -> float:
+        return float(FixedPoint(
+            x,
+            signed=self.is_signed,
+            m=self.int_width,
+            n=self.frac_width,
+            **mode
+        ))
+
     def __str__(self) -> str:
         prefix = 'UQ'[self.is_signed:]
 
