@@ -33,7 +33,9 @@ class Number(Expr[Num]):
         return libm['cast'](self.val)
 
     def __str__(self) -> str:
-        return float(self.val).hex()
+        val = float(self.val)
+
+        return f'{val:.0f}' if val.is_integer() else val.hex()
 
 @dataclass
 class Operation(Expr[Num]):
