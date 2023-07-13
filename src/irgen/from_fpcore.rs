@@ -8,11 +8,11 @@ use calyx_ir::{self as ir, build_assignments};
 use calyx_utils::{CalyxResult, Error, Id, NameGenerator};
 
 use super::libm::MathLib;
-use super::stdlib::{self, Arguments, Primitive, Signature};
+use super::stdlib::{Arguments, Primitive, Signature};
 use crate::analysis::context::ContextResolution;
 use crate::format::Format;
 use crate::fpcore::ast;
-use crate::functions::lookup;
+use crate::functions::{builtins, lookup};
 use crate::utils::mangling;
 
 /// Prefix for components generated from anonymous FPCores.
@@ -55,84 +55,17 @@ fn compile_symbol(
     })
 }
 
-fn get_primitive_adder(
-    fixed_point: bool,
-    signed: bool,
-) -> &'static Primitive<'static> {
-    match (fixed_point, signed) {
-        (false, false) => &stdlib::compile::STD_ADD,
-        (false, true) => &stdlib::binary_operators::STD_SADD,
-        (true, false) => &stdlib::binary_operators::STD_FP_ADD,
-        (true, true) => &stdlib::binary_operators::STD_FP_SADD,
-    }
-}
-
-fn get_primitive_subtractor(
-    fixed_point: bool,
-    signed: bool,
-) -> &'static Primitive<'static> {
-    match (fixed_point, signed) {
-        (false, false) => &stdlib::core::STD_SUB,
-        (false, true) => &stdlib::binary_operators::STD_SSUB,
-        (true, false) => &stdlib::binary_operators::STD_FP_SUB,
-        (true, true) => &stdlib::binary_operators::STD_FP_SSUB,
-    }
-}
-
-fn get_primitive_multiplier(
-    fixed_point: bool,
-    signed: bool,
-) -> &'static Primitive<'static> {
-    match (fixed_point, signed) {
-        (false, false) => &stdlib::binary_operators::STD_MULT_PIPE,
-        (false, true) => &stdlib::binary_operators::STD_SMULT_PIPE,
-        (true, false) => &stdlib::binary_operators::STD_FP_MULT_PIPE,
-        (true, true) => &stdlib::binary_operators::STD_FP_SMULT_PIPE,
-    }
-}
-
-fn get_primitive_divider(
-    fixed_point: bool,
-    signed: bool,
-) -> &'static Primitive<'static> {
-    match (fixed_point, signed) {
-        (false, false) => &stdlib::binary_operators::STD_DIV_PIPE_QUOTIENT,
-        (false, true) => &stdlib::binary_operators::STD_SDIV_PIPE_QUOTIENT,
-        (true, false) => &stdlib::binary_operators::STD_FP_DIV_PIPE_QUOTIENT,
-        (true, true) => &stdlib::binary_operators::STD_FP_SDIV_PIPE_QUOTIENT,
-    }
-}
-
 fn get_primitive_operation(
     op: &ast::Operation,
     format: &Format,
 ) -> Option<&'static Primitive<'static>> {
-    let is_fixed_point = format.frac_width != 0;
-
     match op.kind {
         ast::OpKind::Math(op) => match op {
-            ast::MathOp::Add => {
-                Some(get_primitive_adder(is_fixed_point, format.is_signed))
-            }
-            ast::MathOp::Sub => {
-                Some(get_primitive_subtractor(is_fixed_point, format.is_signed))
-            }
-            ast::MathOp::Mul => {
-                Some(get_primitive_multiplier(is_fixed_point, format.is_signed))
-            }
-            ast::MathOp::Div => {
-                Some(get_primitive_divider(is_fixed_point, format.is_signed))
-            }
-            ast::MathOp::Sqrt => {
-                if format.is_signed {
-                    log::debug!("Using sqrt with a signed format");
-                }
-
-                match is_fixed_point {
-                    false => Some(&stdlib::math::STD_SQRT),
-                    true => Some(&stdlib::math::STD_FP_SQRT),
-                }
-            }
+            ast::MathOp::Add => Some(builtins::primitive_adder(format)),
+            ast::MathOp::Sub => Some(builtins::primitive_subtractor(format)),
+            ast::MathOp::Mul => Some(builtins::primitive_multiplier(format)),
+            ast::MathOp::Div => Some(builtins::primitive_divider(format)),
+            ast::MathOp::Sqrt => Some(builtins::primitive_sqrt(format)),
             _ => None,
         },
         ast::OpKind::Test(_) => unimplemented!(),
