@@ -74,14 +74,19 @@ impl FPCoreParser {
 
     fn argument(input: Node) -> ParseResult<ast::ArgumentDef> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var)] => ast::ArgumentDef::Id(var),
-            [annotation(props), symbol(var), dimension(dims)..] => ast::ArgumentDef::Annotated {
-                props,
+            [symbol(var)] => ast::ArgumentDef {
                 var,
+                props: Vec::new(),
+                dims: Vec::new(),
+            },
+            [annotation(props), symbol(var), dimension(dims)..] => ast::ArgumentDef {
+                var,
+                props,
                 dims: dims.collect(),
             },
-            [symbol(var), dimension(dims)..] => ast::ArgumentDef::Sized {
+            [symbol(var), dimension(dims)..] => ast::ArgumentDef {
                 var,
+                props: Vec::new(),
                 dims: dims.collect(),
             },
         ))

@@ -242,14 +242,17 @@ fn compile_benchmark(
         attributes: Default::default(),
     }];
 
-    ports.extend(def.args.iter().map(|arg| match arg {
-        ast::ArgumentDef::Id(sym) => ir::PortDef {
-            name: sym.id,
-            width: context.format.width,
-            direction: ir::Direction::Input,
-            attributes: Default::default(),
-        },
-        _ => unimplemented!(),
+    ports.extend(def.args.iter().map(|arg| {
+        if arg.dims.is_empty() {
+            ir::PortDef {
+                name: arg.var.id,
+                width: context.format.width,
+                direction: ir::Direction::Input,
+                attributes: Default::default(),
+            }
+        } else {
+            unimplemented!()
+        }
     }));
 
     let mut component = ir::Component::new(name, ports, false, None);

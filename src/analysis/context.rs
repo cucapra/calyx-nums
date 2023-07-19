@@ -70,6 +70,12 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
         &mut self,
         def: &'ast ast::BenchmarkDef,
     ) -> CalyxResult<()> {
+        for arg in &def.args {
+            for prop in &arg.props {
+                log::warn!("Ignoring property `{}`", prop.name());
+            }
+        }
+
         self.parent.domain = None;
         self.parent.strategy = None;
 

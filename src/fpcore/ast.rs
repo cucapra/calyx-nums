@@ -29,17 +29,10 @@ pub enum Dimension {
 
 /// A formal parameter to a benchmark.
 #[derive(Debug)]
-pub enum ArgumentDef {
-    Id(Symbol),
-    Sized {
-        var: Symbol,
-        dims: Vec<Dimension>,
-    },
-    Annotated {
-        props: Vec<Property>,
-        var: Symbol,
-        dims: Vec<Dimension>,
-    },
+pub struct ArgumentDef {
+    pub var: Symbol,
+    pub props: Vec<Property>,
+    pub dims: Vec<Dimension>,
 }
 
 #[derive(Debug)]
