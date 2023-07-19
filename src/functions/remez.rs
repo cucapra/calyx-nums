@@ -10,23 +10,25 @@ use crate::format::Format;
 use crate::fpcore::ast::{Rational, Sign};
 use crate::utils::sollya::{self, SollyaFunction};
 
-/// Constructs a table of values approximating `f` over the interval
-/// `[left, right]`.
+/// Constructs a table of polynomials approximating `f` piecewise over the
+/// interval `[left, right]`.
 ///
 /// The interval is subdivided at evenly-spaced breakpoints, with the number of
-/// subintervals given by `size`. Each value is computed so as to minimize the
-/// maximum absolute error over the corresponding subinterval.
+/// subintervals given by `size`. Each polynomial is computed so as to minimize
+/// the maximum absolute error over the corresponding subinterval.
 pub fn build_table(
     f: SollyaFunction,
+    degree: u32,
     left: &Rational,
     right: &Rational,
     size: u32,
     format: &Format,
-) -> CalyxResult<Vec<Rational>> {
+) -> CalyxResult<Vec<Vec<Rational>>> {
     let cmd = include_bytes!("scripts/remez.sollya");
 
     let args = [
         format!("{f}(_x_)"),
+        format!("{degree}"),
         format!("{left}"),
         format!("{right}"),
         format!("{size}"),
@@ -39,11 +41,15 @@ pub fn build_table(
     result
         .lines()
         .map(|line| {
-            parse_dyadic(line).map_err(|_| {
-                Error::misc(format!(
-                    "Sollya error: failed to parse result `{line}`"
-                ))
-            })
+            line.split(' ')
+                .map(|c| {
+                    parse_dyadic(c).map_err(|_| {
+                        Error::misc(format!(
+                            "Sollya error: failed to parse coefficient `{c}`"
+                        ))
+                    })
+                })
+                .collect()
         })
         .collect()
 }

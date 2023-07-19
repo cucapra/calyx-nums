@@ -1,21 +1,37 @@
-// Usage: sollya remez.sollya --args <fn> <left> <right> <count> <frac-width>
+// Usage: sollya remez.sollya --args <fn> <degree> <left> <right> <count> <frac-width>
 
 dieonerrormode = on!;
 display = dyadic!;
 
 f = parse(__argv[0]);
-l = parse(__argv[1]);
-r = parse(__argv[2]);
-c = parse(__argv[3]);
-w = parse(__argv[4]);
+n = parse(__argv[1]);
+l = parse(__argv[2]);
+r = parse(__argv[3]);
+c = parse(__argv[4]);
+w = parse(__argv[5]);
 
 stride = (r - l) / c;
+W = [||];
+
+for i from 0 to n do
+    W = W :. w;
 
 for i from 0 to c - 1 do {
+    var x, y, p, j;
+
     x = l + stride * i;
     y = x + stride;
 
-    print(coeff(fpminimax(f, 0, [|w|], [x;y], fixed, absolute), 0));
+    p = fpminimax(f, n, W, [x;y], fixed, absolute);
+
+    for j from 0 to n do {
+        if j != 0 then
+            write(" ");
+
+        write(coeff(p, j));
+    };
+
+    write("\n");
 };
 
 quit;

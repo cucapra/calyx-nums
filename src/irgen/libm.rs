@@ -169,6 +169,7 @@ fn build_primitive(
 ) -> CalyxResult<frontend::Primitive> {
     let table = remez::build_table(
         function,
+        0,
         &domain.left.rational,
         &domain.right.rational,
         size,
@@ -177,13 +178,19 @@ fn build_primitive(
 
     let values: Vec<_> = table
         .iter()
-        .map(|rational| {
-            rational.to_format(format).ok_or_else(|| {
-                Error::misc(format!(
-                    "Generated constant {rational} in implementation of \
-                     {function} is not representable in the given format"
-                ))
-            })
+        .map(|row| {
+            itertools::process_results(
+                row.iter().map(|value| {
+                    value.to_format(format).ok_or_else(|| {
+                        Error::misc(format!(
+                            "Generated constant {value} in implementation of \
+                             {function} is not representable in the given \
+                             format"
+                        ))
+                    })
+                }),
+                |bits| lut::pack(bits, format.width),
+            )
         })
         .collect::<CalyxResult<_>>()?;
 
@@ -207,5 +214,5 @@ fn build_component(
         lut.strategy,
     ));
 
-    lookup::compile_lookup(name, lut.name, format, lut.domain, lut_size, lib)
+    lookup::compile_lookup(name, lut.name, lut_size, 1, format, lut.domain, lib)
 }

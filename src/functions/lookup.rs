@@ -9,7 +9,7 @@ use crate::fpcore::ast::Rational;
 use crate::fpcore::metadata::CalyxDomain;
 
 /// Returns the signature for a table-lookup component.
-pub fn signature(format: &Format) -> Vec<ir::PortDef<u64>> {
+pub fn signature(cols: u32, format: &Format) -> Vec<ir::PortDef<u64>> {
     vec![
         ir::PortDef {
             name: Id::new("in"),
@@ -19,7 +19,7 @@ pub fn signature(format: &Format) -> Vec<ir::PortDef<u64>> {
         },
         ir::PortDef {
             name: Id::new("out"),
-            width: format.width,
+            width: u64::from(cols) * format.width,
             direction: ir::Direction::Output,
             attributes: Default::default(),
         },
@@ -29,9 +29,10 @@ pub fn signature(format: &Format) -> Vec<ir::PortDef<u64>> {
 pub fn compile_lookup(
     name: Id,
     lut: Id,
+    rows: u32,
+    cols: u32,
     format: &Format,
     domain: &CalyxDomain,
-    lut_size: u32,
     lib: &ir::LibrarySignatures,
 ) -> CalyxResult<ir::Component> {
     let sup = supremum(format);
@@ -52,15 +53,16 @@ pub fn compile_lookup(
         .with_pos(&domain.left)
     })?;
 
-    let idx_width = u64::from(index_width(lut_size));
-    let offset_width = u64::from(offset_width(format, domain, lut_size)?);
+    let width = u64::from(cols) * format.width;
+    let idx_width = u64::from(index_width(rows));
+    let offset_width = u64::from(offset_width(rows, format, domain)?);
 
-    let ports = signature(format);
+    let ports = signature(cols, format);
 
     let mut component = ir::Component::new(name, ports, true, None);
     let mut builder = ir::Builder::new(&mut component, lib);
 
-    let prim = builder.add_primitive("lut", lut, &[format.width, idx_width]);
+    let prim = builder.add_primitive("lut", lut, &[width, idx_width]);
 
     structure!(builder;
         let sub = prim std_sub(format.width);
@@ -113,12 +115,12 @@ fn index_width<T: PrimInt + Unsigned>(size: T) -> u32 {
 
 /// Computes the position of the least significant bit of the index.
 fn offset_width(
+    rows: u32,
     format: &Format,
     domain: &CalyxDomain,
-    lut_size: u32,
 ) -> CalyxResult<u32> {
     let stride = (domain.right.rational.clone() - domain.left.rational.clone())
-        / Rational::from(lut_size);
+        / Rational::from(rows);
 
     let stride_bits: u64 = stride.to_format(format).ok_or_else(|| {
         Error::misc(format!(

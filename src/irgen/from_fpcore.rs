@@ -111,7 +111,7 @@ fn compile_operation(
             let cell = builder.add_component(
                 Id::new("fn"),
                 Id::new(name),
-                lookup::signature(context.format),
+                lookup::signature(1, context.format),
             );
 
             (cell, &Signature::UNARY_DEFAULT, true)

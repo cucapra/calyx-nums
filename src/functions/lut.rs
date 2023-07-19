@@ -1,11 +1,24 @@
 //! Implementation of lookup tables as Verilog primitives.
 
-use std::fmt::Write;
+use std::fmt::{LowerHex, Write};
 
 use calyx_frontend::{Direction, PortDef, Primitive, Width};
 use calyx_utils::Id;
+use num::{BigUint, Zero};
 
-pub fn compile_lut(name: Id, values: &[u64]) -> Primitive {
+/// Packs a sequence of values, each of the given width, into a single bit
+/// vector. The first element of the sequence occupies the most-significant
+/// position.
+pub fn pack<I>(values: I, width: u64) -> BigUint
+where
+    I: IntoIterator<Item = BigUint>,
+{
+    values
+        .into_iter()
+        .fold(Zero::zero(), |acc, value| (acc << width) | value)
+}
+
+pub fn compile_lut<T: LowerHex>(name: Id, values: &[T]) -> Primitive {
     let width = Id::new("WIDTH");
     let idx_size = Id::new("IDX_SIZE");
 
@@ -33,7 +46,7 @@ pub fn compile_lut(name: Id, values: &[u64]) -> Primitive {
     }
 }
 
-fn format_body(values: &[u64]) -> String {
+fn format_body<T: LowerHex>(values: &[T]) -> String {
     let mut body = String::from("\n  always_comb begin\n    case (idx)\n");
 
     for (i, val) in values.iter().enumerate() {
