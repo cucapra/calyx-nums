@@ -98,7 +98,7 @@ impl Visitor<'_> for Builder<'_> {
                             .with_pos(op)
                     })?;
 
-                    let context = self.context[expr.uid];
+                    let context = self.context.props[&expr.uid];
 
                     let domain = context.domain.ok_or_else(|| {
                         Error::misc(String::from("No domain specified"))

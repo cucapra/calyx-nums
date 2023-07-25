@@ -94,7 +94,11 @@ impl FPCoreParser {
 
     fn binder(input: Node) -> ParseResult<ast::Binder> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(expr)] => ast::Binder { var, expr },
+            [symbol(var), expr(expr)] => ast::Binder {
+                var,
+                expr,
+                uid: ast::NodeId::new(),
+            },
         ))
     }
 

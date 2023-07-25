@@ -5,8 +5,10 @@ from typing import Generic, Optional, TypeVar
 
 from .ast import (
     Annotation,
+    Binder,
     Expr,
     FPCore,
+    Let,
     Num,
     Number,
     Operation,
@@ -38,13 +40,37 @@ class Parser(Generic[Num]):
     def expr(self) -> Expr[Num]:
         if (tk := next(self.tokens)) == '(':
             if (tk := next(self.tokens)) == '!':
-                return Annotation(self.props(), *self.until_close(self.expr))
+                props = self.props()
+                body = self.expr()
+
+                self.match(')')
+
+                return Annotation(props, body)
+            elif tk in ('let', 'let*'):
+                self.match('(')
+
+                binders = self.until_close(self.binder)
+                body = self.expr()
+
+                self.match(')')
+
+                return Let(binders, body, tk[-1] == '*')
             else:
                 return Operation(tk, self.until_close(self.expr))
         elif re.match(r'[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?$', tk):
             return Number(self.ntype(tk))
         else:
             return Symbol(tk)
+
+    def binder(self) -> Binder[Num]:
+        self.match('[')
+
+        var = next(self.tokens)
+        expr = self.expr()
+
+        self.match(']')
+
+        return Binder(var, expr)
 
     def prop(self) -> Property[Num]:
         return Property(next(self.tokens), self.expr())
@@ -77,7 +103,7 @@ class Parser(Generic[Num]):
 
     @staticmethod
     def tokenize(core: str) -> Iterator[str]:
-        return filter(bool, re.split(r'([()])|\s+|;.*', core))
+        return filter(bool, re.split(r'([][)(]|"[^"]*")|\s+|;.*', core))
 
     @staticmethod
     def parse(core: str, ntype: Callable[[str], Num]) -> FPCore[Num]:

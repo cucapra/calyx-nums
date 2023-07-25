@@ -39,6 +39,7 @@ pub struct ArgumentDef {
 pub struct Binder {
     pub var: Symbol,
     pub expr: Expression,
+    pub uid: NodeId,
 }
 
 #[derive(Debug)]

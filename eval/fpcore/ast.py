@@ -53,6 +53,36 @@ class Operation(Expr[Num]):
         return f'({self.op} {args})'
 
 @dataclass
+class Binder(Generic[Num]):
+    var: str
+    expr: Expr[Num]
+
+    def __str__(self) -> str:
+        return f'[{self.var} {self.expr}]'
+
+@dataclass
+class Let(Expr[Num]):
+    binders: list[Binder[Num]]
+    body: Expr[Num]
+    seq: bool
+
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
+        scope = context.copy()
+
+        for binder in self.binders:
+            inner = scope if self.seq else context
+
+            scope[binder.var] = binder.expr.interp(inner, libm)
+
+        return self.body.interp(scope, libm)
+
+    def __str__(self) -> str:
+        binders = ' '.join(map(str, self.binders))
+        star = '*' if self.seq else ''
+
+        return f'(let{star} ({binders}) {self.body})'
+
+@dataclass
 class Property(Generic[Num]):
     name: str
     data: Expr[Num]
