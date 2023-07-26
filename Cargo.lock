@@ -78,12 +78,13 @@ dependencies = [
 
 [[package]]
 name = "calyx-frontend"
-version = "0.2.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83f7a7d2db44a1412f0b8bea9407967ad4e974f47160a07d56e964bceb236d7e"
+checksum = "aef97b8b850d1772ba00a8e2851072b3895b588f6163529bf272a779c5d1ded7"
 dependencies = [
  "atty",
  "calyx-utils",
+ "itertools",
  "lazy_static",
  "linked-hash-map",
  "log",
@@ -97,9 +98,9 @@ dependencies = [
 
 [[package]]
 name = "calyx-ir"
-version = "0.2.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a44d97fef5acc208a94b3936f87a9abea4f4a6e98f251b11d6b4f48132c982ec"
+checksum = "7dbbbf550f847d0dba90c22391e0a21c9ef025d5d4acc07f7530985a7bd04de7"
 dependencies = [
  "calyx-frontend",
  "calyx-utils",
@@ -131,9 +132,9 @@ dependencies = [
 
 [[package]]
 name = "calyx-utils"
-version = "0.2.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e5e8944e4a90dcc05e2deeff0c811fdb1e09dac2cd16a6b451eee2888e22022"
+checksum = "4ad1f497349c8eea805daf3f5ba4c3196e0251a7c858c4d7d7eaa0aa6471fbbc"
 dependencies = [
  "atty",
  "itertools",

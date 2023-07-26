@@ -47,13 +47,13 @@ pub fn compile_lut<T: LowerHex>(name: Id, values: &[T]) -> Primitive {
 }
 
 fn format_body<T: LowerHex>(values: &[T]) -> String {
-    let mut body = String::from("\n  always_comb begin\n    case (idx)\n");
+    let mut body = String::from("always_comb begin\n    case (idx)\n");
 
     for (i, val) in values.iter().enumerate() {
         writeln!(body, "      'd{i} : out = 'h{val:x};").unwrap();
     }
 
-    body.push_str("    endcase\n  end\n");
+    body.push_str("    endcase\n  end");
 
     body
 }

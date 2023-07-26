@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 argh = "0.1.10"
-calyx-frontend = "0.2.1"
-calyx-ir = "0.2.1"
-calyx-utils = "0.2.1"
+calyx-frontend = "0.4.0"
+calyx-ir = "0.4.0"
+calyx-utils = "0.4.0"
 env_logger = "0.9.3"
 itertools = "0.10.5"
 log = "0.4.18"

@@ -1,8 +1,6 @@
 //! Math library construction.
 
 use std::collections::HashSet;
-use std::iter;
-use std::path::PathBuf;
 
 use calyx_frontend as frontend;
 use calyx_ir as ir;
@@ -19,58 +17,37 @@ use crate::utils::sollya::SollyaFunction;
 
 pub struct MathLib {
     pub components: Vec<ir::Component>,
-    pub lib: ir::LibrarySignatures,
 }
 
 impl MathLib {
-    pub fn new<I>(
+    pub fn new(
         defs: &[ast::BenchmarkDef],
         format: &Format,
         context: &ContextResolution,
-        core_lib: I,
-    ) -> CalyxResult<MathLib>
-    where
-        I: IntoIterator<Item = (Option<PathBuf>, Vec<frontend::Primitive>)>,
-    {
+        lib: &mut ir::LibrarySignatures,
+    ) -> CalyxResult<MathLib> {
         let mut builder = Builder {
-            primitives: Vec::new(),
-            luts: Vec::new(),
+            components: Vec::new(),
+            generated: HashSet::new(),
             format,
             context,
-            generated: HashSet::new(),
+            lib,
         };
 
         builder.visit_benchmarks(defs)?;
 
-        let lib = ir::LibrarySignatures::from(
-            core_lib
-                .into_iter()
-                .chain(iter::once((None, builder.primitives))),
-        );
-
-        let components = builder
-            .luts
-            .iter()
-            .map(|lut| build_component(lut, format, &lib))
-            .collect::<CalyxResult<_>>()?;
-
-        Ok(MathLib { components, lib })
+        Ok(MathLib {
+            components: builder.components,
+        })
     }
 }
 
-struct Lut<'a> {
-    name: ir::Id,
-    function: SollyaFunction,
-    domain: &'a CalyxDomain,
-    strategy: &'a CalyxImpl,
-}
-
 struct Builder<'a> {
-    primitives: Vec<frontend::Primitive>,
-    luts: Vec<Lut<'a>>,
+    components: Vec<ir::Component>,
+    generated: HashSet<ir::Id>,
     format: &'a Format,
     context: &'a ContextResolution<'a>,
-    generated: HashSet<ir::Id>,
+    lib: &'a mut ir::LibrarySignatures,
 }
 
 impl Visitor<'_> for Builder<'_> {
@@ -110,7 +87,7 @@ impl Visitor<'_> for Builder<'_> {
                             .with_pos(op)
                     })?;
 
-                    self.build_lut(f, domain, strategy)?;
+                    self.build_function(f, domain, strategy)?;
                 }
 
                 visitor::visit_expression(self, expr)
@@ -121,7 +98,7 @@ impl Visitor<'_> for Builder<'_> {
 }
 
 impl<'a> Builder<'a> {
-    fn build_lut(
+    fn build_function(
         &mut self,
         function: SollyaFunction,
         domain: &'a CalyxDomain,
@@ -145,15 +122,18 @@ impl<'a> Builder<'a> {
             let prim =
                 build_primitive(name, function, self.format, domain, size)?;
 
-            let lut = Lut {
+            self.lib.add_inline_primitive(prim).set_source();
+
+            let comp = build_component(
                 name,
                 function,
+                self.format,
                 domain,
                 strategy,
-            };
+                self.lib,
+            )?;
 
-            self.primitives.push(prim);
-            self.luts.push(lut);
+            self.components.push(comp);
         }
 
         Ok(())
@@ -198,21 +178,21 @@ fn build_primitive(
 }
 
 fn build_component(
-    lut: &Lut,
+    lut: ir::Id,
+    function: SollyaFunction,
     format: &Format,
+    domain: &CalyxDomain,
+    strategy: &CalyxImpl,
     lib: &ir::LibrarySignatures,
 ) -> CalyxResult<ir::Component> {
-    let lut_size = match lut.strategy {
+    let lut_size = match strategy {
         CalyxImpl::Lut { lut_size } => *lut_size,
         CalyxImpl::Poly { .. } => unimplemented!(),
     };
 
     let name = ir::Id::new(mangling::mangle_function(
-        lut.function,
-        format,
-        lut.domain,
-        lut.strategy,
+        function, format, domain, strategy,
     ));
 
-    lookup::compile_lookup(name, lut.name, lut_size, 1, format, lut.domain, lib)
+    lookup::compile_lookup(name, lut, lut_size, 1, format, domain, lib)
 }

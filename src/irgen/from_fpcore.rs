@@ -3,7 +3,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::iter;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use calyx_ir as ir;
@@ -290,7 +289,7 @@ fn compile_benchmark(
         }
     }));
 
-    let mut component = ir::Component::new(name, ports, false, None);
+    let mut component = ir::Component::new(name, ports, false, false, None);
     let mut builder = ir::Builder::new(&mut component, lib);
 
     let mut context = Context {
@@ -318,14 +317,11 @@ fn compile_benchmark(
     Ok(component)
 }
 
-pub fn compile_fpcore<I>(
+pub fn compile_fpcore(
     defs: &[ast::BenchmarkDef],
     format: &Format,
-    math_lib: I,
-) -> CalyxResult<ir::Context>
-where
-    I: IntoIterator<Item = (Option<PathBuf>, Vec<ir::Primitive>)>,
-{
+    mut lib: ir::LibrarySignatures,
+) -> CalyxResult<ir::Context> {
     let mut name_gen = NameGenerator::with_prev_defined_names(
         defs.iter()
             .filter_map(|def| def.name.as_ref().map(|sym| sym.id))
@@ -333,12 +329,12 @@ where
     );
 
     let context = ContextResolution::new(defs)?;
-    let libm = MathLib::new(defs, format, &context, math_lib)?;
+    let libm = MathLib::new(defs, format, &context, &mut lib)?;
 
     let mut components: Vec<_> = defs
         .iter()
         .map(|def| {
-            compile_benchmark(def, format, &context, &libm.lib, &mut name_gen)
+            compile_benchmark(def, format, &context, &lib, &mut name_gen)
         })
         .collect::<CalyxResult<_>>()?;
 
@@ -346,7 +342,7 @@ where
 
     Ok(ir::Context {
         components,
-        lib: libm.lib,
+        lib,
         bc: Default::default(),
         entrypoint: Id::new("main"),
         extra_opts: Vec::new(),

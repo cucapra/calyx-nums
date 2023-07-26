@@ -59,7 +59,7 @@ pub fn compile_lookup(
 
     let ports = signature(cols, format);
 
-    let mut component = ir::Component::new(name, ports, true, None);
+    let mut component = ir::Component::new(name, ports, false, true, None);
     let mut builder = ir::Builder::new(&mut component, lib);
 
     let prim = builder.add_primitive("lut", lut, &[width, idx_width]);
