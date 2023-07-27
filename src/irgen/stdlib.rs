@@ -87,6 +87,54 @@ pub mod core {
         params: Parameters::Bitnum,
         is_comb: true,
     };
+
+    pub const STD_GT: Primitive = Primitive {
+        name: "std_gt",
+        prefix_hint: "gt",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_LT: Primitive = Primitive {
+        name: "std_lt",
+        prefix_hint: "lt",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_EQ: Primitive = Primitive {
+        name: "std_eq",
+        prefix_hint: "eq",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_NEQ: Primitive = Primitive {
+        name: "std_neq",
+        prefix_hint: "neq",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_GE: Primitive = Primitive {
+        name: "std_ge",
+        prefix_hint: "ge",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_LE: Primitive = Primitive {
+        name: "std_le",
+        prefix_hint: "le",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
 }
 
 pub mod binary_operators {
@@ -140,6 +188,14 @@ pub mod binary_operators {
         is_comb: false,
     };
 
+    pub const STD_FP_GT: Primitive = Primitive {
+        name: "std_fp_gt",
+        prefix_hint: "gt",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::FixedPoint,
+        is_comb: true,
+    };
+
     pub const STD_FP_SADD: Primitive = Primitive {
         name: "std_fp_sadd",
         prefix_hint: "add",
@@ -184,6 +240,22 @@ pub mod binary_operators {
         },
         params: Parameters::FixedPoint,
         is_comb: false,
+    };
+
+    pub const STD_FP_SGT: Primitive = Primitive {
+        name: "std_fp_sgt",
+        prefix_hint: "gt",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::FixedPoint,
+        is_comb: true,
+    };
+
+    pub const STD_FP_SLT: Primitive = Primitive {
+        name: "std_fp_slt",
+        prefix_hint: "lt",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::FixedPoint,
+        is_comb: true,
     };
 
     pub const STD_MULT_PIPE: Primitive = Primitive {
@@ -260,6 +332,54 @@ pub mod binary_operators {
         },
         params: Parameters::Bitnum,
         is_comb: false,
+    };
+
+    pub const STD_SGT: Primitive = Primitive {
+        name: "std_sgt",
+        prefix_hint: "gt",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_SLT: Primitive = Primitive {
+        name: "std_slt",
+        prefix_hint: "lt",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_SEQ: Primitive = Primitive {
+        name: "std_seq",
+        prefix_hint: "eq",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_SNEQ: Primitive = Primitive {
+        name: "std_sneq",
+        prefix_hint: "neq",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_SGE: Primitive = Primitive {
+        name: "std_sge",
+        prefix_hint: "ge",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
+    };
+
+    pub const STD_SLE: Primitive = Primitive {
+        name: "std_sle",
+        prefix_hint: "le",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Bitnum,
+        is_comb: true,
     };
 }
 

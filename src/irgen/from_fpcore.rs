@@ -72,11 +72,11 @@ fn get_primitive_operation(
 ) -> Option<&'static Primitive<'static>> {
     match op.kind {
         ast::OpKind::Math(op) => match op {
-            ast::MathOp::Add => Some(builtins::primitive_adder(format)),
-            ast::MathOp::Sub => Some(builtins::primitive_subtractor(format)),
-            ast::MathOp::Mul => Some(builtins::primitive_multiplier(format)),
-            ast::MathOp::Div => Some(builtins::primitive_divider(format)),
-            ast::MathOp::Sqrt => Some(builtins::primitive_sqrt(format)),
+            ast::MathOp::Add => Some(builtins::add(format)),
+            ast::MathOp::Sub => Some(builtins::sub(format)),
+            ast::MathOp::Mul => Some(builtins::mul(format)),
+            ast::MathOp::Div => Some(builtins::div(format)),
+            ast::MathOp::Sqrt => Some(builtins::sqrt(format)),
             _ => None,
         },
         ast::OpKind::Test(_) => unimplemented!(),
