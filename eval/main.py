@@ -58,10 +58,11 @@ def test_bench(
         comp_result = compile(core, fmt, nums, lib)
 
         bench = comp_result.stdout
-        comb = f'comb component {benchmark.name}' in bench
+        name = benchmark.name or 'anonymous'
+        comb = f'comb component {name}' in bench
 
         main = harness.single(
-            benchmark.name or 'anonymous',
+            name,
             comb,
             benchmark.args,
             'mem',
