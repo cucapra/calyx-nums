@@ -56,7 +56,7 @@ fn compile_symbol(
             signature.get(sym.id)
         }
         Name::Binding(binder) => {
-            let cell = &ctx.stores[&binder.uid];
+            let cell = &ctx.stores[&binder.expr.uid];
             let port = cell.borrow().get("out");
 
             port
@@ -203,7 +203,7 @@ fn compile_let(
                 vec![],
             );
 
-            ctx.stores.insert(binder.uid, reg);
+            ctx.stores.insert(binder.expr.uid, reg);
 
             CalyxResult::Ok((control, invoke))
         }),
