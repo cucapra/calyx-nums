@@ -7,10 +7,11 @@ use std::rc::Rc;
 
 use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error, Id, NameGenerator};
+use itertools::Itertools;
 
 use super::libm::MathLib;
 use super::stdlib::{Arguments, Primitive, Signature};
-use crate::analysis::context::{ContextResolution, Name};
+use crate::analysis::{Binding, ContextResolution, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::functions::{builtins, lookup};
@@ -50,12 +51,12 @@ fn compile_symbol(
     ctx: &mut Context,
 ) -> ir::RRC<ir::Port> {
     match ctx.resolved.names[&uid] {
-        Name::Argument(_) => {
+        Binding::Argument(_) => {
             let signature = ctx.builder.component.signature.borrow();
 
             signature.get(sym.id)
         }
-        Name::Binding(binder) => {
+        Binding::Let(binder) => {
             let cell = &ctx.stores[&binder.expr.uid];
             let port = cell.borrow().get("out");
 
@@ -125,33 +126,16 @@ fn compile_operation(
         };
 
     let inputs = match signature.args {
-        Arguments::Unary { input: cell_in } => {
-            if let [arg] = &arg_ports[..] {
-                vec![(Id::new(cell_in), arg.clone())]
-            } else {
-                return Err(Error::misc(format!(
-                    "Operation expects 1 argument, got {}",
-                    arg_ports.len()
-                ))
-                .with_pos(op));
-            }
+        Arguments::Unary { input } => {
+            let (arg,) = arg_ports.into_iter().collect_tuple().unwrap();
+
+            vec![(Id::new(input), arg)]
         }
-        Arguments::Binary {
-            left: cell_left,
-            right: cell_right,
-        } => {
-            if let [left_arg, right_arg] = &arg_ports[..] {
-                vec![
-                    (Id::new(cell_left), left_arg.clone()),
-                    (Id::new(cell_right), right_arg.clone()),
-                ]
-            } else {
-                return Err(Error::misc(format!(
-                    "Operation expects 2 arguments, got {}",
-                    arg_ports.len()
-                ))
-                .with_pos(op));
-            }
+        Arguments::Binary { left, right } => {
+            let (left_arg, right_arg) =
+                arg_ports.into_iter().collect_tuple().unwrap();
+
+            vec![(Id::new(left), left_arg), (Id::new(right), right_arg)]
         }
     };
 
@@ -276,17 +260,11 @@ fn compile_benchmark(
         attributes: Default::default(),
     }];
 
-    ports.extend(def.args.iter().map(|arg| {
-        if arg.dims.is_empty() {
-            ir::PortDef {
-                name: arg.var.id,
-                width: format.width,
-                direction: ir::Direction::Input,
-                attributes: Default::default(),
-            }
-        } else {
-            unimplemented!()
-        }
+    ports.extend(def.args.iter().map(|arg| ir::PortDef {
+        name: arg.var.id,
+        width: format.width,
+        direction: ir::Direction::Input,
+        attributes: Default::default(),
     }));
 
     let mut component = ir::Component::new(name, ports, false, false, None);
@@ -329,6 +307,8 @@ pub fn compile_fpcore(
     );
 
     let context = ContextResolution::new(defs)?;
+    let _ = TypeCheck::new(defs, &context)?;
+
     let libm = MathLib::new(defs, format, &context, &mut lib)?;
 
     let mut components: Vec<_> = defs

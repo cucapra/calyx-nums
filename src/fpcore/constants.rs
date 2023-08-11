@@ -71,6 +71,58 @@ impl FromStr for MathOp {
     }
 }
 
+impl MathOp {
+    pub fn arity(&self) -> usize {
+        match self {
+            MathOp::Add => 2,
+            MathOp::Sub => 2,
+            MathOp::Mul => 2,
+            MathOp::Div => 2,
+            MathOp::FAbs => 1,
+            MathOp::FMA => 3,
+            MathOp::Exp => 1,
+            MathOp::Exp2 => 1,
+            MathOp::ExpM1 => 1,
+            MathOp::Log => 1,
+            MathOp::Log10 => 1,
+            MathOp::Log2 => 1,
+            MathOp::Log1P => 1,
+            MathOp::Pow => 2,
+            MathOp::Sqrt => 1,
+            MathOp::Cbrt => 1,
+            MathOp::Hypot => 2,
+            MathOp::Sin => 1,
+            MathOp::Cos => 1,
+            MathOp::Tan => 1,
+            MathOp::ASin => 1,
+            MathOp::ACos => 1,
+            MathOp::ATan => 1,
+            MathOp::ATan2 => 2,
+            MathOp::Sinh => 1,
+            MathOp::Cosh => 1,
+            MathOp::Tanh => 1,
+            MathOp::ASinh => 1,
+            MathOp::ACosh => 1,
+            MathOp::ATanh => 1,
+            MathOp::Erf => 1,
+            MathOp::ErfC => 1,
+            MathOp::TGamma => 1,
+            MathOp::LGamma => 1,
+            MathOp::Ceil => 1,
+            MathOp::Floor => 1,
+            MathOp::FMod => 2,
+            MathOp::Remainder => 2,
+            MathOp::FMax => 2,
+            MathOp::FMin => 2,
+            MathOp::FDim => 2,
+            MathOp::CopySign => 2,
+            MathOp::Trunc => 1,
+            MathOp::Round => 1,
+            MathOp::NearbyInt => 1,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 #[rustfmt::skip]
 pub enum TestOp {
@@ -99,6 +151,27 @@ impl FromStr for TestOp {
             "isnormal" => Ok(TestOp::IsNormal),
             "signbit" => Ok(TestOp::SignBit),
             _ => Err(()),
+        }
+    }
+}
+
+impl TestOp {
+    pub fn arity(&self) -> usize {
+        match self {
+            TestOp::Lt => 2,
+            TestOp::Gt => 2,
+            TestOp::Leq => 2,
+            TestOp::Geq => 2,
+            TestOp::Eq => 2,
+            TestOp::Neq => 2,
+            TestOp::And => 2,
+            TestOp::Or => 2,
+            TestOp::Not => 1,
+            TestOp::IsFinite => 1,
+            TestOp::IsInf => 1,
+            TestOp::IsNan => 1,
+            TestOp::IsNormal => 1,
+            TestOp::SignBit => 1,
         }
     }
 }

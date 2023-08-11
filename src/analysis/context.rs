@@ -5,9 +5,9 @@ use calyx_utils::{CalyxResult, Error, Id};
 use crate::fpcore::{ast, metadata, visitor, Visitor};
 
 #[derive(Clone, Copy)]
-pub enum Name<'ast> {
+pub enum Binding<'ast> {
     Argument(&'ast ast::ArgumentDef),
-    Binding(&'ast ast::Binder),
+    Let(&'ast ast::Binder),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -17,7 +17,7 @@ pub struct Context<'ast> {
 }
 
 pub struct ContextResolution<'ast> {
-    pub names: HashMap<ast::NodeId, Name<'ast>>,
+    pub names: HashMap<ast::NodeId, Binding<'ast>>,
     pub props: HashMap<ast::NodeId, Context<'ast>>,
 }
 
@@ -42,7 +42,7 @@ impl<'ast> ContextResolution<'ast> {
 
 struct Builder<'ast> {
     result: ContextResolution<'ast>,
-    scopes: Vec<HashMap<Id, Name<'ast>>>,
+    scopes: Vec<HashMap<Id, Binding<'ast>>>,
     parent: Context<'ast>,
 }
 
@@ -65,7 +65,7 @@ impl<'ast> Builder<'ast> {
         }
     }
 
-    fn find_name(&self, symbol: Id) -> Option<&Name<'ast>> {
+    fn find_name(&self, symbol: Id) -> Option<&Binding<'ast>> {
         for map in self.scopes.iter().rev() {
             if let Some(name) = map.get(&symbol) {
                 return Some(name);
@@ -86,7 +86,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
         let mut scope = HashMap::new();
 
         for arg in &def.args {
-            scope.insert(arg.var.id, Name::Argument(arg));
+            scope.insert(arg.var.id, Binding::Argument(arg));
 
             for prop in &arg.props {
                 if !is_silent(prop) {
@@ -137,7 +137,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 for binder in binders {
                     self.visit_expression(&binder.expr)?;
 
-                    scope.insert(binder.var.id, Name::Binding(binder));
+                    scope.insert(binder.var.id, Binding::Let(binder));
                 }
 
                 self.scopes.push(scope);
@@ -160,7 +160,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                     self.scopes
                         .last_mut()
                         .unwrap()
-                        .insert(binder.var.id, Name::Binding(binder));
+                        .insert(binder.var.id, Binding::Let(binder));
                 }
 
                 self.visit_expression(body)?;

@@ -6,7 +6,7 @@ use calyx_frontend as frontend;
 use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error};
 
-use crate::analysis::context::ContextResolution;
+use crate::analysis::ContextResolution;
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
