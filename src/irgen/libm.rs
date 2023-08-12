@@ -150,8 +150,8 @@ fn build_primitive(
     let table = remez::build_table(
         function,
         0,
-        &domain.left.rational,
-        &domain.right.rational,
+        &domain.left.value,
+        &domain.right.value,
         size,
         format,
     )?;

@@ -1,13 +1,9 @@
 //! Minimax approximations.
 
 use calyx_utils::{CalyxResult, Error};
-use itertools::PeekingNext;
-use num::bigint::{BigInt, BigUint, ParseBigIntError};
-use num::rational::Ratio;
-use num::traits::Pow;
 
 use crate::format::Format;
-use crate::fpcore::ast::{Rational, Sign};
+use crate::fpcore::ast::Rational;
 use crate::utils::sollya::{self, SollyaFunction};
 
 /// Constructs a table of polynomials approximating `f` piecewise over the
@@ -43,7 +39,7 @@ pub fn build_table(
         .map(|line| {
             line.split(' ')
                 .map(|c| {
-                    parse_dyadic(c).map_err(|_| {
+                    Rational::from_dyadic(c).map_err(|_| {
                         Error::misc(format!(
                             "Sollya error: failed to parse coefficient `{c}`"
                         ))
@@ -52,34 +48,4 @@ pub fn build_table(
                 .collect()
         })
         .collect()
-}
-
-/// Parses a number in Gappa dyadic notation.
-///
-/// The accepted format is defined by the following regular expression:
-/// `[-+]?[0-9]+([bB][-+]?[0-9]+)?`.
-fn parse_dyadic(s: &str) -> Result<Rational, ParseBigIntError> {
-    let mut iter = s.chars();
-
-    let sign = match iter.peeking_next(|&c| c == '-' || c == '+') {
-        Some('-') => Sign::Neg,
-        _ => Sign::Pos,
-    };
-
-    let rest = iter.as_str();
-
-    if let Some((m, e)) = rest.split_once(|c| c == 'b' || c == 'B') {
-        let mantissa: BigUint = m.parse()?;
-        let exponent: BigInt = e.parse()?;
-
-        let value = Ratio::from(mantissa)
-            * Ratio::from(BigUint::from(2u8)).pow(exponent);
-
-        Ok(Rational { sign, value })
-    } else {
-        Ok(Rational {
-            sign,
-            value: Ratio::from_integer(rest.parse()?),
-        })
-    }
 }

@@ -115,7 +115,7 @@ pub struct Expression {
 /// A numeric literal.
 #[derive(Debug)]
 pub struct Number {
-    pub rational: Rational,
+    pub value: Rational,
     pub span: GPosIdx,
 }
 

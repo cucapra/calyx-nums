@@ -1,4 +1,3 @@
-mod conv;
 pub mod mangling;
-mod ops;
+mod rational;
 pub mod sollya;

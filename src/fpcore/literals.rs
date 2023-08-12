@@ -16,7 +16,7 @@ pub enum Sign {
 #[derive(Clone, Debug)]
 pub struct Rational {
     pub sign: Sign,
-    pub value: Ratio<BigUint>,
+    pub mag: Ratio<BigUint>,
 }
 
 impl Rational {
@@ -24,7 +24,7 @@ impl Rational {
     pub fn new(sign: Sign, numer: BigUint, denom: BigUint) -> Rational {
         Rational {
             sign,
-            value: Ratio::new(numer, denom),
+            mag: Ratio::new(numer, denom),
         }
     }
 
@@ -50,7 +50,7 @@ impl Rational {
     ) -> Result<Rational, ParseBigIntError> {
         Ok(Rational {
             sign,
-            value: ratio_from_fixed_point_str(integer, fraction, radix)?,
+            mag: ratio_from_fixed_point_str(integer, fraction, radix)?,
         })
     }
 
@@ -67,7 +67,7 @@ impl Rational {
     ) -> Result<Rational, ParseBigIntError> {
         Ok(Rational {
             sign,
-            value: ratio_from_scientific_str(
+            mag: ratio_from_scientific_str(
                 integer, fraction, radix, base, exponent,
             )?,
         })
@@ -87,7 +87,7 @@ impl Rational {
 
         Ok(Rational {
             sign,
-            value: Ratio::from(mantissa) * Ratio::from(base).pow(exponent),
+            mag: Ratio::from(mantissa) * Ratio::from(base).pow(exponent),
         })
     }
 
@@ -101,7 +101,7 @@ impl Rational {
 
     /// Returns `true` if the number is zero.
     pub fn is_zero(&self) -> bool {
-        self.value.is_zero()
+        self.mag.is_zero()
     }
 }
 
@@ -110,7 +110,7 @@ impl fmt::Display for Rational {
         if self.is_negative() {
             write!(f, "-")?
         }
-        write!(f, "{}", self.value)
+        write!(f, "{}", self.mag)
     }
 }
 

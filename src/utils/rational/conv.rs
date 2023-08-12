@@ -29,7 +29,7 @@ impl Rational {
         }
 
         let padding = frac_width.checked_sub(self.frac_width()?)?;
-        let val = self.value.numer() << padding;
+        let val = self.mag.numer() << padding;
 
         if val.bits() <= width {
             val.try_into().ok()
@@ -43,12 +43,12 @@ impl Rational {
     where
         T: TryFrom<BigUint> + Zero,
     {
-        if self.value.is_zero() {
+        if self.mag.is_zero() {
             return Some(Zero::zero());
         }
 
         let padding = frac_width.checked_sub(self.frac_width()?)?;
-        let val = self.value.numer() << padding;
+        let val = self.mag.numer() << padding;
 
         if self.is_negative() {
             let complement = (BigUint::one() << width).checked_sub(&val)?;
@@ -65,7 +65,7 @@ impl Rational {
     }
 
     fn frac_width(&self) -> Option<u64> {
-        let denom = self.value.denom();
+        let denom = self.mag.denom();
 
         if denom.count_ones() == 1 {
             Some(denom.bits() - 1)

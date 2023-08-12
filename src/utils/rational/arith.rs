@@ -33,6 +33,31 @@ impl BitXor for Sign {
     }
 }
 
+impl Neg for Rational {
+    type Output = Self;
+
+    fn neg(self) -> Rational {
+        Rational {
+            sign: -self.sign,
+            mag: self.mag,
+        }
+    }
+}
+
+macro_rules! forwarding_unop {
+    ($trait:ident, $method:ident, $type:ty) => {
+        impl $trait for &$type {
+            type Output = $type;
+
+            fn $method(self) -> $type {
+                self.clone().$method()
+            }
+        }
+    };
+}
+
+forwarding_unop!(Neg, neg, Rational);
+
 impl Add for Rational {
     type Output = Self;
 
@@ -40,34 +65,23 @@ impl Add for Rational {
         if self.sign == rhs.sign {
             return Rational {
                 sign: self.sign,
-                value: self.value + rhs.value,
+                mag: self.mag + rhs.mag,
             };
         }
 
-        match self.value.cmp(&rhs.value) {
+        match self.mag.cmp(&rhs.mag) {
             Ordering::Greater => Rational {
                 sign: self.sign,
-                value: self.value - rhs.value,
+                mag: self.mag - rhs.mag,
             },
             Ordering::Equal => Rational {
                 sign: Sign::Pos,
-                value: Zero::zero(),
+                mag: Zero::zero(),
             },
             Ordering::Less => Rational {
                 sign: rhs.sign,
-                value: rhs.value - self.value,
+                mag: rhs.mag - self.mag,
             },
-        }
-    }
-}
-
-impl Neg for Rational {
-    type Output = Self;
-
-    fn neg(self) -> Rational {
-        Rational {
-            sign: -self.sign,
-            value: self.value,
         }
     }
 }
@@ -86,7 +100,7 @@ impl Mul for Rational {
     fn mul(self, rhs: Rational) -> Rational {
         Rational {
             sign: self.sign ^ rhs.sign,
-            value: self.value * rhs.value,
+            mag: self.mag * rhs.mag,
         }
     }
 }
@@ -97,10 +111,43 @@ impl Div for Rational {
     fn div(self, rhs: Rational) -> Rational {
         Rational {
             sign: self.sign ^ rhs.sign,
-            value: self.value / rhs.value,
+            mag: self.mag / rhs.mag,
         }
     }
 }
+
+macro_rules! forwarding_binop {
+    ($trait:ident, $method:ident, $type:ty) => {
+        impl $trait<&$type> for $type {
+            type Output = $type;
+
+            fn $method(self, rhs: &$type) -> $type {
+                self.$method(rhs.clone())
+            }
+        }
+
+        impl $trait<$type> for &$type {
+            type Output = $type;
+
+            fn $method(self, rhs: $type) -> $type {
+                self.clone().$method(rhs)
+            }
+        }
+
+        impl $trait<&$type> for &$type {
+            type Output = $type;
+
+            fn $method(self, rhs: &$type) -> $type {
+                self.clone().$method(rhs.clone())
+            }
+        }
+    };
+}
+
+forwarding_binop!(Add, add, Rational);
+forwarding_binop!(Sub, sub, Rational);
+forwarding_binop!(Mul, mul, Rational);
+forwarding_binop!(Div, div, Rational);
 
 impl<RHS> Pow<RHS> for Rational
 where
@@ -114,15 +161,26 @@ where
 
         Rational {
             sign,
-            value: self.value.pow(rhs),
+            mag: self.mag.pow(rhs),
         }
+    }
+}
+
+impl<RHS> Pow<RHS> for &Rational
+where
+    Rational: Pow<RHS, Output = Rational>,
+{
+    type Output = Rational;
+
+    fn pow(self, rhs: RHS) -> Rational {
+        self.clone().pow(rhs)
     }
 }
 
 impl PartialEq for Rational {
     fn eq(&self, other: &Rational) -> bool {
         if self.sign == other.sign {
-            self.value == other.value
+            self.mag == other.mag
         } else {
             self.is_zero() && other.is_zero()
         }
@@ -144,10 +202,10 @@ impl Ord for Rational {
         }
 
         match (self.sign, other.sign) {
-            (Sign::Pos, Sign::Pos) => self.value.cmp(&other.value),
+            (Sign::Pos, Sign::Pos) => self.mag.cmp(&other.mag),
             (Sign::Pos, Sign::Neg) => Ordering::Greater,
             (Sign::Neg, Sign::Pos) => Ordering::Less,
-            (Sign::Neg, Sign::Neg) => self.value.cmp(&other.value).reverse(),
+            (Sign::Neg, Sign::Neg) => self.mag.cmp(&other.mag).reverse(),
         }
     }
 }
@@ -159,7 +217,7 @@ where
     fn from(value: T) -> Rational {
         Rational {
             sign: Sign::Pos,
-            value: Ratio::from_integer(value.into()),
+            mag: Ratio::from_integer(value.into()),
         }
     }
 }

@@ -224,15 +224,15 @@ impl FPCoreParser {
     fn number(input: Node) -> ParseResult<ast::Number> {
         let span = intern_span(&input);
 
-        let rational = match_nodes!(input.into_children();
-            [rational(rational)] => rational,
-            [decnum(rational)] => rational,
-            [hexnum(rational)] => rational,
+        let value = match_nodes!(input.into_children();
+            [rational(value)] => value,
+            [decnum(value)] => value,
+            [hexnum(value)] => value,
             [digits_kwd(_), mantissa((sign, mantissa)), exponent(exponent), dec_digits(base)] =>
                 ast::Rational::from_digits(sign, mantissa, exponent, base).unwrap(),
         );
 
-        Ok(ast::Number { rational, span })
+        Ok(ast::Number { value, span })
     }
 
     fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {

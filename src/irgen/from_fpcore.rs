@@ -32,10 +32,10 @@ fn compile_number(
     num: &ast::Number,
     ctx: &mut Context,
 ) -> CalyxResult<ir::RRC<ir::Port>> {
-    let val = num.rational.to_format(ctx.format).ok_or_else(|| {
+    let val = num.value.to_format(ctx.format).ok_or_else(|| {
         Error::misc(format!(
             "Constant value {} is not representable in the given format",
-            num.rational
+            num.value
         ))
         .with_pos(num)
     })?;

@@ -37,18 +37,18 @@ pub fn compile_lookup(
 ) -> CalyxResult<ir::Component> {
     let sup = supremum(format);
 
-    if domain.right.rational > sup {
+    if domain.right.value > sup {
         return Err(Error::misc(format!(
             "Right endpoint {} exceeds maximum permissable value of {}",
-            domain.right.rational, sup
+            domain.right.value, sup
         ))
         .with_pos(&domain.right));
     }
 
-    let left = domain.left.rational.to_format(format).ok_or_else(|| {
+    let left = domain.left.value.to_format(format).ok_or_else(|| {
         Error::misc(format!(
             "Left endpoint {} is not representable in the given format",
-            domain.left.rational
+            domain.left.value
         ))
         .with_pos(&domain.left)
     })?;
@@ -119,8 +119,8 @@ fn offset_width(
     format: &Format,
     domain: &CalyxDomain,
 ) -> CalyxResult<u32> {
-    let stride = (domain.right.rational.clone() - domain.left.rational.clone())
-        / Rational::from(rows);
+    let stride =
+        (&domain.right.value - &domain.left.value) / Rational::from(rows);
 
     let stride_bits: u64 = stride.to_format(format).ok_or_else(|| {
         Error::misc(format!(

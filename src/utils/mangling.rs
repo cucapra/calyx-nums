@@ -43,8 +43,8 @@ fn mangle_format(format: &Format) -> String {
 fn mangle_domain(domain: &CalyxDomain) -> String {
     format!(
         "tl11CalyxDomain{}{}E",
-        mangle_rational(&domain.left.rational),
-        mangle_rational(&domain.right.rational)
+        mangle_rational(&domain.left.value),
+        mangle_rational(&domain.right.value)
     )
 }
 
@@ -67,7 +67,7 @@ fn mangle_rational(rational: &Rational) -> String {
     format!(
         "tl8RationalLi{}{}ELj{}EE",
         sign,
-        rational.value.numer(),
-        rational.value.denom()
+        rational.mag.numer(),
+        rational.mag.denom()
     )
 }
