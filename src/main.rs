@@ -65,7 +65,7 @@ fn main() -> CalyxResult<()> {
 
     let workspace = build_workspace(STD_IMPORTS, &opts.lib_path)?;
 
-    let ctx = irgen::compile_fpcore(&benchmarks, &opts.format, workspace.lib)?;
+    let ctx = irgen::compile_fpcore(&benchmarks, &opts, workspace.lib)?;
 
     let mut out: Box<dyn Write> = if let Some(path) = opts.output {
         Box::new(File::create(path)?)

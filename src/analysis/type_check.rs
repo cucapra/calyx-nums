@@ -4,6 +4,7 @@ use std::ops::Index;
 use calyx_utils::{CalyxResult, Error};
 
 use super::context::{Binding, ContextResolution};
+use super::passes::{Pass, PassManager};
 use crate::fpcore::ast;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -16,17 +17,14 @@ pub struct TypeCheck {
     types: HashMap<ast::NodeId, Type>,
 }
 
-impl TypeCheck {
-    pub fn new(
-        defs: &[ast::BenchmarkDef],
-        context: &ContextResolution,
-    ) -> CalyxResult<TypeCheck> {
+impl Pass<'_> for TypeCheck {
+    fn run(pm: &PassManager) -> CalyxResult<Self> {
         let mut builder = Builder {
-            context,
+            context: pm.get_analysis()?,
             types: HashMap::new(),
         };
 
-        for def in defs {
+        for def in pm.ast() {
             builder.check_expression(&def.body)?;
         }
 

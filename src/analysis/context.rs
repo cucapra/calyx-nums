@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use calyx_utils::{CalyxResult, Error, Id};
 
+use super::passes::{Pass, PassManager};
 use crate::fpcore::{ast, metadata, visitor, Visitor};
 
 #[derive(Clone, Copy)]
@@ -21,10 +22,8 @@ pub struct ContextResolution<'ast> {
     pub props: HashMap<ast::NodeId, Context<'ast>>,
 }
 
-impl<'ast> ContextResolution<'ast> {
-    pub fn new(
-        defs: &'ast [ast::BenchmarkDef],
-    ) -> CalyxResult<ContextResolution<'ast>> {
+impl<'ast> Pass<'ast> for ContextResolution<'ast> {
+    fn run(pm: &PassManager<'_, 'ast>) -> CalyxResult<Self> {
         let mut builder = Builder {
             result: ContextResolution {
                 names: HashMap::new(),
@@ -34,7 +33,7 @@ impl<'ast> ContextResolution<'ast> {
             parent: Default::default(),
         };
 
-        builder.visit_benchmarks(defs)?;
+        builder.visit_benchmarks(pm.ast())?;
 
         Ok(builder.result)
     }

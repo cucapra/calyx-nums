@@ -6,7 +6,7 @@ use calyx_frontend as frontend;
 use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error};
 
-use crate::analysis::ContextResolution;
+use crate::analysis::{ContextResolution, PassManager};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
@@ -21,20 +21,20 @@ pub struct MathLib {
 
 impl MathLib {
     pub fn new(
-        defs: &[ast::BenchmarkDef],
-        format: &Format,
-        context: &ContextResolution,
+        pm: &PassManager,
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<MathLib> {
+        let opts = pm.opts();
+
         let mut builder = Builder {
             components: Vec::new(),
             generated: HashSet::new(),
-            format,
-            context,
+            format: &opts.format,
+            context: pm.get_analysis()?,
             lib,
         };
 
-        builder.visit_benchmarks(defs)?;
+        builder.visit_benchmarks(pm.ast())?;
 
         Ok(MathLib {
             components: builder.components,

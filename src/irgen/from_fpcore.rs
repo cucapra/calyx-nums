@@ -11,10 +11,11 @@ use itertools::Itertools;
 
 use super::libm::MathLib;
 use super::stdlib::{Arguments, Primitive, Signature};
-use crate::analysis::{Binding, ContextResolution, TypeCheck};
+use crate::analysis::{Binding, ContextResolution, PassManager, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::functions::{builtins, lookup};
+use crate::opts::Opts;
 use crate::utils::mangling;
 
 /// Prefix for components generated from anonymous FPCores.
@@ -297,7 +298,7 @@ fn compile_benchmark(
 
 pub fn compile_fpcore(
     defs: &[ast::BenchmarkDef],
-    format: &Format,
+    opts: &Opts,
     mut lib: ir::LibrarySignatures,
 ) -> CalyxResult<ir::Context> {
     let mut name_gen = NameGenerator::with_prev_defined_names(
@@ -306,15 +307,17 @@ pub fn compile_fpcore(
             .collect(),
     );
 
-    let context = ContextResolution::new(defs)?;
-    let _ = TypeCheck::new(defs, &context)?;
+    let pm = PassManager::new(opts, defs);
 
-    let libm = MathLib::new(defs, format, &context, &mut lib)?;
+    let context: &ContextResolution = pm.get_analysis()?;
+    let _: &TypeCheck = pm.get_analysis()?;
+
+    let libm = MathLib::new(&pm, &mut lib)?;
 
     let mut components: Vec<_> = defs
         .iter()
         .map(|def| {
-            compile_benchmark(def, format, &context, &lib, &mut name_gen)
+            compile_benchmark(def, &opts.format, context, &lib, &mut name_gen)
         })
         .collect::<CalyxResult<_>>()?;
 
