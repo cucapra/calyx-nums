@@ -6,7 +6,7 @@ use std::ops::{Add, BitXor, Div, Mul, Neg, Sub};
 use num::bigint::BigUint;
 use num::integer::Integer;
 use num::rational::Ratio;
-use num::traits::{Pow, Zero};
+use num::traits::{One, Pow, Zero};
 
 use crate::fpcore::ast::{Rational, Sign};
 
@@ -219,5 +219,154 @@ where
             sign: Sign::Pos,
             mag: Ratio::from_integer(value.into()),
         }
+    }
+}
+
+impl Rational {
+    /// Rounds towards zero.
+    pub fn truncate(&self, frac_width: u64) -> Rational {
+        let numer = self.mag.numer();
+        let denom = self.mag.denom();
+
+        let val = (numer << frac_width) / denom;
+
+        Rational::new(self.sign, val, BigUint::one() << frac_width)
+    }
+
+    /// Rounds away from zero.
+    pub fn round_away(&self, frac_width: u64) -> Rational {
+        let numer = self.mag.numer();
+        let denom = self.mag.denom();
+
+        let val = (numer << frac_width).div_ceil(denom);
+
+        Rational::new(self.sign, val, BigUint::one() << frac_width)
+    }
+
+    /// Rounds towards negative infinity.
+    pub fn floor(&self, frac_width: u64) -> Rational {
+        if self.is_negative() {
+            self.round_away(frac_width)
+        } else {
+            self.truncate(frac_width)
+        }
+    }
+
+    /// Rounds towards positive infinity.
+    pub fn ceil(&self, frac_width: u64) -> Rational {
+        if self.is_negative() {
+            self.truncate(frac_width)
+        } else {
+            self.round_away(frac_width)
+        }
+    }
+
+    /// Computes the floor of the base-2 log of `self`. Panics if `self` is not
+    /// strictly positive.
+    pub fn floor_log2(&self) -> i64 {
+        assert!(!self.is_negative() && !self.is_zero());
+
+        let numer = self.mag.numer();
+        let denom = self.mag.denom();
+
+        let n_bits = numer.bits();
+        let d_bits = denom.bits();
+
+        let bump = match n_bits.cmp(&d_bits) {
+            Ordering::Greater => numer < &(denom << (n_bits - d_bits)),
+            Ordering::Equal => numer < denom,
+            Ordering::Less => &(numer << (d_bits - n_bits)) < denom,
+        };
+
+        (n_bits - bump as u64) as i64 - d_bits as i64
+    }
+
+    /// Computes the ceiling of the base-2 log of `self`. Panics if `self` is
+    /// not strictly positive.
+    pub fn ceil_log2(&self) -> i64 {
+        assert!(!self.is_negative() && !self.is_zero());
+
+        let numer = self.mag.numer();
+        let denom = self.mag.denom();
+
+        let n_bits = numer.bits();
+        let d_bits = denom.bits();
+
+        let bump = match n_bits.cmp(&d_bits) {
+            Ordering::Greater => numer > &(denom << (n_bits - d_bits)),
+            Ordering::Equal => numer > denom,
+            Ordering::Less => &(numer << (d_bits - n_bits)) > denom,
+        };
+
+        n_bits as i64 - (d_bits - bump as u64) as i64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rational_from_prims(sign: Sign, numer: u8, denom: u8) -> Rational {
+        Rational::new(sign, numer.into(), denom.into())
+    }
+
+    #[test]
+    fn rounding() {
+        let pos_five_quarters = rational_from_prims(Sign::Pos, 5, 4);
+        let neg_five_quarters = rational_from_prims(Sign::Neg, 5, 4);
+
+        for mode in [Rational::floor, Rational::ceil] {
+            for val in [&pos_five_quarters, &neg_five_quarters] {
+                assert_eq!(&mode(val, 2), val);
+            }
+        }
+
+        assert_eq!(
+            pos_five_quarters.ceil(1),
+            rational_from_prims(Sign::Pos, 3, 2)
+        );
+        assert_eq!(
+            pos_five_quarters.floor(1),
+            rational_from_prims(Sign::Pos, 1, 1)
+        );
+
+        assert_eq!(
+            neg_five_quarters.ceil(1),
+            rational_from_prims(Sign::Neg, 1, 1)
+        );
+        assert_eq!(
+            neg_five_quarters.floor(1),
+            rational_from_prims(Sign::Neg, 3, 2)
+        );
+    }
+
+    #[test]
+    fn floor_log2() {
+        assert_eq!(rational_from_prims(Sign::Pos, 0b111, 16).floor_log2(), -2);
+        assert_eq!(rational_from_prims(Sign::Pos, 1, 2).floor_log2(), -1);
+
+        assert_eq!(rational_from_prims(Sign::Pos, 0b101, 2).floor_log2(), 1);
+        assert_eq!(rational_from_prims(Sign::Pos, 0b100, 1).floor_log2(), 2);
+
+        assert_eq!(rational_from_prims(Sign::Pos, 1, 16).floor_log2(), -4);
+        assert_eq!(rational_from_prims(Sign::Pos, 1, 8).floor_log2(), -3);
+
+        assert_eq!(rational_from_prims(Sign::Pos, 11, 5).floor_log2(), 1);
+        assert_eq!(rational_from_prims(Sign::Pos, 1, 3).floor_log2(), -2);
+    }
+
+    #[test]
+    fn ceil_log2() {
+        assert_eq!(rational_from_prims(Sign::Pos, 0b1011, 16).ceil_log2(), 0);
+        assert_eq!(rational_from_prims(Sign::Pos, 1, 2).ceil_log2(), -1);
+
+        assert_eq!(rational_from_prims(Sign::Pos, 0b1001, 2).ceil_log2(), 3);
+        assert_eq!(rational_from_prims(Sign::Pos, 0b100, 1).ceil_log2(), 2);
+
+        assert_eq!(rational_from_prims(Sign::Pos, 0b11, 16).ceil_log2(), -2);
+        assert_eq!(rational_from_prims(Sign::Pos, 1, 8).ceil_log2(), -3);
+
+        assert_eq!(rational_from_prims(Sign::Pos, 11, 5).ceil_log2(), 2);
+        assert_eq!(rational_from_prims(Sign::Pos, 1, 3).ceil_log2(), -1);
     }
 }
