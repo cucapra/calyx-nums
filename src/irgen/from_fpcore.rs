@@ -9,20 +9,20 @@ use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error, Id, NameGenerator};
 use itertools::Itertools;
 
-use super::libm::MathLib;
+use super::libm::{MathLib, Prototype};
 use super::stdlib::{Arguments, Primitive, Signature};
 use crate::analysis::{Binding, ContextResolution, PassManager, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
-use crate::functions::{builtins, lookup};
+use crate::functions::builtins;
 use crate::opts::Opts;
-use crate::utils::mangling;
 
 /// Prefix for components generated from anonymous FPCores.
 const ANONYMOUS_PREFIX: &str = "anonymous";
 
 struct Context<'a, 'b> {
     builder: &'a mut ir::Builder<'b>,
+    libm: &'a mut HashMap<ast::NodeId, Prototype>,
     format: &'a Format,
     resolved: &'a ContextResolution<'b>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
@@ -105,25 +105,15 @@ fn compile_operation(
 
             (prim, &decl.signature, decl.is_comb)
         } else {
-            let local = ctx.resolved.props[&uid];
+            let proto = ctx.libm.remove(&uid).unwrap();
 
-            let name = match op.kind {
-                ast::OpKind::Math(op) => mangling::mangle_function(
-                    op.try_into().unwrap(),
-                    ctx.format,
-                    local.domain.unwrap(),
-                    local.strategy.unwrap(),
-                ),
-                _ => unreachable!(),
-            };
-
-            let cell = ctx.builder.add_component(
-                Id::new("fn"),
-                Id::new(name),
-                lookup::signature(1, ctx.format),
+            let comp = ctx.builder.add_component(
+                proto.prefix_hint,
+                proto.name,
+                proto.signature,
             );
 
-            (cell, &Signature::UNARY_DEFAULT, true)
+            (comp, &Signature::UNARY_DEFAULT, proto.is_comb)
         };
 
     let inputs = match signature.args {
@@ -247,6 +237,7 @@ fn compile_benchmark(
     format: &Format,
     resolved: &ContextResolution,
     lib: &ir::LibrarySignatures,
+    libm: &mut HashMap<ast::NodeId, Prototype>,
     name_gen: &mut NameGenerator,
 ) -> CalyxResult<ir::Component> {
     let name = def
@@ -273,6 +264,7 @@ fn compile_benchmark(
 
     let mut context = Context {
         builder: &mut builder,
+        libm,
         format,
         resolved,
         stores: HashMap::new(),
@@ -312,16 +304,23 @@ pub fn compile_fpcore(
     let context: &ContextResolution = pm.get_analysis()?;
     let _: &TypeCheck = pm.get_analysis()?;
 
-    let libm = MathLib::new(&pm, &mut lib)?;
+    let MathLib {
+        mut components,
+        mut prototypes,
+    } = MathLib::new(&pm, &mut lib)?;
 
-    let mut components: Vec<_> = defs
-        .iter()
-        .map(|def| {
-            compile_benchmark(def, &opts.format, context, &lib, &mut name_gen)
-        })
-        .collect::<CalyxResult<_>>()?;
+    for def in defs {
+        let component = compile_benchmark(
+            def,
+            &opts.format,
+            context,
+            &lib,
+            &mut prototypes,
+            &mut name_gen,
+        )?;
 
-    components.extend(libm.components);
+        components.push(component);
+    }
 
     Ok(ir::Context {
         components,

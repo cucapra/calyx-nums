@@ -1,6 +1,6 @@
 //! Math library construction.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use calyx_frontend as frontend;
 use calyx_ir as ir;
@@ -15,8 +15,17 @@ use crate::functions::{lookup, lut, remez};
 use crate::utils::mangling;
 use crate::utils::sollya::SollyaFunction;
 
+#[derive(Clone)]
+pub struct Prototype {
+    pub name: ir::Id,
+    pub prefix_hint: ir::Id,
+    pub signature: Vec<ir::PortDef<u64>>,
+    pub is_comb: bool,
+}
+
 pub struct MathLib {
     pub components: Vec<ir::Component>,
+    pub prototypes: HashMap<ast::NodeId, Prototype>,
 }
 
 impl MathLib {
@@ -27,8 +36,11 @@ impl MathLib {
         let opts = pm.opts();
 
         let mut builder = Builder {
-            components: Vec::new(),
-            generated: HashSet::new(),
+            result: MathLib {
+                components: Vec::new(),
+                prototypes: HashMap::new(),
+            },
+            generated: HashMap::new(),
             format: &opts.format,
             context: pm.get_analysis()?,
             lib,
@@ -36,15 +48,13 @@ impl MathLib {
 
         builder.visit_benchmarks(pm.ast())?;
 
-        Ok(MathLib {
-            components: builder.components,
-        })
+        Ok(builder.result)
     }
 }
 
 struct Builder<'a> {
-    components: Vec<ir::Component>,
-    generated: HashSet<ir::Id>,
+    result: MathLib,
+    generated: HashMap<ir::Id, ast::NodeId>,
     format: &'a Format,
     context: &'a ContextResolution<'a>,
     lib: &'a mut ir::LibrarySignatures,
@@ -87,7 +97,7 @@ impl Visitor<'_> for Builder<'_> {
                             .with_pos(op)
                     })?;
 
-                    self.build_function(f, domain, strategy)?;
+                    self.build_function(f, expr.uid, domain, strategy)?;
                 }
 
                 visitor::visit_expression(self, expr)
@@ -101,6 +111,7 @@ impl<'a> Builder<'a> {
     fn build_function(
         &mut self,
         function: SollyaFunction,
+        uid: ast::NodeId,
         domain: &'a CalyxDomain,
         strategy: &'a CalyxImpl,
     ) -> CalyxResult<()> {
@@ -118,23 +129,31 @@ impl<'a> Builder<'a> {
             strategy,
         ));
 
-        if self.generated.insert(name) {
-            let prim =
-                build_primitive(name, function, self.format, domain, size)?;
+        match self.generated.insert(name, uid) {
+            Some(prev) => {
+                self.result
+                    .prototypes
+                    .insert(uid, self.result.prototypes[&prev].clone());
+            }
+            None => {
+                let prim =
+                    build_primitive(name, function, self.format, domain, size)?;
 
-            self.lib.add_inline_primitive(prim).set_source();
+                self.lib.add_inline_primitive(prim).set_source();
 
-            let comp = build_component(
-                name,
-                function,
-                self.format,
-                domain,
-                strategy,
-                self.lib,
-            )?;
+                let (comp, proto) = build_component(
+                    name,
+                    function,
+                    self.format,
+                    domain,
+                    strategy,
+                    self.lib,
+                )?;
 
-            self.components.push(comp);
-        }
+                self.result.components.push(comp);
+                self.result.prototypes.insert(uid, proto);
+            }
+        };
 
         Ok(())
     }
@@ -184,7 +203,7 @@ fn build_component(
     domain: &CalyxDomain,
     strategy: &CalyxImpl,
     lib: &ir::LibrarySignatures,
-) -> CalyxResult<ir::Component> {
+) -> CalyxResult<(ir::Component, Prototype)> {
     let lut_size = match strategy {
         CalyxImpl::Lut { lut_size } => *lut_size,
         CalyxImpl::Poly { .. } => unimplemented!(),
@@ -194,5 +213,15 @@ fn build_component(
         function, format, domain, strategy,
     ));
 
-    lookup::compile_lookup(name, lut, lut_size, 1, format, domain, lib)
+    let comp =
+        lookup::compile_lookup(name, lut, lut_size, 1, format, domain, lib)?;
+
+    let proto = Prototype {
+        name,
+        prefix_hint: ir::Id::new(function.as_str()),
+        signature: lookup::signature(1, format),
+        is_comb: true,
+    };
+
+    Ok((comp, proto))
 }
