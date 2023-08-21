@@ -12,7 +12,7 @@ use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
 use crate::functions::{lookup, lut, remez};
-use crate::utils::mangling;
+use crate::utils::mangling::mangle;
 use crate::utils::sollya::SollyaFunction;
 
 #[derive(Clone)]
@@ -122,12 +122,8 @@ impl<'a> Builder<'a> {
 
         let base_name = format!("{function}_lut");
 
-        let name = ir::Id::new(mangling::mangle_name(
-            &base_name,
-            self.format,
-            domain,
-            strategy,
-        ));
+        let name =
+            ir::Id::new(mangle!(base_name, self.format, domain, strategy));
 
         match self.generated.insert(name, uid) {
             Some(prev) => {
@@ -209,9 +205,8 @@ fn build_component(
         CalyxImpl::Poly { .. } => unimplemented!(),
     };
 
-    let name = ir::Id::new(mangling::mangle_function(
-        function, format, domain, strategy,
-    ));
+    let name =
+        ir::Id::new(mangle!(function.as_str(), format, domain, strategy));
 
     let comp =
         lookup::compile_lookup(name, lut, lut_size, 1, format, domain, lib)?;

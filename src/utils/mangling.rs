@@ -1,73 +1,159 @@
 //! Name mangling.
 
-use super::sollya::SollyaFunction;
-use crate::format::Format;
-use crate::fpcore::ast::Rational;
-use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
+use std::fmt;
 
-/// See `mangle_name`.
-pub fn mangle_function(
-    f: SollyaFunction,
-    format: &Format,
-    domain: &CalyxDomain,
-    strategy: &CalyxImpl,
-) -> String {
-    mangle_name(f.as_str(), format, domain, strategy)
-}
+use num::BigUint;
+
+use crate::format::Format;
+use crate::fpcore::ast::{Rational, Sign};
+use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 
 /// Encodes context information into an identifier. The resulting identifier is
 /// a valid name in the IA-64 C++ ABI's name mangling scheme.
-pub fn mangle_name(
-    name: &str,
-    format: &Format,
-    domain: &CalyxDomain,
-    strategy: &CalyxImpl,
-) -> String {
-    format!(
-        "_Z{}{}IX{}EX{}EX{}EE",
-        name.len(),
-        name,
-        mangle_format(format),
-        mangle_domain(domain),
-        mangle_strategy(strategy)
-    )
+macro_rules! mangle {
+    ($name:expr, $($arg:expr),+ $(,)?) => {{
+        use $crate::utils::mangling::Mangle as _;
+
+        let mut res = match $name {
+            name => format!("_Z{}{}I", name.len(), name),
+        };
+
+        $(
+            res.push('X');
+            $arg.mangle(&mut res).unwrap();
+            res.push('E');
+        )+
+
+        res.push('E');
+        res
+    }};
 }
 
-fn mangle_format(format: &Format) -> String {
-    format!(
-        "tl6FormatLj{}ELj{}ELb{}EE",
-        format.width, format.frac_width, format.is_signed as u8
-    )
+pub(crate) use mangle;
+
+/// A trait for formatting data as a mangled expression.
+pub trait Mangle {
+    /// Formats `self` as an [`<expression>`].
+    ///
+    /// [`<expression>`]:
+    ///     https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangle.expression
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write;
 }
 
-fn mangle_domain(domain: &CalyxDomain) -> String {
-    format!(
-        "tl11CalyxDomain{}{}E",
-        mangle_rational(&domain.left.value),
-        mangle_rational(&domain.right.value)
-    )
+/// Formats an [`<expression>`] given an [`<identifier>`] and a list of
+/// [`<expression>`].
+///
+/// [`<expression>`]:
+///     https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangle.expression
+/// [`<identifier>`]:
+///     https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangle.identifier
+macro_rules! init_list {
+    ($dst:ident, $type:literal, $($expr:expr),+ $(,)?) => {{
+        write!($dst, "tl{}{}", $type.len(), $type)?;
+        $(
+            $expr.mangle($dst)?;
+        )+
+        write!($dst, "E")
+    }};
 }
 
-fn mangle_strategy(strategy: &CalyxImpl) -> String {
-    let kind = match strategy {
-        CalyxImpl::Lut { lut_size } => {
-            format!("tl3LutLj{}EE", lut_size)
+impl Mangle for bool {
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        write!(w, "Lb{}E", *self as u8)
+    }
+}
+
+macro_rules! impl_mangle_unsigned {
+    ($($type:ty),*) => {$(
+        impl Mangle for $type {
+            fn mangle<W>(&self, w: &mut W) -> fmt::Result
+            where
+                W: fmt::Write,
+            {
+                write!(w, "Lj{}E", self)
+            }
         }
-        CalyxImpl::Poly { degree, lut_size } => {
-            format!("tl4PolyLj{}ELj{}EE", degree, lut_size)
-        }
-    };
-
-    format!("tl9CalyxImpl{}E", kind)
+    )*};
 }
 
-fn mangle_rational(rational: &Rational) -> String {
-    let sign = if rational.is_negative() { "n" } else { "" };
+impl_mangle_unsigned!(usize, u8, u16, u32, u64, BigUint);
 
-    format!(
-        "tl8RationalLi{}{}ELj{}EE",
-        sign,
-        rational.mag.numer(),
-        rational.mag.denom()
-    )
+macro_rules! impl_mangle_signed {
+    ($($type:ty),*) => {$(
+        impl Mangle for $type {
+            fn mangle<W>(&self, w: &mut W) -> fmt::Result
+            where
+                W: fmt::Write,
+            {
+                if *self < 0 {
+                    write!(w, "Lin{}E", self.unsigned_abs())
+                } else {
+                    write!(w, "Li{}E", self)
+                }
+            }
+        }
+    )*};
+}
+
+impl_mangle_signed!(isize, i8, i16, i32, i64);
+
+impl Mangle for Format {
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        init_list!(w, "Format", self.width, self.frac_width, self.is_signed)
+    }
+}
+
+impl Mangle for Sign {
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        write!(w, "L4Sign{}E", *self as u8)
+    }
+}
+
+impl Mangle for Rational {
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        init_list!(w, "Rational", self.sign, self.mag.numer(), self.mag.denom())
+    }
+}
+
+impl Mangle for CalyxDomain {
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        init_list!(w, "CalyxDomain", self.left.value, self.right.value)
+    }
+}
+
+impl Mangle for CalyxImpl {
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        write!(w, "tl9CalyxImpl")?;
+
+        match self {
+            CalyxImpl::Lut { lut_size } => {
+                init_list!(w, "Lut", lut_size)?;
+            }
+            CalyxImpl::Poly { degree, lut_size } => {
+                init_list!(w, "Poly", degree, lut_size)?;
+            }
+        };
+
+        write!(w, "E")
+    }
 }
