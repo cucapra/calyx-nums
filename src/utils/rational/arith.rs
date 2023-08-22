@@ -223,6 +223,19 @@ where
 }
 
 impl Rational {
+    /// Creates a `Rational` with value `2^k`.
+    pub fn power_of_two(k: i64) -> Rational {
+        let mut val = BigUint::zero();
+
+        val.set_bit(k.unsigned_abs(), true);
+
+        if k >= 0 {
+            Rational::new(Sign::Pos, val, One::one())
+        } else {
+            Rational::new(Sign::Pos, One::one(), val)
+        }
+    }
+
     /// Rounds towards zero.
     pub fn truncate(&self, frac_width: u64) -> Rational {
         let numer = self.mag.numer();

@@ -51,7 +51,7 @@ fn main() -> CalyxResult<()> {
 
     env_logger::Builder::new()
         .format_timestamp(None)
-        .filter_level(log::LevelFilter::Warn)
+        .filter_level(opts.log_level)
         .target(env_logger::Target::Stderr)
         .init();
 

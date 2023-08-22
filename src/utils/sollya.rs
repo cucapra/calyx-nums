@@ -97,12 +97,12 @@ pub enum SollyaError {
 impl fmt::Display for SollyaError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SollyaError::Io(err) => write!(f, "I/O error: {err}"),
+            SollyaError::Io(err) => write!(f, "{}", err),
             SollyaError::Utf8 => {
                 write!(f, "invocation returned invalid UTF-8")
             }
             SollyaError::Status(status) => {
-                write!(f, "invocation failed: {status}")
+                write!(f, "invocation failed ({})", status)
             }
         }
     }

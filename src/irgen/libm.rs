@@ -11,7 +11,8 @@ use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
-use crate::functions::{lookup, lut, remez};
+use crate::functions::lookup::{self, TableDomain};
+use crate::functions::{lut, remez};
 use crate::utils::mangling::mangle;
 use crate::utils::sollya::SollyaFunction;
 
@@ -97,7 +98,9 @@ impl Visitor<'_> for Builder<'_> {
                             .with_pos(op)
                     })?;
 
-                    self.build_function(f, expr.uid, domain, strategy)?;
+                    let domain = self.widen_domain(f, domain, strategy);
+
+                    self.build_function(f, expr.uid, &domain, strategy)?;
                 }
 
                 visitor::visit_expression(self, expr)
@@ -107,13 +110,32 @@ impl Visitor<'_> for Builder<'_> {
     }
 }
 
-impl<'a> Builder<'a> {
+impl Builder<'_> {
+    fn widen_domain(
+        &self,
+        function: SollyaFunction,
+        domain: &CalyxDomain,
+        strategy: &CalyxImpl,
+    ) -> TableDomain {
+        let left = &domain.left.value;
+        let right = &domain.right.value;
+
+        let widened =
+            TableDomain::from_hint(left, right, strategy, self.format);
+
+        if left != &widened.left || right != &widened.right {
+            log::info!("Domain widened in implementation of {function}");
+        }
+
+        widened
+    }
+
     fn build_function(
         &mut self,
         function: SollyaFunction,
         uid: ast::NodeId,
-        domain: &'a CalyxDomain,
-        strategy: &'a CalyxImpl,
+        domain: &TableDomain,
+        strategy: &CalyxImpl,
     ) -> CalyxResult<()> {
         let size = match strategy {
             CalyxImpl::Lut { lut_size } => *lut_size,
@@ -159,14 +181,14 @@ fn build_primitive(
     name: ir::Id,
     function: SollyaFunction,
     format: &Format,
-    domain: &CalyxDomain,
+    domain: &TableDomain,
     size: u32,
 ) -> CalyxResult<frontend::Primitive> {
     let table = remez::build_table(
         function,
         0,
-        &domain.left.value,
-        &domain.right.value,
+        &domain.left,
+        &domain.right,
         size,
         format,
     )?;
@@ -196,7 +218,7 @@ fn build_component(
     lut: ir::Id,
     function: SollyaFunction,
     format: &Format,
-    domain: &CalyxDomain,
+    domain: &TableDomain,
     strategy: &CalyxImpl,
     lib: &ir::LibrarySignatures,
 ) -> CalyxResult<(ir::Component, Prototype)> {
@@ -209,7 +231,12 @@ fn build_component(
         ir::Id::new(mangle!(function.as_str(), format, domain, strategy));
 
     let comp =
-        lookup::compile_lookup(name, lut, lut_size, 1, format, domain, lib)?;
+        lookup::compile_lookup(name, lut, lut_size, 1, format, domain, lib)
+            .map_err(|err| {
+                Error::misc(format!(
+                    "Invalid domain in implementation of {function}: {err}"
+                ))
+            })?;
 
     let proto = Prototype {
         name,

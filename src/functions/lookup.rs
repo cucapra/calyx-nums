@@ -1,12 +1,13 @@
 //! Table lookup operations.
 
+use std::fmt;
+
 use calyx_ir::{self as ir, build_assignments, structure};
-use calyx_utils::{CalyxResult, Error, Id};
-use num::traits::{Pow, PrimInt, Unsigned};
+use calyx_utils::{self as utils, Id};
 
 use crate::format::Format;
 use crate::fpcore::ast::Rational;
-use crate::fpcore::metadata::CalyxDomain;
+use crate::fpcore::metadata::CalyxImpl;
 
 /// Returns the signature for a table-lookup component.
 pub fn signature(cols: u32, format: &Format) -> Vec<ir::PortDef<u64>> {
@@ -32,30 +33,21 @@ pub fn compile_lookup(
     rows: u32,
     cols: u32,
     format: &Format,
-    domain: &CalyxDomain,
+    domain: &TableDomain,
     lib: &ir::LibrarySignatures,
-) -> CalyxResult<ir::Component> {
-    let sup = supremum(format);
+) -> Result<ir::Component, DomainError> {
+    domain.validate_bounds(format)?;
 
-    if domain.right.value > sup {
-        return Err(Error::misc(format!(
-            "Right endpoint {} exceeds maximum permissable value of {}",
-            domain.right.value, sup
-        ))
-        .with_pos(&domain.right));
-    }
-
-    let left = domain.left.value.to_format(format).ok_or_else(|| {
-        Error::misc(format!(
-            "Left endpoint {} is not representable in the given format",
-            domain.left.value
-        ))
-        .with_pos(&domain.left)
+    let left = domain.left.to_format(format).ok_or_else(|| {
+        DomainError::new(
+            DomainErrorKind::EndpointNotRepresentable,
+            domain.left.clone(),
+        )
     })?;
 
     let width = u64::from(cols) * format.width;
-    let idx_width = u64::from(index_width(rows));
-    let offset_width = u64::from(offset_width(rows, format, domain)?);
+    let idx_width = utils::bits_needed_for(rows.into());
+    let idx_lsb = u64::from(domain.checked_stride(rows, format)?);
 
     let ports = signature(cols, format);
 
@@ -69,7 +61,7 @@ pub fn compile_lookup(
         let rsh = prim std_rsh(format.width);
         let slice = prim std_slice(format.width, idx_width);
         let left = constant(left, format.width);
-        let shift = constant(offset_width, format.width);
+        let shift = constant(idx_lsb, format.width);
     );
 
     let signature = &builder.component.signature;
@@ -89,50 +81,139 @@ pub fn compile_lookup(
     Ok(component)
 }
 
-/// For a format with resolution `r`, computes the greatest representable value
-/// plus `r`.
-fn supremum(format: &Format) -> Rational {
-    let int_width = format.width - format.frac_width;
-
-    let e = if format.is_signed {
-        int_width as i64 - 1
-    } else {
-        int_width as i64
-    };
-
-    Rational::from(2u8).pow(e)
+/// An input domain for a lookup table.
+pub struct TableDomain {
+    pub left: Rational,
+    pub right: Rational,
 }
 
-/// Computes the ceiling of the base-2 log of `size`.
-///
-/// In contrast to the formula `floor(log2(size - 1)) + 1`, this is defined for
-/// `size == 1` and gives the answer `0`.
-fn index_width<T: PrimInt + Unsigned>(size: T) -> u32 {
-    let type_width = T::zero().count_zeros();
+impl TableDomain {
+    /// Attempts to widen the given domain so that it is amenable to
+    /// implementation via a lookup table.
+    pub fn from_hint(
+        left: &Rational,
+        right: &Rational,
+        strategy: &CalyxImpl,
+        format: &Format,
+    ) -> TableDomain {
+        let rows = match *strategy {
+            CalyxImpl::Lut { lut_size } => lut_size,
+            CalyxImpl::Poly { lut_size, .. } => lut_size,
+        };
 
-    type_width - T::leading_zeros(size - T::one())
+        let a = left.floor(format.frac_width);
+        let b = right.ceil(format.frac_width);
+
+        let n = ((&b - &a) / Rational::from(rows)).ceil_log2();
+
+        if n.is_negative() && n.unsigned_abs() > format.frac_width {
+            return TableDomain { left: a, right: b }; // Give up
+        }
+
+        let diameter = Rational::power_of_two(n) * Rational::from(rows);
+
+        let q = if a.sign != b.sign || a.is_zero() || b.is_zero() {
+            &a * &diameter / (b - a)
+        } else {
+            &a * (&b + &b - &diameter) / (a + b)
+        };
+
+        let left = q.round_away(format.frac_width);
+        let right = &left + diameter;
+
+        TableDomain { left, right }
+    }
+
+    fn validate_bounds(&self, format: &Format) -> Result<(), DomainError> {
+        let int_width = format.width - format.frac_width;
+
+        let bound =
+            Rational::power_of_two(int_width as i64 - format.is_signed as i64);
+
+        if self.right > bound {
+            return Err(DomainError::new(
+                DomainErrorKind::EndpointOutOfBounds,
+                self.right.clone(),
+            ));
+        }
+
+        let out_of_bounds = if format.is_signed {
+            self.left < -bound
+        } else {
+            self.left.is_negative()
+        };
+
+        if out_of_bounds {
+            Err(DomainError::new(
+                DomainErrorKind::EndpointOutOfBounds,
+                self.left.clone(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Returns the exact base-2 log of the stride, or an error.
+    fn checked_stride(
+        &self,
+        rows: u32,
+        format: &Format,
+    ) -> Result<u32, DomainError> {
+        let stride = (&self.right - &self.left) / Rational::from(rows);
+
+        let Some(stride_bits) = stride.to_format::<u64>(format) else {
+            return Err(DomainError::new(
+                DomainErrorKind::StrideNotRepresentable,
+                stride,
+            ));
+        };
+
+        if stride_bits.is_power_of_two() {
+            Ok(stride_bits.trailing_zeros())
+        } else {
+            Err(DomainError::new(
+                DomainErrorKind::StrideNotPowerOfTwo,
+                stride,
+            ))
+        }
+    }
 }
 
-/// Computes the position of the least significant bit of the index.
-fn offset_width(
-    rows: u32,
-    format: &Format,
-    domain: &CalyxDomain,
-) -> CalyxResult<u32> {
-    let stride =
-        (&domain.right.value - &domain.left.value) / Rational::from(rows);
+#[derive(Debug)]
+pub enum DomainErrorKind {
+    EndpointNotRepresentable,
+    EndpointOutOfBounds,
+    StrideNotRepresentable,
+    StrideNotPowerOfTwo,
+}
 
-    let stride_bits: u64 = stride.to_format(format).ok_or_else(|| {
-        Error::misc(format!(
-            "Stride {stride} is not representable in the given format"
-        ))
-    })?;
+#[derive(Debug)]
+pub struct DomainError {
+    pub kind: DomainErrorKind,
+    pub source: Rational,
+}
 
-    if stride_bits.is_power_of_two() {
-        Ok(stride_bits.trailing_zeros())
-    } else {
-        Err(Error::misc(format!(
-            "Stride {stride} is not a power of two"
-        )))
+impl DomainError {
+    fn new(kind: DomainErrorKind, source: Rational) -> DomainError {
+        DomainError { kind, source }
+    }
+}
+
+impl fmt::Display for DomainError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.kind {
+            DomainErrorKind::EndpointNotRepresentable => {
+                write!(f, "endpoint {} is not representable", self.source)
+            }
+            DomainErrorKind::EndpointOutOfBounds => {
+                write!(f, "endpoint {} is out of bounds", self.source)
+            }
+            DomainErrorKind::StrideNotRepresentable => {
+                write!(f, "stride {} is not representable", self.source)
+            }
+            DomainErrorKind::StrideNotPowerOfTwo => {
+                write!(f, "stride {} is not a power of two", self.source)
+            }
+        }
     }
 }

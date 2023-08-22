@@ -6,7 +6,8 @@ use num::BigUint;
 
 use crate::format::Format;
 use crate::fpcore::ast::{Rational, Sign};
-use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
+use crate::fpcore::metadata::CalyxImpl;
+use crate::functions::TableDomain;
 
 /// Encodes context information into an identifier. The resulting identifier is
 /// a valid name in the IA-64 C++ ABI's name mangling scheme.
@@ -129,12 +130,12 @@ impl Mangle for Rational {
     }
 }
 
-impl Mangle for CalyxDomain {
+impl Mangle for TableDomain {
     fn mangle<W>(&self, w: &mut W) -> fmt::Result
     where
         W: fmt::Write,
     {
-        init_list!(w, "CalyxDomain", self.left.value, self.right.value)
+        init_list!(w, "TableDomain", self.left, self.right)
     }
 }
 

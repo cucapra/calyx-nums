@@ -1,5 +1,7 @@
-use argh::FromArgs;
 use std::path::PathBuf;
+
+use argh::FromArgs;
+use log::LevelFilter;
 
 use crate::format::Format;
 
@@ -21,6 +23,10 @@ pub struct Opts {
     /// global numeric format
     #[argh(option, default = "Default::default()")]
     pub format: Format,
+
+    /// logging level
+    #[argh(option, long = "log", default = "LevelFilter::Warn")]
+    pub log_level: LevelFilter,
 }
 
 impl Opts {
