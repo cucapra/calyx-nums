@@ -1,18 +1,19 @@
 //! Math library construction.
 
 use std::collections::HashMap;
+use std::fmt;
 
 use calyx_frontend as frontend;
 use calyx_ir as ir;
-use calyx_utils::{CalyxResult, Error};
+use calyx_utils::{self as utils, CalyxResult, Error};
 
-use crate::analysis::{ContextResolution, PassManager};
+use crate::analysis::{ContextResolution, DomainInference, PassManager};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
-use crate::functions::lookup::{self, TableDomain};
-use crate::functions::{lut, remez};
+use crate::functions::addressing::{AddressSpec, TableDomain};
+use crate::functions::{lookup, lut, remez};
 use crate::utils::mangling::mangle;
 use crate::utils::sollya::SollyaFunction;
 
@@ -44,6 +45,10 @@ impl MathLib {
             generated: HashMap::new(),
             format: &opts.format,
             context: pm.get_analysis()?,
+            domains: opts
+                .infer_domains
+                .then(|| pm.get_analysis())
+                .transpose()?,
             lib,
         };
 
@@ -58,6 +63,7 @@ struct Builder<'a> {
     generated: HashMap<ir::Id, ast::NodeId>,
     format: &'a Format,
     context: &'a ContextResolution<'a>,
+    domains: Option<&'a DomainInference>,
     lib: &'a mut ir::LibrarySignatures,
 }
 
@@ -71,7 +77,7 @@ impl Visitor<'_> for Builder<'_> {
                     kind: ast::OpKind::Math(f),
                     ..
                 },
-                _,
+                args,
             ) => {
                 if !matches!(
                     f,
@@ -81,26 +87,26 @@ impl Visitor<'_> for Builder<'_> {
                         | ast::MathOp::Div
                         | ast::MathOp::Sqrt
                 ) {
-                    let f: SollyaFunction = (*f).try_into().map_err(|_| {
-                        Error::misc(String::from("Unsupported operation"))
-                            .with_pos(op)
-                    })?;
+                    let f = Function {
+                        kind: (*f).try_into().map_err(|_| {
+                            Error::misc(String::from("Unsupported operation"))
+                                .with_pos(op)
+                        })?,
+                        uid: expr.uid,
+                        span: op.span,
+                    };
 
                     let context = self.context.props[&expr.uid];
 
-                    let domain = context.domain.ok_or_else(|| {
-                        Error::misc(String::from("No domain specified"))
-                            .with_pos(op)
-                    })?;
+                    let domain =
+                        self.choose_domain(&f, args, context.domain)?;
 
                     let strategy = context.strategy.ok_or_else(|| {
                         Error::misc(String::from("No implementation specified"))
                             .with_pos(op)
                     })?;
 
-                    let domain = self.widen_domain(f, domain, strategy);
-
-                    self.build_function(f, expr.uid, &domain, strategy)?;
+                    self.build_function(&f, &domain, strategy)?;
                 }
 
                 visitor::visit_expression(self, expr)
@@ -110,68 +116,71 @@ impl Visitor<'_> for Builder<'_> {
     }
 }
 
-impl Builder<'_> {
-    fn widen_domain(
+impl<'a> Builder<'a> {
+    fn choose_domain(
         &self,
-        function: SollyaFunction,
-        domain: &CalyxDomain,
-        strategy: &CalyxImpl,
-    ) -> TableDomain {
-        let left = &domain.left.value;
-        let right = &domain.right.value;
+        function: &Function,
+        args: &[ast::Expression],
+        hint: Option<&'a CalyxDomain>,
+    ) -> CalyxResult<DomainHint<'a>> {
+        let (left, right) = hint
+            .map(|domain| (&domain.left.value, &domain.right.value))
+            .or_else(|| {
+                self.domains.map(|domains| {
+                    let [left, right] = &domains[args[0].uid];
 
-        let widened =
-            TableDomain::from_hint(left, right, strategy, self.format);
+                    (left, right)
+                })
+            })
+            .ok_or_else(|| {
+                Error::misc(String::from("No domain specified"))
+                    .with_pos(function)
+            })?;
 
-        if left != &widened.left || right != &widened.right {
-            log::info!("Domain widened in implementation of {function}");
-        }
-
-        widened
+        Ok(DomainHint { left, right })
     }
 
     fn build_function(
         &mut self,
-        function: SollyaFunction,
-        uid: ast::NodeId,
-        domain: &TableDomain,
+        function: &Function,
+        domain: &DomainHint,
         strategy: &CalyxImpl,
     ) -> CalyxResult<()> {
-        let size = match strategy {
-            CalyxImpl::Lut { lut_size } => *lut_size,
+        let size = match *strategy {
+            CalyxImpl::Lut { lut_size } => lut_size,
             CalyxImpl::Poly { .. } => unimplemented!(),
         };
 
-        let base_name = format!("{function}_lut");
+        let (spec, domain) = domain.widen(function, self.format, size)?;
 
         let name =
-            ir::Id::new(mangle!(base_name, self.format, domain, strategy));
+            mangle!("lut", function.kind, self.format, domain, strategy).into();
 
-        match self.generated.insert(name, uid) {
-            Some(prev) => {
-                self.result
-                    .prototypes
-                    .insert(uid, self.result.prototypes[&prev].clone());
-            }
-            None => {
-                let prim =
-                    build_primitive(name, function, self.format, domain, size)?;
+        if let Some(prev) = self.generated.insert(name, function.uid) {
+            self.result
+                .prototypes
+                .insert(function.uid, self.result.prototypes[&prev].clone());
+        } else {
+            let prim =
+                build_primitive(name, function, self.format, &domain, size)?;
 
-                self.lib.add_inline_primitive(prim).set_source();
+            self.lib.add_inline_primitive(prim).set_source();
 
-                let (comp, proto) = build_component(
-                    name,
-                    function,
-                    self.format,
-                    domain,
-                    strategy,
-                    self.lib,
-                )?;
+            let comp_name =
+                mangle!("lookup", function.kind, self.format, domain, strategy);
 
-                self.result.components.push(comp);
-                self.result.prototypes.insert(uid, proto);
-            }
-        };
+            let (comp, proto) = build_component(
+                comp_name.into(),
+                name,
+                function,
+                self.format,
+                &spec,
+                self.lib,
+            );
+
+            self.result.components.push(comp);
+            self.result.prototypes.insert(function.uid, proto);
+        }
 
         Ok(())
     }
@@ -179,13 +188,13 @@ impl Builder<'_> {
 
 fn build_primitive(
     name: ir::Id,
-    function: SollyaFunction,
+    function: &Function,
     format: &Format,
     domain: &TableDomain,
     size: u32,
 ) -> CalyxResult<frontend::Primitive> {
     let table = remez::build_table(
-        function,
+        function.kind,
         0,
         &domain.left,
         &domain.right,
@@ -204,6 +213,7 @@ fn build_primitive(
                              {function} is not representable in the given \
                              format"
                         ))
+                        .with_pos(function)
                     })
                 }),
                 |bits| lut::pack(bits, format.width),
@@ -215,35 +225,74 @@ fn build_primitive(
 }
 
 fn build_component(
+    name: ir::Id,
     lut: ir::Id,
-    function: SollyaFunction,
+    function: &Function,
     format: &Format,
-    domain: &TableDomain,
-    strategy: &CalyxImpl,
+    spec: &AddressSpec,
     lib: &ir::LibrarySignatures,
-) -> CalyxResult<(ir::Component, Prototype)> {
-    let lut_size = match strategy {
-        CalyxImpl::Lut { lut_size } => *lut_size,
-        CalyxImpl::Poly { .. } => unimplemented!(),
-    };
-
-    let name =
-        ir::Id::new(mangle!(function.as_str(), format, domain, strategy));
-
-    let comp =
-        lookup::compile_lookup(name, lut, lut_size, 1, format, domain, lib)
-            .map_err(|err| {
-                Error::misc(format!(
-                    "Invalid domain in implementation of {function}: {err}"
-                ))
-            })?;
+) -> (ir::Component, Prototype) {
+    let comp = lookup::compile_lookup(name, lut, 1, format, spec, lib);
 
     let proto = Prototype {
         name,
-        prefix_hint: ir::Id::new(function.as_str()),
+        prefix_hint: function.as_str().into(),
         signature: lookup::signature(1, format),
         is_comb: true,
     };
 
-    Ok((comp, proto))
+    (comp, proto)
+}
+
+struct DomainHint<'a> {
+    left: &'a ast::Rational,
+    right: &'a ast::Rational,
+}
+
+impl DomainHint<'_> {
+    fn widen(
+        &self,
+        function: &Function,
+        format: &Format,
+        size: u32,
+    ) -> CalyxResult<(AddressSpec, TableDomain)> {
+        let (spec, domain) =
+            AddressSpec::from_domain_hint(self.left, self.right, format, size)
+                .map_err(|err| {
+                    Error::misc(format!(
+                        "Invalid domain in implementation of {function}: {err}"
+                    ))
+                    .with_pos(function)
+                })?;
+
+        if &domain.left != self.left || &domain.right != self.right {
+            log::info!("Domain widened in implementation of {function}");
+        }
+
+        Ok((spec, domain))
+    }
+}
+
+struct Function {
+    kind: SollyaFunction,
+    uid: ast::NodeId,
+    span: utils::GPosIdx,
+}
+
+impl Function {
+    fn as_str(&self) -> &str {
+        self.kind.as_str()
+    }
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl utils::WithPos for Function {
+    fn copy_span(&self) -> utils::GPosIdx {
+        self.span
+    }
 }

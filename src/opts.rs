@@ -24,6 +24,10 @@ pub struct Opts {
     #[argh(option, default = "Default::default()")]
     pub format: Format,
 
+    /// enable domain inference
+    #[argh(switch)]
+    pub infer_domains: bool,
+
     /// logging level
     #[argh(option, long = "log", default = "LevelFilter::Warn")]
     pub log_level: LevelFilter,

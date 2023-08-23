@@ -4,6 +4,7 @@ use std::fmt;
 
 use num::BigUint;
 
+use super::sollya::SollyaFunction;
 use crate::format::Format;
 use crate::fpcore::ast::{Rational, Sign};
 use crate::fpcore::metadata::CalyxImpl;
@@ -127,6 +128,15 @@ impl Mangle for Rational {
         W: fmt::Write,
     {
         init_list!(w, "Rational", self.sign, self.mag.numer(), self.mag.denom())
+    }
+}
+
+impl Mangle for SollyaFunction {
+    fn mangle<W>(&self, w: &mut W) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        write!(w, "L14SollyaFunction{}E", *self as u8)
     }
 }
 

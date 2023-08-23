@@ -195,6 +195,7 @@ fn is_silent(prop: &ast::Property) -> bool {
         ast::Property::Spec(_) => true,
         ast::Property::Alt(_) => true,
         ast::Property::Example(_) => true,
+        ast::Property::CalyxDomain(_) => true,
         _ => false,
     }
 }

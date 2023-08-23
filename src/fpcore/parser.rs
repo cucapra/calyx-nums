@@ -78,16 +78,19 @@ impl FPCoreParser {
                 var,
                 props: Vec::new(),
                 dims: Vec::new(),
+                uid: ast::NodeId::new(),
             },
             [annotation(props), symbol(var), dimension(dims)..] => ast::ArgumentDef {
                 var,
                 props,
                 dims: dims.collect(),
+                uid: ast::NodeId::new(),
             },
             [symbol(var), dimension(dims)..] => ast::ArgumentDef {
                 var,
                 props: Vec::new(),
                 dims: dims.collect(),
+                uid: ast::NodeId::new(),
             },
         ))
     }

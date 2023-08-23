@@ -33,6 +33,7 @@ pub struct ArgumentDef {
     pub var: Symbol,
     pub props: Vec<Property>,
     pub dims: Vec<Dimension>,
+    pub uid: NodeId,
 }
 
 #[derive(Debug)]
@@ -146,7 +147,7 @@ pub enum Constant {
 
 /// Uniquely identifies an AST node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct NodeId(u32);
+pub struct NodeId(pub(crate) u32);
 
 impl NodeId {
     /// Creates a new identifier that is distinct from all previously created

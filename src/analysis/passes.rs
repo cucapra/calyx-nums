@@ -2,7 +2,7 @@ use std::cell::OnceCell;
 
 use calyx_utils::CalyxResult;
 
-use super::{ContextResolution, TypeCheck};
+use super::{ContextResolution, DomainInference, TypeCheck};
 use crate::fpcore::ast;
 use crate::opts::Opts;
 
@@ -33,6 +33,7 @@ macro_rules! register_passes {
 register_passes!(Cache<'ast> {
     context: ContextResolution<'ast>,
     types: TypeCheck,
+    domains: DomainInference,
 });
 
 pub trait Pass<'ast>
