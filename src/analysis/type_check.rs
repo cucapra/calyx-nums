@@ -25,7 +25,7 @@ impl Pass<'_> for TypeCheck {
         };
 
         for def in pm.ast() {
-            builder.check_expression(&def.body)?;
+            builder.check_benchmark(def)?;
         }
 
         Ok(TypeCheck {
@@ -48,6 +48,10 @@ struct Builder<'a> {
 }
 
 impl Builder<'_> {
+    fn check_benchmark(&mut self, def: &ast::BenchmarkDef) -> CalyxResult<()> {
+        self.expect(&def.body, Type::Number)
+    }
+
     fn check_expression(
         &mut self,
         expr: &ast::Expression,
@@ -93,22 +97,14 @@ impl Builder<'_> {
                 };
 
                 for arg in args {
-                    if self.check_expression(arg)? != arg_ty {
-                        let err = match arg_ty {
-                            Type::Boolean => "Expected boolean",
-                            Type::Number => "Expected number",
-                        };
-
-                        return Err(
-                            Error::misc(String::from(err)).with_pos(arg)
-                        );
-                    };
+                    self.expect(arg, arg_ty)?;
                 }
 
                 (args.len() == arity).then_some(ty).ok_or_else(|| {
                     Error::misc(format!(
-                        "Expected {arity} argument{}",
-                        if arity == 1 { "" } else { "s" }
+                        "Expected {arity} argument{}, got {}",
+                        if arity == 1 { "" } else { "s" },
+                        args.len()
                     ))
                     .with_pos(op)
                 })
@@ -118,10 +114,7 @@ impl Builder<'_> {
                 if_true,
                 if_false,
             } => {
-                if self.check_expression(cond)? != Type::Boolean {
-                    return Err(Error::misc(String::from("Expected boolean"))
-                        .with_pos(cond.as_ref()));
-                }
+                self.expect(cond, Type::Boolean)?;
 
                 let true_ty = self.check_expression(if_true)?;
                 let false_ty = self.check_expression(if_false)?;
@@ -157,5 +150,18 @@ impl Builder<'_> {
         self.types.insert(expr.uid, ty);
 
         Ok(ty)
+    }
+
+    fn expect(&mut self, expr: &ast::Expression, ty: Type) -> CalyxResult<()> {
+        if self.check_expression(expr)? == ty {
+            Ok(())
+        } else {
+            let msg = match ty {
+                Type::Boolean => "Expected boolean",
+                Type::Number => "Expected number",
+            };
+
+            Err(Error::misc(String::from(msg)).with_pos(expr))
+        }
     }
 }

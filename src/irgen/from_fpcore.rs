@@ -46,6 +46,23 @@ fn compile_number(
     Ok(port)
 }
 
+fn compile_constant(
+    constant: ast::Constant,
+    ctx: &mut Context,
+) -> ir::RRC<ir::Port> {
+    match constant {
+        ast::Constant::Math(_) => unimplemented!(),
+        ast::Constant::Bool(val) => {
+            let params = [1, val.into()];
+
+            let cell = ctx.builder.add_primitive("const", "std_const", &params);
+            let port = cell.borrow().get("out");
+
+            port
+        }
+    }
+}
+
 fn compile_symbol(
     sym: &ast::Symbol,
     uid: ast::NodeId,
@@ -79,8 +96,16 @@ fn get_primitive_operation(
             ast::MathOp::Sqrt => Some(builtins::sqrt(format)),
             _ => None,
         },
-        ast::OpKind::Test(_) => unimplemented!(),
-        ast::OpKind::Tensor(_) => unimplemented!(),
+        ast::OpKind::Test(op) => match op {
+            ast::TestOp::Lt => Some(builtins::lt(format)),
+            ast::TestOp::Gt => Some(builtins::gt(format)),
+            ast::TestOp::Leq => Some(builtins::le(format)),
+            ast::TestOp::Geq => Some(builtins::ge(format)),
+            ast::TestOp::Eq => Some(builtins::eq(format)),
+            ast::TestOp::Neq => Some(builtins::neq(format)),
+            _ => None,
+        },
+        ast::OpKind::Tensor(_) => None,
     }
 }
 
@@ -104,9 +129,7 @@ fn compile_operation(
             );
 
             (prim, &decl.signature, decl.is_comb)
-        } else {
-            let proto = ctx.libm.remove(&uid).unwrap();
-
+        } else if let Some(proto) = ctx.libm.remove(&uid) {
             let comp = ctx.builder.add_component(
                 proto.prefix_hint,
                 proto.name,
@@ -114,6 +137,8 @@ fn compile_operation(
             );
 
             (comp, &Signature::UNARY_DEFAULT, proto.is_comb)
+        } else {
+            unimplemented!()
         };
 
     let inputs = match signature.args {
@@ -164,12 +189,11 @@ fn compile_let(
     sequential: bool,
     ctx: &mut Context,
 ) -> CalyxResult<(ir::RRC<ir::Port>, ir::Control)> {
-    let params = [ctx.format.width];
-
     let (args, stores): (Vec<_>, Vec<_>) = itertools::process_results(
         binders.iter().map(|binder| {
             let (port, control) = compile_expression(&binder.expr, ctx)?;
 
+            let params = [port.borrow().width];
             let reg = ctx.builder.add_primitive("r", "std_reg", &params);
 
             let invoke = ir::Control::invoke(
@@ -213,6 +237,9 @@ fn compile_expression(
     match &expr.kind {
         ast::ExprKind::Num(num) => {
             Ok((compile_number(num, ctx)?, ir::Control::empty()))
+        }
+        ast::ExprKind::Const(constant) => {
+            Ok((compile_constant(*constant, ctx), ir::Control::empty()))
         }
         ast::ExprKind::Id(sym) => {
             Ok((compile_symbol(sym, expr.uid, ctx), ir::Control::empty()))
