@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -55,16 +56,27 @@ fn main() -> CalyxResult<()> {
         .target(env_logger::Target::Stderr)
         .init();
 
-    let path = opts.file.to_string_lossy();
-    let file = fs::read_to_string(&opts.file)?;
+    let (filename, src) = match &opts.file {
+        Some(file) => {
+            let filename = file.to_string_lossy();
+            let src = fs::read_to_string(file)?;
 
-    let benchmarks =
-        FPCoreParser::parse_file(path.to_string(), file).map_err(|err| {
-            Error::misc(format!("Syntax error:\n{}", err.with_path(&path)))
+            (filename, src)
+        }
+        None => {
+            let filename = Cow::from("<stdin>");
+            let src = io::read_to_string(io::stdin())?;
+
+            (filename, src)
+        }
+    };
+
+    let benchmarks = FPCoreParser::parse_file(filename.to_string(), src)
+        .map_err(|err| {
+            Error::misc(format!("Syntax error:\n{}", err.with_path(&filename)))
         })?;
 
     let workspace = build_workspace(STD_IMPORTS, &opts.lib_path)?;
-
     let ctx = irgen::compile_fpcore(&benchmarks, &opts, workspace.lib)?;
 
     let mut out: Box<dyn Write> = if let Some(path) = opts.output {

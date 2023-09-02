@@ -10,7 +10,7 @@ use crate::format::Format;
 pub struct Opts {
     /// input FPCore benchmark
     #[argh(positional)]
-    pub file: PathBuf,
+    pub file: Option<PathBuf>,
 
     /// path to the primitives library
     #[argh(option, short = 'l')]

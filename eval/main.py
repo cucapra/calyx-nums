@@ -24,13 +24,12 @@ def format_data(data: list[FixedPoint], fmt: QFormat) -> str:
         }
     })
 
-def compile(file: Path, fmt: QFormat, nums: Path, lib: Path):
+def compile(fpcore: str, fmt: QFormat, nums: Path, lib: Path):
     return subprocess.run([
         nums,
-        file,
         '--format', str(fmt),
         '--lib-path', lib
-    ], check=True, stdout=subprocess.PIPE, encoding='utf-8')
+    ], check=True, input=fpcore, stdout=subprocess.PIPE, encoding='utf-8')
 
 def simulate(futil: str, data: Path):
     return subprocess.run([
@@ -39,7 +38,7 @@ def simulate(futil: str, data: Path):
         '--to', 'dat',
         '--through', 'icarus-verilog',
         '-s', 'verilog.data', data
-    ], check=True, stdout=subprocess.PIPE, input=futil, encoding='utf-8')
+    ], check=True, input=futil, stdout=subprocess.PIPE, encoding='utf-8')
 
 def test_bench(
     benchmark: FPCore[FixedPoint],
@@ -49,15 +48,11 @@ def test_bench(
     lib: Path
 ) -> int:
     with tempfile.TemporaryDirectory() as tmp:
-        core = Path(tmp, 'bench.fpcore')
-        data = Path(tmp, 'dat.json')
-
-        core.write_text(str(benchmark))
+        data = Path(tmp, 'data.json')
         data.write_text(format_data(vals, fmt))
 
-        comp_result = compile(core, fmt, nums, lib)
+        bench = compile(str(benchmark), fmt, nums, lib).stdout
 
-        bench = comp_result.stdout
         name = benchmark.name or 'anonymous'
         comb = f'comb component {name}' in bench
 
@@ -69,11 +64,9 @@ def test_bench(
             fmt.width
         )
 
-        sim_result = simulate(bench + main, data)
+        dat = simulate(bench + main, data).stdout
 
-        result = json.loads(sim_result.stdout)
-
-        return int(result['memories']['mem'][0])
+        return json.loads(dat)['memories']['mem'][0]
 
 def format_diagnostic(
     benchmark: FPCore[FixedPoint],
