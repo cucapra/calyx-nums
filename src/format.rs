@@ -26,7 +26,8 @@ impl Default for Format {
 impl FromStr for Format {
     type Err = ParseFormatError;
 
-    /// Parse a fixed-point format in ARM-style Q notation.
+    /// Parses a fixed-point format in ARM-style Q notation.
+    #[allow(clippy::from_str_radix_10)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut iter = s.chars();
         let is_signed = iter.peeking_next(|&x| x == 'U').is_none();
@@ -59,6 +60,6 @@ impl From<ParseIntError> for ParseFormatError {
 
 impl fmt::Display for ParseFormatError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid format.")
+        write!(f, "invalid format")
     }
 }

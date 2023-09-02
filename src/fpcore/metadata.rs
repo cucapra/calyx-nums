@@ -79,20 +79,20 @@ pub enum Precision {
 }
 
 impl Precision {
-    pub fn from_shorthand(s: &str) -> Result<Self, ()> {
+    pub fn from_shorthand(s: &str) -> Option<Self> {
         match s {
-            "binary16" => Ok(Precision::Float { e: 5, nbits: 16 }),
-            "binary32" => Ok(Precision::Float { e: 8, nbits: 32 }),
-            "binary64" => Ok(Precision::Float { e: 11, nbits: 64 }),
-            "binary128" => Ok(Precision::Float { e: 15, nbits: 128 }),
-            "binary256" => Ok(Precision::Float { e: 19, nbits: 256 }),
-            "posit8" => Ok(Precision::Posit { es: 0, nbits: 8 }),
-            "posit16" => Ok(Precision::Posit { es: 1, nbits: 16 }),
-            "posit32" => Ok(Precision::Posit { es: 2, nbits: 32 }),
-            "posit64" => Ok(Precision::Posit { es: 3, nbits: 64 }),
-            "real" => Ok(Precision::Real),
-            "integer" => Ok(Precision::Integer),
-            _ => Err(()),
+            "binary16" => Some(Precision::Float { e: 5, nbits: 16 }),
+            "binary32" => Some(Precision::Float { e: 8, nbits: 32 }),
+            "binary64" => Some(Precision::Float { e: 11, nbits: 64 }),
+            "binary128" => Some(Precision::Float { e: 15, nbits: 128 }),
+            "binary256" => Some(Precision::Float { e: 19, nbits: 256 }),
+            "posit8" => Some(Precision::Posit { es: 0, nbits: 8 }),
+            "posit16" => Some(Precision::Posit { es: 1, nbits: 16 }),
+            "posit32" => Some(Precision::Posit { es: 2, nbits: 32 }),
+            "posit64" => Some(Precision::Posit { es: 3, nbits: 64 }),
+            "real" => Some(Precision::Real),
+            "integer" => Some(Precision::Integer),
+            _ => None,
         }
     }
 }

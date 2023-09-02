@@ -187,15 +187,15 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
 
 /// Whether the property can be safely ignored without emitting a warning.
 fn is_silent(prop: &ast::Property) -> bool {
-    match prop {
-        ast::Property::Name(_) => true,
-        ast::Property::Description(_) => true,
-        ast::Property::Cite(_) => true,
-        ast::Property::Pre(_) => true,
-        ast::Property::Spec(_) => true,
-        ast::Property::Alt(_) => true,
-        ast::Property::Example(_) => true,
-        ast::Property::CalyxDomain(_) => true,
-        _ => false,
-    }
+    matches!(
+        prop,
+        ast::Property::Name(_)
+            | ast::Property::Description(_)
+            | ast::Property::Cite(_)
+            | ast::Property::Pre(_)
+            | ast::Property::Spec(_)
+            | ast::Property::Alt(_)
+            | ast::Property::Example(_)
+            | ast::Property::CalyxDomain(_)
+    )
 }

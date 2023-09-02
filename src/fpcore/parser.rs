@@ -16,13 +16,13 @@ impl FPCoreParser {
     pub fn parse_file(
         name: String,
         src: String,
-    ) -> ParseResult<Vec<ast::BenchmarkDef>> {
+    ) -> Result<Vec<ast::BenchmarkDef>, Box<Error<Rule>>> {
         let file = GlobalPositionTable::as_mut().add_file(name, src);
         let src = GlobalPositionTable::as_ref().get_source(file);
 
         let nodes = FPCoreParser::parse_with_userdata(Rule::file, src, file)?;
 
-        FPCoreParser::file(nodes.single()?)
+        FPCoreParser::file(nodes.single()?).map_err(Box::new)
     }
 }
 
@@ -43,11 +43,13 @@ impl FPCoreParser {
 
     fn fpcore(input: Node) -> ParseResult<ast::BenchmarkDef> {
         Ok(match_nodes!(input.into_children();
-            [symbol_opt(name), argument_list(args), property(props).., expr(body)] => ast::BenchmarkDef {
-                name,
-                args,
-                props: props.collect(),
-                body,
+            [symbol_opt(name), argument_list(args), property(props).., expr(body)] => {
+                ast::BenchmarkDef {
+                    name,
+                    args,
+                    props: props.collect(),
+                    body,
+                }
             },
         ))
     }
@@ -80,11 +82,13 @@ impl FPCoreParser {
                 dims: Vec::new(),
                 uid: ast::NodeId::new(),
             },
-            [annotation(props), symbol(var), dimension(dims)..] => ast::ArgumentDef {
-                var,
-                props,
-                dims: dims.collect(),
-                uid: ast::NodeId::new(),
+            [annotation(props), symbol(var), dimension(dims)..] => {
+                ast::ArgumentDef {
+                    var,
+                    props,
+                    dims: dims.collect(),
+                    uid: ast::NodeId::new(),
+                }
             },
             [symbol(var), dimension(dims)..] => ast::ArgumentDef {
                 var,
@@ -103,8 +107,8 @@ impl FPCoreParser {
 
     fn update_rule(input: Node) -> ParseResult<ast::UpdateRule> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(init), expr(update)] => ast::UpdateRule {
-                var, init, update
+            [symbol(var), expr(init), expr(update)] => {
+                ast::UpdateRule { var, init, update }
             },
         ))
     }
@@ -174,43 +178,56 @@ impl FPCoreParser {
             [number(num)] => ast::ExprKind::Num(num),
             [constant(constant)] => ast::ExprKind::Const(constant),
             [symbol(sym)] => ast::ExprKind::Id(sym),
-            [operation(op), expr(expressions)..] =>
-                ast::ExprKind::Op(op, expressions.collect()),
-            [if_kwd(_), expr(cond), expr(if_true), expr(if_false)] => ast::ExprKind::If {
-                cond: Box::new(cond),
-                if_true: Box::new(if_true),
-                if_false: Box::new(if_false),
+            [operation(op), expr(expressions)..] => {
+                ast::ExprKind::Op(op, expressions.collect())
             },
-            [let_kwd(sequential), binder(binders).., expr(body)] => ast::ExprKind::Let {
-                binders: binders.collect(),
-                body: Box::new(body),
-                sequential,
+            [if_kwd(_), expr(cond), expr(if_true), expr(if_false)] => {
+                ast::ExprKind::If {
+                    cond: Box::new(cond),
+                    if_true: Box::new(if_true),
+                    if_false: Box::new(if_false),
+                }
             },
-            [while_kwd(sequential), expr(cond), rules(rules), expr(body)] => ast::ExprKind::While {
-                cond: Box::new(cond),
-                rules,
-                body: Box::new(body),
-                sequential,
+            [let_kwd(sequential), binder(binders).., expr(body)] => {
+                ast::ExprKind::Let {
+                    binders: binders.collect(),
+                    body: Box::new(body),
+                    sequential,
+                }
             },
-            [for_kwd(sequential), conditions(conditions), rules(rules), expr(body)] => ast::ExprKind::For {
-                conditions,
-                rules,
-                body: Box::new(body),
-                sequential,
+            [while_kwd(sequential), expr(cond), rules(rules), expr(body)] => {
+                ast::ExprKind::While {
+                    cond: Box::new(cond),
+                    rules,
+                    body: Box::new(body),
+                    sequential,
+                }
             },
-            [tensor_kwd(_), conditions(conditions), expr(body)] => ast::ExprKind::Tensor {
-                conditions,
-                body: Box::new(body),
+            [for_kwd(sequential), conditions(conditions), rules(rules), expr(body)] => {
+                ast::ExprKind::For {
+                    conditions,
+                    rules,
+                    body: Box::new(body),
+                    sequential,
+                }
             },
-            [tensor_star_kwd(_), conditions(conditions), rules(rules), expr(body)] => ast::ExprKind::TensorStar {
-                conditions,
-                rules,
-                body: Box::new(body),
+            [tensor_kwd(_), conditions(conditions), expr(body)] => {
+                ast::ExprKind::Tensor {
+                    conditions,
+                    body: Box::new(body),
+                }
             },
-            [cast_kwd(_), expr(body)] =>
-                ast::ExprKind::Cast(Box::new(body)),
-            [array_kwd(_), expr(elems)..] =>
-                ast::ExprKind::Array(elems.collect()),
+            [tensor_star_kwd(_), conditions(conditions), rules(rules), expr(body)] => {
+                ast::ExprKind::TensorStar {
+                    conditions,
+                    rules,
+                    body: Box::new(body),
+                }
+            },
+            [cast_kwd(_), expr(body)] => ast::ExprKind::Cast(Box::new(body)),
+            [array_kwd(_), expr(elems)..] => {
+                ast::ExprKind::Array(elems.collect())
+            },
             [annotation(props), expr(body)] => ast::ExprKind::Annotation {
                 props,
                 body: Box::new(body),
@@ -231,8 +248,10 @@ impl FPCoreParser {
             [rational(value)] => value,
             [decnum(value)] => value,
             [hexnum(value)] => value,
-            [digits_kwd(_), mantissa((sign, mantissa)), exponent(exponent), dec_digits(base)] =>
-                ast::Rational::from_digits(sign, mantissa, exponent, base).unwrap(),
+            [digits_kwd(_), mantissa((sign, mantissa)), exponent(exponent), dec_digits(base)] => {
+                ast::Rational::from_digits(sign, mantissa, exponent, base)
+                    .unwrap()
+            },
         );
 
         Ok(ast::Number { value, span })
@@ -304,36 +323,41 @@ impl FPCoreParser {
 
     fn property(input: Node) -> ParseResult<ast::Property> {
         Ok(match_nodes!(input.into_children();
-            [name_kwd(_), string(name)] =>
-                ast::Property::Name(name),
-            [description_kwd(_), string(description)] =>
-                ast::Property::Description(description),
-            [cite_kwd(_), symbol(symbols)..] =>
-                ast::Property::Cite(symbols.collect()),
-            [precision_kwd(_), precision(precision)] =>
-                ast::Property::Precision(precision),
-            [round_kwd(_), rounding(round)] =>
-                ast::Property::Round(round.parse().unwrap()),
-            [overflow_kwd(_), overflow(overflow)] =>
-                ast::Property::Overflow(overflow.parse().unwrap()),
-            [pre_kwd(_), expr(pre)] =>
-                ast::Property::Pre(pre),
-            [spec_kwd(_), expr(spec)] =>
-                ast::Property::Spec(spec),
-            [alt_kwd(_), expr(alt)] =>
-                ast::Property::Alt(alt),
-            [math_lib_kwd(_), symbol(lib)] =>
-                ast::Property::MathLib(lib),
-            [example_kwd(_), binder(binders)..] =>
-                ast::Property::Example(binders.collect()),
-            [domain_kwd(_), number(left), number(right)] =>
+            [name_kwd(_), string(name)] => ast::Property::Name(name),
+            [description_kwd(_), string(description)] => {
+                ast::Property::Description(description)
+            },
+            [cite_kwd(_), symbol(symbols)..] => {
+                ast::Property::Cite(symbols.collect())
+            },
+            [precision_kwd(_), precision(precision)] => {
+                ast::Property::Precision(precision)
+            },
+            [round_kwd(_), rounding(round)] => {
+                ast::Property::Round(round.parse().unwrap())
+            },
+            [overflow_kwd(_), overflow(overflow)] => {
+                ast::Property::Overflow(overflow.parse().unwrap())
+            },
+            [pre_kwd(_), expr(pre)] => ast::Property::Pre(pre),
+            [spec_kwd(_), expr(spec)] => ast::Property::Spec(spec),
+            [alt_kwd(_), expr(alt)] => ast::Property::Alt(alt),
+            [math_lib_kwd(_), symbol(lib)] => ast::Property::MathLib(lib),
+            [example_kwd(_), binder(binders)..] => {
+                ast::Property::Example(binders.collect())
+            },
+            [domain_kwd(_), number(left), number(right)] => {
                 ast::Property::CalyxDomain(metadata::CalyxDomain {
-                    left, right
-                }),
-            [impl_kwd(_), strategy(strategy)] =>
-                ast::Property::CalyxImpl(strategy),
-            [property_name(name), data(data)] =>
-                ast::Property::Unknown(name, data),
+                    left,
+                    right,
+                })
+            },
+            [impl_kwd(_), strategy(strategy)] => {
+                ast::Property::CalyxImpl(strategy)
+            },
+            [property_name(name), data(data)] => {
+                ast::Property::Unknown(name, data)
+            },
         ))
     }
 
@@ -372,8 +396,12 @@ impl FPCoreParser {
         Ok(match_nodes!(input.into_children();
             [float((e, nbits))] => metadata::Precision::Float { e, nbits },
             [posit((es, nbits))] => metadata::Precision::Posit { es, nbits },
-            [fixed((scale, nbits))] => metadata::Precision::Fixed { scale, nbits },
-            [precision_shorthand(s)] => metadata::Precision::from_shorthand(s).unwrap(),
+            [fixed((scale, nbits))] => {
+                metadata::Precision::Fixed { scale, nbits }
+            },
+            [precision_shorthand(s)] => {
+                metadata::Precision::from_shorthand(s).unwrap()
+            },
         ))
     }
 
@@ -400,7 +428,9 @@ impl FPCoreParser {
     fn strategy(input: Node) -> ParseResult<metadata::CalyxImpl> {
         Ok(match_nodes!(input.into_children();
             [lut(lut_size)] => metadata::CalyxImpl::Lut { lut_size },
-            [poly((degree, lut_size))] => metadata::CalyxImpl::Poly { degree, lut_size },
+            [poly((degree, lut_size))] => {
+                metadata::CalyxImpl::Poly { degree, lut_size }
+            },
         ))
     }
 
@@ -429,30 +459,30 @@ impl FPCoreParser {
 
     fn rational(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
-            [pm_opt(sign), dec_digits(numerator), nonzero(denominator)] =>
-                ast::Rational::from_ratio_str(sign, numerator, denominator, 10).unwrap(),
+            [pm_opt(sign), dec_digits(numerator), nonzero(denominator)] => {
+                ast::Rational::from_ratio_str(sign, numerator, denominator, 10)
+                    .unwrap()
+            },
         ))
     }
 
     fn dec_mantissa(input: Node) -> ParseResult<(&str, &str)> {
         Ok(match_nodes!(input.into_children();
-            [dec_digits(integer)] =>
-                (integer, "0"),
-            [dec_digits(integer), dot(_), dec_digits(fraction)] =>
-                (integer, fraction),
-            [dot(_), dec_digits(fraction)] =>
-                ("0", fraction),
+            [dec_digits(integer)] => (integer, "0"),
+            [dec_digits(integer), dot(_), dec_digits(fraction)] => {
+                (integer, fraction)
+            },
+            [dot(_), dec_digits(fraction)] => ("0", fraction),
         ))
     }
 
     fn hex_mantissa(input: Node) -> ParseResult<(&str, &str)> {
         Ok(match_nodes!(input.into_children();
-            [hex_digits(integer)] =>
-                (integer, "0"),
-            [hex_digits(integer), dot(_), hex_digits(fraction)] =>
-                (integer, fraction),
-            [dot(_), hex_digits(fraction)] =>
-                ("0", fraction),
+            [hex_digits(integer)] => (integer, "0"),
+            [hex_digits(integer), dot(_), hex_digits(fraction)] => {
+                (integer, fraction)
+            },
+            [dot(_), hex_digits(fraction)] => ("0", fraction),
         ))
     }
 
@@ -468,19 +498,31 @@ impl FPCoreParser {
 
     fn decnum(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
-            [pm_opt(sign), dec_mantissa((integer, fraction)), exponent(exponent)] =>
-                ast::Rational::from_scientific_str(sign, integer, fraction, 10, 10, exponent).unwrap(),
-            [pm_opt(sign), dec_mantissa((integer, fraction))] =>
-                ast::Rational::from_fixed_point_str(sign, integer, fraction, 10).unwrap(),
+            [pm_opt(sign), dec_mantissa((integer, fraction)), exponent(exponent)] => {
+                ast::Rational::from_scientific_str(
+                    sign, integer, fraction, 10, 10, exponent,
+                )
+                .unwrap()
+            },
+            [pm_opt(sign), dec_mantissa((integer, fraction))] => {
+                ast::Rational::from_fixed_point_str(sign, integer, fraction, 10)
+                    .unwrap()
+            },
         ))
     }
 
     fn hexnum(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
-            [pm_opt(sign), hex_mantissa((integer, fraction)), exponent(exponent)] =>
-                ast::Rational::from_scientific_str(sign, integer, fraction, 16, 2, exponent).unwrap(),
-            [pm_opt(sign), hex_mantissa((integer, fraction))] =>
-                ast::Rational::from_fixed_point_str(sign, integer, fraction, 16).unwrap(),
+            [pm_opt(sign), hex_mantissa((integer, fraction)), exponent(exponent)] => {
+                ast::Rational::from_scientific_str(
+                    sign, integer, fraction, 16, 2, exponent,
+                )
+                .unwrap()
+            },
+            [pm_opt(sign), hex_mantissa((integer, fraction))] => {
+                ast::Rational::from_fixed_point_str(sign, integer, fraction, 16)
+                    .unwrap()
+            },
         ))
     }
 
@@ -539,7 +581,9 @@ impl FPCoreParser {
 
     fn constant(input: Node) -> ParseResult<ast::Constant> {
         Ok(match_nodes!(input.into_children();
-            [mathematical_const(name)] => ast::Constant::Math(name.parse().unwrap()),
+            [mathematical_const(name)] => {
+                ast::Constant::Math(name.parse().unwrap())
+            },
             [boolean_const(name)] => ast::Constant::Bool(match name {
                 "TRUE" => true,
                 "FALSE" => false,
@@ -549,6 +593,7 @@ impl FPCoreParser {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_node<T>(input: &Node) -> ParseResult<T>
 where
     T: FromStr,

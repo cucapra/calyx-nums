@@ -152,6 +152,7 @@ pub struct NodeId(pub(crate) u32);
 impl NodeId {
     /// Creates a new identifier that is distinct from all previously created
     /// identifiers.
+    #[allow(clippy::new_without_default)]
     pub fn new() -> NodeId {
         static NEXT: AtomicU32 = AtomicU32::new(0);
 
