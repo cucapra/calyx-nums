@@ -63,14 +63,14 @@ impl Builder<'_> {
                 ast::Constant::Bool(_) => Ok(Type::Boolean),
             },
             ast::ExprKind::Id(_) => match self.context.names[&expr.uid] {
-                Binding::Argument(arg) => arg
-                    .dims
-                    .is_empty()
-                    .then_some(Type::Number)
-                    .ok_or_else(|| {
-                        Error::misc(String::from("Unsupported argument type"))
-                            .with_pos(&arg.var)
-                    }),
+                Binding::Argument(arg) => {
+                    arg.dims.is_empty().then_some(Type::Number).ok_or_else(
+                        || {
+                            Error::misc("Unsupported argument type")
+                                .with_pos(&arg.var)
+                        },
+                    )
+                }
                 Binding::Let(binder) => Ok(self.types[&binder.expr.uid]),
             },
             ast::ExprKind::Op(op, args) => {
@@ -89,10 +89,9 @@ impl Builder<'_> {
                         (Type::Boolean, arg_ty, op.arity())
                     }
                     ast::OpKind::Tensor(_) => {
-                        return Err(Error::misc(String::from(
-                            "Unsupported operation",
-                        ))
-                        .with_pos(op))
+                        return Err(
+                            Error::misc("Unsupported operation").with_pos(op)
+                        )
                     }
                 };
 
@@ -120,10 +119,8 @@ impl Builder<'_> {
                 let false_ty = self.check_expression(if_false)?;
 
                 (true_ty == false_ty).then_some(true_ty).ok_or_else(|| {
-                    Error::misc(String::from(
-                        "Branches have incompatible types",
-                    ))
-                    .with_pos(if_false.as_ref())
+                    Error::misc("Branches have incompatible types")
+                        .with_pos(if_false.as_ref())
                 })
             }
             ast::ExprKind::Let { binders, body, .. } => {
@@ -136,10 +133,10 @@ impl Builder<'_> {
             ast::ExprKind::While { .. } => unimplemented!(),
             ast::ExprKind::For { .. } => unimplemented!(),
             ast::ExprKind::Tensor { .. } | ast::ExprKind::TensorStar { .. } => {
-                Err(Error::misc(String::from("Unsupported construct `tensor`")))
+                Err(Error::misc("Unsupported construct `tensor`"))
             }
             ast::ExprKind::Array(..) => {
-                Err(Error::misc(String::from("Unsupported construct `array`")))
+                Err(Error::misc("Unsupported construct `array`"))
             }
             ast::ExprKind::Cast(body) => self.check_expression(body),
             ast::ExprKind::Annotation { body, .. } => {
@@ -161,7 +158,7 @@ impl Builder<'_> {
                 Type::Number => "Expected number",
             };
 
-            Err(Error::misc(String::from(msg)).with_pos(expr))
+            Err(Error::misc(msg).with_pos(expr))
         }
     }
 }

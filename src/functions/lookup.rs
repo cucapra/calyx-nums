@@ -9,18 +9,18 @@ use crate::format::Format;
 /// Returns the signature for a table-lookup component.
 pub fn signature(cols: u32, format: &Format) -> Vec<ir::PortDef<u64>> {
     vec![
-        ir::PortDef {
-            name: Id::new("in"),
-            width: format.width,
-            direction: ir::Direction::Input,
-            attributes: Default::default(),
-        },
-        ir::PortDef {
-            name: Id::new("out"),
-            width: u64::from(cols) * format.width,
-            direction: ir::Direction::Output,
-            attributes: Default::default(),
-        },
+        ir::PortDef::new(
+            "in",
+            format.width,
+            ir::Direction::Input,
+            Default::default(),
+        ),
+        ir::PortDef::new(
+            "out",
+            u64::from(cols) * format.width,
+            ir::Direction::Output,
+            Default::default(),
+        ),
     ]
 }
 

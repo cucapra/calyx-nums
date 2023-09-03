@@ -1,9 +1,7 @@
 //! FPCore to Calyx compiler.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::iter;
-use std::rc::Rc;
 
 use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error, Id, NameGenerator};
@@ -272,18 +270,20 @@ fn compile_benchmark(
         .as_ref()
         .map_or_else(|| name_gen.gen_name(ANONYMOUS_PREFIX), |sym| sym.id);
 
-    let mut ports = vec![ir::PortDef {
-        name: Id::new("out"),
-        width: format.width,
-        direction: ir::Direction::Output,
-        attributes: Default::default(),
-    }];
+    let mut ports = vec![ir::PortDef::new(
+        "out",
+        format.width,
+        ir::Direction::Output,
+        Default::default(),
+    )];
 
-    ports.extend(def.args.iter().map(|arg| ir::PortDef {
-        name: arg.var.id,
-        width: format.width,
-        direction: ir::Direction::Input,
-        attributes: Default::default(),
+    ports.extend(def.args.iter().map(|arg| {
+        ir::PortDef::new(
+            arg.var.id,
+            format.width,
+            ir::Direction::Input,
+            Default::default(),
+        )
     }));
 
     let mut component = ir::Component::new(name, ports, false, false, None);
@@ -308,7 +308,7 @@ fn compile_benchmark(
     let is_comb = matches!(control, ir::Control::Empty(_));
 
     builder.add_continuous_assignments(assigns);
-    builder.component.control = Rc::new(RefCell::new(control));
+    builder.component.control = ir::rrc(control);
 
     component.is_comb = is_comb;
 

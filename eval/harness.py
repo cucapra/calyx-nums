@@ -71,7 +71,7 @@ def batch(
         True
     )
 
-    lt = main.lt('lt', idx_width)
+    lt = main.lt(idx_width, 'lt')
     idx = main.reg('idx', idx_width)
     init = main.group('init')
     cond = main.comb_group('cond')
@@ -85,7 +85,7 @@ def batch(
         lt.left = idx.out
         lt.right = count
 
-    add = main.add('add', idx_width)
+    add = main.add(idx_width, 'add')
     inc = main.group('inc')
 
     with inc:
@@ -127,7 +127,10 @@ def batch(
         write.done = mem.done
 
     main.control += init
-    main.control += cb.while_(lt.out, cond, reads + [write, inc])
+    main.control += cb.while_with(
+        cb.CellAndGroup(lt, cond),
+        reads + [write, inc]
+    )
 
     top_level.program.imports = []
 

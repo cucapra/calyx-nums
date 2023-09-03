@@ -116,8 +116,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
             ast::ExprKind::Const(_) => Ok(()),
             ast::ExprKind::Id(sym) => {
                 let binding = self.find_name(sym.id).ok_or_else(|| {
-                    Error::undefined(sym.id, String::from("variable"))
-                        .with_pos(sym)
+                    Error::undefined(sym.id, "variable").with_pos(sym)
                 })?;
 
                 self.result.names.insert(expr.uid, *binding);

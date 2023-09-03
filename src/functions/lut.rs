@@ -26,18 +26,18 @@ pub fn compile_lut<T: LowerHex>(name: Id, values: &[T]) -> Primitive {
         name,
         params: vec![width, idx_size],
         signature: vec![
-            PortDef {
-                name: Id::new("idx"),
-                width: Width::Param { value: idx_size },
-                direction: Direction::Input,
-                attributes: Default::default(),
-            },
-            PortDef {
-                name: Id::new("out"),
-                width: Width::Param { value: width },
-                direction: Direction::Output,
-                attributes: Default::default(),
-            },
+            PortDef::new(
+                "idx",
+                Width::Param { value: idx_size },
+                Direction::Input,
+                Default::default(),
+            ),
+            PortDef::new(
+                "out",
+                Width::Param { value: width },
+                Direction::Output,
+                Default::default(),
+            ),
         ],
         attributes: Default::default(),
         is_comb: true,

@@ -89,8 +89,7 @@ impl Visitor<'_> for Builder<'_> {
                 ) {
                     let f = Function {
                         kind: (*f).try_into().map_err(|_| {
-                            Error::misc(String::from("Unsupported operation"))
-                                .with_pos(op)
+                            Error::misc("Unsupported operation").with_pos(op)
                         })?,
                         uid: expr.uid,
                         span: op.span,
@@ -102,8 +101,7 @@ impl Visitor<'_> for Builder<'_> {
                         self.choose_domain(&f, args, context.domain)?;
 
                     let strategy = context.strategy.ok_or_else(|| {
-                        Error::misc(String::from("No implementation specified"))
-                            .with_pos(op)
+                        Error::misc("No implementation specified").with_pos(op)
                     })?;
 
                     self.build_function(&f, &domain, strategy)?;
@@ -133,8 +131,7 @@ impl<'a> Builder<'a> {
                 })
             })
             .ok_or_else(|| {
-                Error::misc(String::from("No domain specified"))
-                    .with_pos(function)
+                Error::misc("No domain specified").with_pos(function)
             })?;
 
         Ok(DomainHint { left, right })

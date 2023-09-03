@@ -188,8 +188,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                     _ => None,
                 })
                 .ok_or_else(|| {
-                    Error::misc(String::from("No domain specified"))
-                        .with_pos(&arg.var)
+                    Error::misc("No domain specified").with_pos(&arg.var)
                 })?;
 
             self.script_interval(arg, left, right);
@@ -233,10 +232,8 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                     _ => (
                         SollyaFunction::try_from(*function)
                             .map_err(|_| {
-                                Error::misc(String::from(
-                                    "Unsupported operation",
-                                ))
-                                .with_pos(op)
+                                Error::misc("Unsupported operation")
+                                    .with_pos(op)
                             })?
                             .as_str(),
                         false,
