@@ -1,6 +1,6 @@
 //! Metadata properties.
 
-use std::str::FromStr;
+use strum_macros::{EnumString, IntoStaticStr};
 
 use super::ast::{Binder, Expression, Number, Symbol};
 
@@ -98,48 +98,28 @@ impl Precision {
 }
 
 /// An IEEE 754 rounding mode.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
 pub enum RoundingMode {
+    #[strum(to_string = "nearestEven")]
     NearestEven,
+    #[strum(to_string = "nearestAway")]
     NearestAway,
+    #[strum(to_string = "toPositive")]
     ToPositive,
+    #[strum(to_string = "toNegative")]
     ToNegative,
+    #[strum(to_string = "toZero")]
     ToZero,
 }
 
-impl FromStr for RoundingMode {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "nearestEven" => Ok(RoundingMode::NearestEven),
-            "nearestAway" => Ok(RoundingMode::NearestAway),
-            "toPositive" => Ok(RoundingMode::ToPositive),
-            "toNegative" => Ok(RoundingMode::ToNegative),
-            "toZero" => Ok(RoundingMode::ToZero),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
 pub enum OverflowMode {
+    #[strum(to_string = "infinity")]
     Infinity,
+    #[strum(to_string = "clamp")]
     Clamp,
+    #[strum(to_string = "wrap")]
     Wrap,
-}
-
-impl FromStr for OverflowMode {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "infinity" => Ok(OverflowMode::Infinity),
-            "clamp" => Ok(OverflowMode::Clamp),
-            "wrap" => Ok(OverflowMode::Wrap),
-            _ => Err(()),
-        }
-    }
 }
 
 /// An input domain for a function.

@@ -1,74 +1,55 @@
 //! Built-in operations and constants.
 
-use std::str::FromStr;
+use strum_macros::{EnumString, IntoStaticStr};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
 #[rustfmt::skip]
 pub enum MathOp {
-    Add,   Sub,      Mul,       Div,    FAbs,
-    FMA,   Exp,      Exp2,      ExpM1,  Log,
-    Log10, Log2,     Log1P,     Pow,    Sqrt,
-    Cbrt,  Hypot,    Sin,       Cos,    Tan,
-    ASin,  ACos,     ATan,      ATan2,  Sinh,
-    Cosh,  Tanh,     ASinh,     ACosh,  ATanh,
-    Erf,   ErfC,     TGamma,    LGamma, Ceil,
-    Floor, FMod,     Remainder, FMax,   FMin,
-    FDim,  CopySign, Trunc,     Round,  NearbyInt,
-}
-
-impl FromStr for MathOp {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "+" => Ok(MathOp::Add),
-            "-" => Ok(MathOp::Sub),
-            "*" => Ok(MathOp::Mul),
-            "/" => Ok(MathOp::Div),
-            "fabs" => Ok(MathOp::FAbs),
-            "fma" => Ok(MathOp::FMA),
-            "exp" => Ok(MathOp::Exp),
-            "exp2" => Ok(MathOp::Exp2),
-            "expm1" => Ok(MathOp::ExpM1),
-            "log" => Ok(MathOp::Log),
-            "log10" => Ok(MathOp::Log10),
-            "log2" => Ok(MathOp::Log2),
-            "log1p" => Ok(MathOp::Log1P),
-            "pow" => Ok(MathOp::Pow),
-            "sqrt" => Ok(MathOp::Sqrt),
-            "cbrt" => Ok(MathOp::Cbrt),
-            "hypot" => Ok(MathOp::Hypot),
-            "sin" => Ok(MathOp::Sin),
-            "cos" => Ok(MathOp::Cos),
-            "tan" => Ok(MathOp::Tan),
-            "asin" => Ok(MathOp::ASin),
-            "acos" => Ok(MathOp::ACos),
-            "atan" => Ok(MathOp::ATan),
-            "atan2" => Ok(MathOp::ATan2),
-            "sinh" => Ok(MathOp::Sinh),
-            "cosh" => Ok(MathOp::Cosh),
-            "tanh" => Ok(MathOp::Tanh),
-            "asinh" => Ok(MathOp::ASinh),
-            "acosh" => Ok(MathOp::ACosh),
-            "atanh" => Ok(MathOp::ATanh),
-            "erf" => Ok(MathOp::Erf),
-            "erfc" => Ok(MathOp::ErfC),
-            "tgamma" => Ok(MathOp::TGamma),
-            "lgamma" => Ok(MathOp::LGamma),
-            "ceil" => Ok(MathOp::Ceil),
-            "floor" => Ok(MathOp::Floor),
-            "fmod" => Ok(MathOp::FMod),
-            "remainder" => Ok(MathOp::Remainder),
-            "fmax" => Ok(MathOp::FMax),
-            "fmin" => Ok(MathOp::FMin),
-            "fdim" => Ok(MathOp::FDim),
-            "copysign" => Ok(MathOp::CopySign),
-            "trunc" => Ok(MathOp::Trunc),
-            "round" => Ok(MathOp::Round),
-            "nearbyint" => Ok(MathOp::NearbyInt),
-            _ => Err(()),
-        }
-    }
+    #[strum(to_string = "+")] Add,
+    #[strum(to_string = "-")] Sub,
+    #[strum(to_string = "*")] Mul,
+    #[strum(to_string = "/")] Div,
+    #[strum(to_string = "fabs")] FAbs,
+    #[strum(to_string = "fma")] FMA,
+    #[strum(to_string = "exp")] Exp,
+    #[strum(to_string = "exp2")] Exp2,
+    #[strum(to_string = "expm1")] ExpM1,
+    #[strum(to_string = "log")] Log,
+    #[strum(to_string = "log10")] Log10,
+    #[strum(to_string = "log2")] Log2,
+    #[strum(to_string = "log1p")] Log1P,
+    #[strum(to_string = "pow")] Pow,
+    #[strum(to_string = "sqrt")] Sqrt,
+    #[strum(to_string = "cbrt")] Cbrt,
+    #[strum(to_string = "hypot")] Hypot,
+    #[strum(to_string = "sin")] Sin,
+    #[strum(to_string = "cos")] Cos,
+    #[strum(to_string = "tan")] Tan,
+    #[strum(to_string = "asin")] ASin,
+    #[strum(to_string = "acos")] ACos,
+    #[strum(to_string = "atan")] ATan,
+    #[strum(to_string = "atan2")] ATan2,
+    #[strum(to_string = "sinh")] Sinh,
+    #[strum(to_string = "cosh")] Cosh,
+    #[strum(to_string = "tanh")] Tanh,
+    #[strum(to_string = "asinh")] ASinh,
+    #[strum(to_string = "acosh")] ACosh,
+    #[strum(to_string = "atanh")] ATanh,
+    #[strum(to_string = "erf")] Erf,
+    #[strum(to_string = "erfc")] ErfC,
+    #[strum(to_string = "tgamma")] TGamma,
+    #[strum(to_string = "lgamma")] LGamma,
+    #[strum(to_string = "ceil")] Ceil,
+    #[strum(to_string = "floor")] Floor,
+    #[strum(to_string = "fmod")] FMod,
+    #[strum(to_string = "remainder")] Remainder,
+    #[strum(to_string = "fmax")] FMax,
+    #[strum(to_string = "fmin")] FMin,
+    #[strum(to_string = "fdim")] FDim,
+    #[strum(to_string = "copysign")] CopySign,
+    #[strum(to_string = "trunc")] Trunc,
+    #[strum(to_string = "round")] Round,
+    #[strum(to_string = "nearbyint")] NearbyInt,
 }
 
 impl MathOp {
@@ -123,36 +104,23 @@ impl MathOp {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
 #[rustfmt::skip]
 pub enum TestOp {
-    Lt,    Gt,    Leq,      Geq,     Eq,
-    Neq,   And,   Or,       Not,     IsFinite,
-    IsInf, IsNan, IsNormal, SignBit,
-}
-
-impl FromStr for TestOp {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "<" => Ok(TestOp::Lt),
-            ">" => Ok(TestOp::Gt),
-            "<=" => Ok(TestOp::Leq),
-            ">=" => Ok(TestOp::Geq),
-            "==" => Ok(TestOp::Eq),
-            "!=" => Ok(TestOp::Neq),
-            "and" => Ok(TestOp::And),
-            "or" => Ok(TestOp::Or),
-            "not" => Ok(TestOp::Not),
-            "isfinite" => Ok(TestOp::IsFinite),
-            "isinf" => Ok(TestOp::IsInf),
-            "isnan" => Ok(TestOp::IsNan),
-            "isnormal" => Ok(TestOp::IsNormal),
-            "signbit" => Ok(TestOp::SignBit),
-            _ => Err(()),
-        }
-    }
+    #[strum(to_string = "<")] Lt,
+    #[strum(to_string = ">")] Gt,
+    #[strum(to_string = "<=")] Leq,
+    #[strum(to_string = ">=")] Geq,
+    #[strum(to_string = "==")] Eq,
+    #[strum(to_string = "!=")] Neq,
+    #[strum(to_string = "and")] And,
+    #[strum(to_string = "or")] Or,
+    #[strum(to_string = "not")] Not,
+    #[strum(to_string = "isfinite")] IsFinite,
+    #[strum(to_string = "isinf")] IsInf,
+    #[strum(to_string = "isnan")] IsNan,
+    #[strum(to_string = "isnormal")] IsNormal,
+    #[strum(to_string = "signbit")] SignBit,
 }
 
 impl TestOp {
@@ -176,55 +144,31 @@ impl TestOp {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
 #[rustfmt::skip]
 pub enum TensorOp {
-    Dim, Size, Ref,
+    #[strum(to_string = "dim")] Dim,
+    #[strum(to_string = "size")] Size,
+    #[strum(to_string = "ref")] Ref,
 }
 
-impl FromStr for TensorOp {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "dim" => Ok(TensorOp::Dim),
-            "size" => Ok(TensorOp::Size),
-            "ref" => Ok(TensorOp::Ref),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
 pub enum MathConst {
-    E,          LOG2E, LOG10E,  LN2,      LN10,
-    PI,         PI_2,  PI_4,    M_1_PI,   M_2_PI,
-    M_2_SQRTPI, SQRT2, SQRT1_2, INFINITY, NAN,
-}
-
-impl FromStr for MathConst {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "E" => Ok(MathConst::E),
-            "LOG2E" => Ok(MathConst::LOG2E),
-            "LOG10E" => Ok(MathConst::LOG10E),
-            "LN2" => Ok(MathConst::LN2),
-            "LN10" => Ok(MathConst::LN10),
-            "PI" => Ok(MathConst::PI),
-            "PI_2" => Ok(MathConst::PI_2),
-            "PI_4" => Ok(MathConst::PI_4),
-            "M_1_PI" => Ok(MathConst::M_1_PI),
-            "M_2_PI" => Ok(MathConst::M_2_PI),
-            "M_2_SQRTPI" => Ok(MathConst::M_2_SQRTPI),
-            "SQRT2" => Ok(MathConst::SQRT2),
-            "SQRT1_2" => Ok(MathConst::SQRT1_2),
-            "INFINITY" => Ok(MathConst::INFINITY),
-            "NAN" => Ok(MathConst::NAN),
-            _ => Err(()),
-        }
-    }
+    #[strum(to_string = "E")] E,
+    #[strum(to_string = "LOG2E")] LOG2E,
+    #[strum(to_string = "LOG10E")] LOG10E,
+    #[strum(to_string = "LN2")] LN2,
+    #[strum(to_string = "LN10")] LN10,
+    #[strum(to_string = "PI")] PI,
+    #[strum(to_string = "PI_2")] PI_2,
+    #[strum(to_string = "PI_4")] PI_4,
+    #[strum(to_string = "M_1_PI")] M_1_PI,
+    #[strum(to_string = "M_2_PI")] M_2_PI,
+    #[strum(to_string = "M_2_SQRTPI")] M_2_SQRTPI,
+    #[strum(to_string = "SQRT2")] SQRT2,
+    #[strum(to_string = "SQRT1_2")] SQRT1_2,
+    #[strum(to_string = "INFINITY")] INFINITY,
+    #[strum(to_string = "NAN")] NAN,
 }
