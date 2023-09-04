@@ -1,7 +1,7 @@
 import random
 from typing import Any, Callable, Optional
 
-from .ast import Expr, FPCore, Num, Number, Operation, Symbol
+from .ast import Argument, Expr, FPCore, Num, Number, Operation, Symbol
 
 Dist = Callable[[], Num]
 
@@ -32,6 +32,7 @@ def random_expr(vars: list[str], lpi: float, dist: Dist[Num]) -> Expr[Num]:
 def random_fpcore(
     name: Optional[str], args: list[str], lpi: float, dist: Dist[Num]
 ) -> FPCore[Num]:
+    argv = [Argument[Num](arg, []) for arg in args]
     body = random_expr(args, lpi, dist)
 
-    return FPCore(name, args, [], body)
+    return FPCore(name, argv, [], body)

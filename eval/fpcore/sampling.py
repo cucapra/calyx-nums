@@ -89,4 +89,4 @@ def sample_args(bench: FPCore[float], n: int) -> list[list[float]]:
     else:
         raise RuntimeError('No domain specified')
 
-    return [[sample(domains[arg]) for arg in bench.args] for _ in range(n)]
+    return [[sample(domains[arg.var]) for arg in bench.args] for _ in range(n)]

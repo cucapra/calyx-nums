@@ -59,7 +59,7 @@ def test_bench(
         main = harness.single(
             name,
             comb,
-            benchmark.args,
+            [arg.var for arg in benchmark.args],
             'mem',
             fmt.width
         )

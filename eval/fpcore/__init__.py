@@ -1,13 +1,25 @@
-from .ast import Annotation, Expr, FPCore, Number, Operation, Property, Symbol
-from .parser import Parser
+from .ast import (
+    Annotation,
+    Argument,
+    Binder,
+    Expr,
+    FPCore,
+    Let,
+    Number,
+    Operation,
+    Property,
+    Symbol
+)
 
 __all__ = [
     'Annotation',
+    'Argument',
+    'Binder',
     'Expr',
     'FPCore',
+    'Let',
     'Number',
     'Operation',
-    'Parser',
     'Property',
     'Symbol'
 ]

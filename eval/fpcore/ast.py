@@ -104,18 +104,33 @@ class Annotation(Expr[Num]):
         return f'(! {props} {self.body})'
 
 @dataclass
+class Argument(Generic[Num]):
+    var: str
+    props: list[Property[Num]]
+
+    def __str__(self) -> str:
+        if len(self.props) > 0:
+            props = ' '.join(map(str, self.props))
+
+            return f'(! {props} {self.var})'
+        else:
+            return self.var
+
+@dataclass
 class FPCore(Generic[Num]):
     name: Optional[str]
-    args: list[str]
+    args: list[Argument[Num]]
     props: list[Property[Num]]
     body: Expr[Num]
 
     def interp(self, args: Iterable[Num], libm: Lib[Num]) -> Num:
-        return self.body.interp(dict(zip(self.args, args)), libm)
+        context = {arg.var: val for arg, val in zip(self.args, args)}
+
+        return self.body.interp(context, libm)
 
     def __str__(self) -> str:
-        name = '' if self.name is None else self.name
-        args = ' '.join(self.args)
+        name = self.name or ''
+        args = ' '.join(map(str, self.args))
         props = ' '.join(chain(map(str, self.props), ('',)))
 
         return f'(FPCore {name}({args}) {props}{self.body})'

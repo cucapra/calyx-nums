@@ -5,6 +5,7 @@ from typing import Generic, Optional, TypeVar
 
 from .ast import (
     Annotation,
+    Argument,
     Binder,
     Expr,
     FPCore,
@@ -23,6 +24,12 @@ class Parser(Generic[Num]):
         self.tokens = peekable(self.tokenize(core))
         self.ntype = ntype
 
+    def peek(self) -> str:
+        return self.tokens.peek()
+
+    def next(self) -> str:
+        return next(self.tokens)
+
     def match(self, *tokens: Optional[str]):
         for token in tokens:
             assert next(self.tokens, None) == token
@@ -30,7 +37,7 @@ class Parser(Generic[Num]):
     def until_close(self, parse: Callable[[], T]) -> list[T]:
         parsed = []
 
-        while self.tokens.peek() != ')':
+        while self.peek() != ')':
             parsed.append(parse())
 
         self.match(')')
@@ -38,8 +45,8 @@ class Parser(Generic[Num]):
         return parsed
 
     def expr(self) -> Expr[Num]:
-        if (tk := next(self.tokens)) == '(':
-            if (tk := next(self.tokens)) == '!':
+        if (tk := self.next()) == '(':
+            if (tk := self.next()) == '!':
                 props = self.props()
                 body = self.expr()
 
@@ -65,7 +72,7 @@ class Parser(Generic[Num]):
     def binder(self) -> Binder[Num]:
         self.match('[')
 
-        var = next(self.tokens)
+        var = self.next()
         expr = self.expr()
 
         self.match(']')
@@ -73,27 +80,40 @@ class Parser(Generic[Num]):
         return Binder(var, expr)
 
     def prop(self) -> Property[Num]:
-        return Property(next(self.tokens), self.expr())
+        return Property(self.next(), self.expr())
 
     def props(self) -> list[Property[Num]]:
         props = []
 
-        while self.tokens.peek().startswith(':'):
+        while self.peek().startswith(':'):
             props.append(self.prop())
 
         return props
 
+    def arg(self) -> Argument[Num]:
+        if (tk := self.next()) == '(':
+            self.match('!')
+
+            props = self.props()
+            var = self.next()
+
+            self.match(')')
+
+            return Argument(var, props)
+        else:
+            return Argument(tk, [])
+
     def fpcore(self) -> FPCore[Num]:
         self.match('(', 'FPCore')
 
-        if self.tokens.peek() != '(':
-            name = next(self.tokens)
+        if self.peek() != '(':
+            name = self.next()
         else:
             name = None
 
         self.match('(')
 
-        args = self.until_close(lambda: next(self.tokens))
+        args = self.until_close(self.arg)
         props = self.props()
         body = self.expr()
 
@@ -103,7 +123,9 @@ class Parser(Generic[Num]):
 
     @staticmethod
     def tokenize(core: str) -> Iterator[str]:
-        return filter(bool, re.split(r'([][)(]|"[^"]*")|\s+|;.*', core))
+        subs = re.split(r'([][)(]|"[^"]*")|\s+|;.*', core)
+
+        return filter(bool, subs)
 
     @staticmethod
     def parse(core: str, ntype: Callable[[str], Num]) -> FPCore[Num]:
