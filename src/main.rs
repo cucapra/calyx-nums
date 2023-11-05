@@ -8,15 +8,15 @@ use calyx_frontend::{parser::CalyxParser, Workspace};
 use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error};
 
+use calyx_nums::backend;
 use calyx_nums::fpcore::FPCoreParser;
-use calyx_nums::irgen;
 use calyx_nums::opts::Opts;
 
 const STD_IMPORTS: &[&str] = &[
-    irgen::stdlib::compile::IMPORT,
-    irgen::stdlib::core::IMPORT,
-    irgen::stdlib::binary_operators::IMPORT,
-    irgen::stdlib::math::IMPORT,
+    backend::stdlib::compile::IMPORT,
+    backend::stdlib::core::IMPORT,
+    backend::stdlib::binary_operators::IMPORT,
+    backend::stdlib::math::IMPORT,
 ];
 
 fn build_workspace(
@@ -77,7 +77,7 @@ fn main() -> CalyxResult<()> {
         })?;
 
     let workspace = build_workspace(STD_IMPORTS, &opts.lib_path)?;
-    let ctx = irgen::compile_fpcore(&benchmarks, &opts, workspace.lib)?;
+    let ctx = backend::compile_fpcore(&benchmarks, &opts, workspace.lib)?;
 
     let mut out: Box<dyn Write> = if let Some(path) = opts.output {
         Box::new(File::create(path)?)

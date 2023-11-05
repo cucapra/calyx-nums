@@ -7,12 +7,12 @@ use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error, Id, NameGenerator};
 use itertools::Itertools;
 
+use super::builtins;
 use super::libm::{MathLib, Prototype};
 use super::stdlib::{Arguments, Primitive, Signature};
 use crate::analysis::{Binding, ContextResolution, PassManager, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
-use crate::functions::builtins;
 use crate::opts::Opts;
 
 /// Prefix for components generated from anonymous FPCores.

@@ -7,13 +7,14 @@ use calyx_frontend as frontend;
 use calyx_ir as ir;
 use calyx_utils::{self as utils, CalyxResult, Error};
 
+use super::{components::lookup, primitives::lut};
 use crate::analysis::{ContextResolution, DomainInference, PassManager};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
 use crate::functions::addressing::{AddressSpec, TableDomain};
-use crate::functions::{lookup, lut, remez};
+use crate::functions::remez;
 use crate::utils::mangling::mangle;
 use crate::utils::sollya::SollyaFunction;
 

@@ -1,7 +1,7 @@
 //! Built-in functions.
 
+use super::stdlib::{self, Primitive};
 use crate::format::Format;
-use crate::irgen::stdlib::{self, Primitive};
 
 pub fn add(format: &Format) -> &'static Primitive<'static> {
     match (format.frac_width, format.is_signed) {

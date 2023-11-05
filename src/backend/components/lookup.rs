@@ -3,8 +3,8 @@
 use calyx_ir::{self as ir, build_assignments, structure};
 use calyx_utils::Id;
 
-use super::addressing::AddressSpec;
 use crate::format::Format;
+use crate::functions::addressing::AddressSpec;
 
 /// Returns the signature for a table-lookup component.
 pub fn signature(cols: u32, format: &Format) -> Vec<ir::PortDef<u64>> {
