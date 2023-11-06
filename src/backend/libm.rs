@@ -3,22 +3,18 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use calyx_frontend as frontend;
 use calyx_ir as ir;
 use calyx_utils::{self as utils, CalyxResult, Error};
 
-use super::{components::lookup, primitives::lut};
+use super::components::{ComponentManager, LookupTable};
 use crate::analysis::{ContextResolution, DomainInference, PassManager};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
 use crate::functions::addressing::{AddressSpec, TableDomain};
-use crate::functions::remez;
-use crate::utils::mangling::mangle;
 use crate::utils::sollya::SollyaFunction;
 
-#[derive(Clone)]
 pub struct Prototype {
     pub name: ir::Id,
     pub prefix_hint: ir::Id,
@@ -39,11 +35,8 @@ impl MathLib {
         let opts = pm.opts();
 
         let mut builder = Builder {
-            result: MathLib {
-                components: Vec::new(),
-                prototypes: HashMap::new(),
-            },
-            generated: HashMap::new(),
+            cm: ComponentManager::new(),
+            prototypes: HashMap::new(),
             format: &opts.format,
             context: pm.get_analysis()?,
             domains: opts
@@ -55,13 +48,16 @@ impl MathLib {
 
         builder.visit_benchmarks(pm.ast())?;
 
-        Ok(builder.result)
+        Ok(MathLib {
+            components: builder.cm.into_components(),
+            prototypes: builder.prototypes,
+        })
     }
 }
 
 struct Builder<'a> {
-    result: MathLib,
-    generated: HashMap<ir::Id, ast::NodeId>,
+    cm: ComponentManager,
+    prototypes: HashMap<ast::NodeId, Prototype>,
     format: &'a Format,
     context: &'a ContextResolution<'a>,
     domains: Option<&'a DomainInference>,
@@ -149,97 +145,32 @@ impl<'a> Builder<'a> {
             CalyxImpl::Poly { .. } => unimplemented!(),
         };
 
-        let (spec, domain) = domain.widen(function, self.format, size)?;
+        let (spec, domain) = &domain.widen(function, self.format, size)?;
 
-        let name =
-            mangle!("lut", function.kind, self.format, domain, strategy).into();
-
-        if let Some(prev) = self.generated.insert(name, function.uid) {
-            self.result
-                .prototypes
-                .insert(function.uid, self.result.prototypes[&prev].clone());
-        } else {
-            let prim =
-                build_primitive(name, function, self.format, &domain, size)?;
-
-            self.lib.add_inline_primitive(prim).set_source();
-
-            let comp_name =
-                mangle!("lookup", function.kind, self.format, domain, strategy);
-
-            let (comp, proto) = build_component(
-                comp_name.into(),
-                name,
+        let (name, signature) = self.cm.get(
+            &LookupTable {
                 function,
-                self.format,
-                &spec,
-                self.lib,
-            );
+                format: self.format,
+                spec,
+                domain,
+                degree: 0,
+                size,
+            },
+            self.lib,
+        )?;
 
-            self.result.components.push(comp);
-            self.result.prototypes.insert(function.uid, proto);
-        }
+        self.prototypes.insert(
+            function.uid,
+            Prototype {
+                name,
+                prefix_hint: ir::Id::new(function),
+                signature,
+                is_comb: true,
+            },
+        );
 
         Ok(())
     }
-}
-
-fn build_primitive(
-    name: ir::Id,
-    function: &Function,
-    format: &Format,
-    domain: &TableDomain,
-    size: u32,
-) -> CalyxResult<frontend::Primitive> {
-    let table = remez::build_table(
-        function.kind,
-        0,
-        &domain.left,
-        &domain.right,
-        size,
-        format,
-    )?;
-
-    let values: Vec<_> = table
-        .iter()
-        .map(|row| {
-            itertools::process_results(
-                row.iter().map(|value| {
-                    value.to_format(format).ok_or_else(|| {
-                        Error::misc(format!(
-                            "Generated constant {value} in implementation of \
-                             {function} is not representable in the given \
-                             format"
-                        ))
-                        .with_pos(function)
-                    })
-                }),
-                |bits| lut::pack(bits, format.width),
-            )
-        })
-        .collect::<CalyxResult<_>>()?;
-
-    Ok(lut::compile_lut(name, &values))
-}
-
-fn build_component(
-    name: ir::Id,
-    lut: ir::Id,
-    function: &Function,
-    format: &Format,
-    spec: &AddressSpec,
-    lib: &ir::LibrarySignatures,
-) -> (ir::Component, Prototype) {
-    let comp = lookup::compile_lookup(name, lut, 1, format, spec, lib);
-
-    let proto = Prototype {
-        name,
-        prefix_hint: function.as_str().into(),
-        signature: lookup::signature(1, format),
-        is_comb: true,
-    };
-
-    (comp, proto)
 }
 
 struct DomainHint<'a> {
@@ -271,15 +202,15 @@ impl DomainHint<'_> {
     }
 }
 
-struct Function {
+pub struct Function {
     kind: SollyaFunction,
     uid: ast::NodeId,
     span: utils::GPosIdx,
 }
 
 impl Function {
-    fn as_str(&self) -> &str {
-        self.kind.as_str()
+    pub fn kind(&self) -> SollyaFunction {
+        self.kind
     }
 }
 
