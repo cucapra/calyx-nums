@@ -2,8 +2,7 @@
 
 use std::fmt::{LowerHex, Write};
 
-use calyx_frontend::{Direction, PortDef, Primitive, Width};
-use calyx_utils::Id;
+use calyx_ir as ir;
 use num::{BigUint, Zero};
 
 /// Packs a sequence of values, each of the given width, into a single bit
@@ -18,28 +17,34 @@ where
         .fold(Zero::zero(), |acc, value| (acc << width) | value)
 }
 
-pub fn compile_lut<T: LowerHex>(name: Id, values: &[T]) -> Primitive {
-    let width = Id::new("WIDTH");
-    let idx_size = Id::new("IDX_SIZE");
+pub fn compile_lut<T: LowerHex>(name: ir::Id, values: &[T]) -> ir::Primitive {
+    let width = ir::Id::new("WIDTH");
+    let idx_size = ir::Id::new("IDX_SIZE");
 
-    Primitive {
+    let mut data = ir::Attributes::default();
+    let mut share = ir::Attributes::default();
+
+    data.insert(ir::Attribute::Bool(ir::BoolAttr::Data), 1);
+    share.insert(ir::Attribute::Bool(ir::BoolAttr::Share), 1);
+
+    ir::Primitive {
         name,
         params: vec![width, idx_size],
         signature: vec![
-            PortDef::new(
+            ir::PortDef::new(
                 "idx",
-                Width::Param { value: idx_size },
-                Direction::Input,
-                Default::default(),
+                ir::Width::Param { value: idx_size },
+                ir::Direction::Input,
+                data,
             ),
-            PortDef::new(
+            ir::PortDef::new(
                 "out",
-                Width::Param { value: width },
-                Direction::Output,
+                ir::Width::Param { value: width },
+                ir::Direction::Output,
                 Default::default(),
             ),
         ],
-        attributes: Default::default(),
+        attributes: share,
         is_comb: true,
         latency: None,
         body: Some(format_body(values)),
