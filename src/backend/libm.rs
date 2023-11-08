@@ -6,7 +6,7 @@ use std::fmt;
 use calyx_ir as ir;
 use calyx_utils::{self as utils, CalyxResult, Error};
 
-use super::components::{ComponentManager, LookupTable};
+use super::components::{ComponentManager, LookupTable, PiecewisePoly};
 use crate::analysis::{ContextResolution, DomainInference, PassManager};
 use crate::format::Format;
 use crate::fpcore::ast;
@@ -140,34 +140,49 @@ impl<'a> Builder<'a> {
         domain: &DomainHint,
         strategy: &CalyxImpl,
     ) -> CalyxResult<()> {
-        let size = match *strategy {
-            CalyxImpl::Lut { lut_size } => lut_size,
-            CalyxImpl::Poly { .. } => unimplemented!(),
+        let (degree, size) = match *strategy {
+            CalyxImpl::Lut { lut_size } => (0, lut_size),
+            CalyxImpl::Poly { degree, lut_size } => (degree, lut_size),
         };
 
         let (spec, domain) = &domain.widen(function, self.format, size)?;
 
-        let (name, signature) = self.cm.get(
-            &LookupTable {
-                function,
-                format: self.format,
-                spec,
-                domain,
-                degree: 0,
-                size,
-            },
-            self.lib,
-        )?;
+        let table = LookupTable {
+            function,
+            format: self.format,
+            spec,
+            domain,
+            degree,
+            size,
+        };
 
-        self.prototypes.insert(
-            function.uid,
-            Prototype {
-                name,
-                prefix_hint: ir::Id::new(function),
-                signature,
-                is_comb: true,
-            },
-        );
+        let prefix_hint = ir::Id::new(function);
+
+        let prototype = match strategy {
+            CalyxImpl::Lut { .. } => {
+                let (name, signature) = self.cm.get(&table, self.lib)?;
+
+                Prototype {
+                    name,
+                    prefix_hint,
+                    signature,
+                    is_comb: true,
+                }
+            }
+            CalyxImpl::Poly { .. } => {
+                let (name, signature) =
+                    self.cm.get(&PiecewisePoly(table), self.lib)?;
+
+                Prototype {
+                    name,
+                    prefix_hint,
+                    signature,
+                    is_comb: false,
+                }
+            }
+        };
+
+        self.prototypes.insert(function.uid, prototype);
 
         Ok(())
     }

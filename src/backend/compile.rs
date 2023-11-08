@@ -299,16 +299,16 @@ fn compile_benchmark(
 
     let (port, control) = compile_expression(&def.body, &mut context)?;
 
-    let assigns = vec![builder.build_assignment(
+    let assign = builder.build_assignment(
         builder.component.signature.borrow().get("out"),
         port,
         ir::Guard::True,
-    )];
+    );
 
     let is_comb = matches!(control, ir::Control::Empty(_));
 
-    builder.add_continuous_assignments(assigns);
-    builder.component.control = ir::rrc(control);
+    builder.component.continuous_assignments.push(assign);
+    *builder.component.control.borrow_mut() = control;
 
     component.is_comb = is_comb;
 

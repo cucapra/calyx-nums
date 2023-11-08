@@ -63,7 +63,7 @@ impl LookupTable<'_> {
             self.format,
             self.domain,
             self.degree,
-            self.size
+            self.size,
         ));
 
         let primitive = lut::compile_lut(name, &values);
@@ -82,7 +82,7 @@ impl ComponentBuilder for LookupTable<'_> {
             self.format,
             self.domain,
             self.degree,
-            self.size
+            self.size,
         ))
     }
 
@@ -129,7 +129,7 @@ impl ComponentBuilder for LookupTable<'_> {
 
         let signature = &builder.component.signature;
 
-        let assigns = Vec::from(build_assignments!(builder;
+        let assigns = build_assignments!(builder;
             sub["left"] = ? signature["in"];
             sub["right"] = ? left["out"];
             rsh["left"] = ? sub["out"];
@@ -137,9 +137,9 @@ impl ComponentBuilder for LookupTable<'_> {
             slice["in"] = ? rsh["out"];
             primitive["idx"] = ? slice["out"];
             signature["out"] = ? primitive["out"];
-        ));
+        );
 
-        builder.add_continuous_assignments(assigns);
+        builder.component.continuous_assignments.extend(assigns);
 
         Ok(component)
     }
