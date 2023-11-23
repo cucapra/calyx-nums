@@ -8,7 +8,7 @@ from .ast import (
     Number,
     Operation,
     Property,
-    Symbol
+    Symbol,
 )
 
 __all__ = [
@@ -21,5 +21,5 @@ __all__ = [
     'Number',
     'Operation',
     'Property',
-    'Symbol'
+    'Symbol',
 ]

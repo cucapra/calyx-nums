@@ -4,6 +4,7 @@ import fud.config
 from fud.stages import SourceType, Stage
 from fud.utils import shell
 
+
 class CalyxNumbersStage(Stage):
     name = 'calyx-nums'
 
@@ -41,5 +42,6 @@ class CalyxNumbersStage(Stage):
             return shell(cmd, stdin=stream)
 
         return run_calyx_nums(input)
+
 
 __STAGES__ = [CalyxNumbersStage]

@@ -1,6 +1,7 @@
 import calyx.builder as cb
 from calyx.py_ast import Stdlib
 
+
 def single(
     comp_name: str, comb: bool, args: list[str], mem_name: str, width: int
 ) -> str:
@@ -43,13 +44,14 @@ def single(
 
     return top_level.program.doc()
 
+
 def batch(
     comp_name: str,
     comb: bool,
     args: list[str],
     count: int,
     mem_name: str,
-    width: int
+    width: int,
 ) -> str:
     top_level = cb.Builder()
     main = top_level.component('main')
@@ -60,15 +62,7 @@ def batch(
     idx_width = count.bit_length()
 
     mem = main.cell(
-        mem_name,
-        Stdlib.mem_d2(
-            width,
-            count,
-            argc,
-            idx_width,
-            arg_width
-        ),
-        True
+        mem_name, Stdlib.mem_d2(width, count, argc, idx_width, arg_width), True
     )
 
     lt = main.lt(idx_width, 'lt')
@@ -128,8 +122,7 @@ def batch(
 
     main.control += init
     main.control += cb.while_with(
-        cb.CellAndGroup(lt, cond),
-        reads + [write, inc]
+        cb.CellAndGroup(lt, cond), reads + [write, inc]
     )
 
     top_level.program.imports = []

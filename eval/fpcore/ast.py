@@ -8,12 +8,14 @@ Num = TypeVar('Num', bound=SupportsFloat)
 Ctx = dict[str, Num]
 Lib = dict[str, Callable[..., Num]]
 
+
 class Expr(Generic[Num]):
     def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
         raise NotImplementedError
 
     def __str__(self) -> str:
         raise NotImplementedError
+
 
 @dataclass
 class Symbol(Expr[Num]):
@@ -24,6 +26,7 @@ class Symbol(Expr[Num]):
 
     def __str__(self) -> str:
         return self.id
+
 
 @dataclass
 class Number(Expr[Num]):
@@ -36,6 +39,7 @@ class Number(Expr[Num]):
         val = float(self.val)
 
         return f'{val:.0f}' if val.is_integer() else val.hex()
+
 
 @dataclass
 class Operation(Expr[Num]):
@@ -52,6 +56,7 @@ class Operation(Expr[Num]):
 
         return f'({self.op} {args})'
 
+
 @dataclass
 class Binder(Generic[Num]):
     var: str
@@ -59,6 +64,7 @@ class Binder(Generic[Num]):
 
     def __str__(self) -> str:
         return f'[{self.var} {self.expr}]'
+
 
 @dataclass
 class Let(Expr[Num]):
@@ -82,6 +88,7 @@ class Let(Expr[Num]):
 
         return f'(let{star} ({binders}) {self.body})'
 
+
 @dataclass
 class Property(Generic[Num]):
     name: str
@@ -89,6 +96,7 @@ class Property(Generic[Num]):
 
     def __str__(self) -> str:
         return f'{self.name} {self.data}'
+
 
 @dataclass
 class Annotation(Expr[Num]):
@@ -103,6 +111,7 @@ class Annotation(Expr[Num]):
 
         return f'(! {props} {self.body})'
 
+
 @dataclass
 class Argument(Generic[Num]):
     var: str
@@ -115,6 +124,7 @@ class Argument(Generic[Num]):
             return f'(! {props} {self.var})'
         else:
             return self.var
+
 
 @dataclass
 class FPCore(Generic[Num]):

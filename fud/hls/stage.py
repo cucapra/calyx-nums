@@ -6,6 +6,7 @@ from fud.stages import SourceType, Stage
 from fud.stages.vivado.stage import VivadoBaseStage
 from fud.utils import shell
 
+
 class FPBenchStage(Stage):
     name = 'fpbench-tools'
 
@@ -42,6 +43,7 @@ class FPBenchStage(Stage):
 
         return run_exporter(input)
 
+
 class VivadoCoSimulationStage(VivadoBaseStage):
     name = 'vivado-hls'
 
@@ -76,6 +78,7 @@ class VivadoCoSimulationStage(VivadoBaseStage):
             Path(header),
             Path(data),
         ]
+
 
 class VivadoCoSimulationExtractStage(Stage):
     name = 'cosim-files'
@@ -115,6 +118,7 @@ class VivadoCoSimulationExtractStage(Stage):
             return project / 'solution1' / 'sim' / 'wrapc' / 'result.dat'
 
         return extract(input)
+
 
 __STAGES__ = [
     FPBenchStage,

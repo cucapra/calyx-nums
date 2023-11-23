@@ -1,7 +1,8 @@
 import re
 from collections.abc import Callable, Iterator
-from more_itertools import peekable
 from typing import Generic, Optional, TypeVar
+
+from more_itertools import peekable
 
 from .ast import (
     Annotation,
@@ -14,10 +15,11 @@ from .ast import (
     Number,
     Operation,
     Property,
-    Symbol
+    Symbol,
 )
 
 T = TypeVar('T')
+
 
 class Parser(Generic[Num]):
     def __init__(self, core: str, ntype: Callable[[str], Num]):

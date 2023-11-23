@@ -1,15 +1,17 @@
 import re
 from dataclasses import dataclass
-from fixedpoint import FixedPoint
 from typing import Any
+
+from fixedpoint import FixedPoint
 
 MODE = {
     'overflow': 'wrap',
     'rounding': 'down',
     'overflow_alert': 'ignore',
     'mismatch_alert': 'error',
-    'implicit_cast_alert': 'error'
+    'implicit_cast_alert': 'error',
 }
+
 
 @dataclass
 class QFormat:
@@ -36,7 +38,7 @@ class QFormat:
             signed=self.is_signed,
             m=self.int_width,
             n=self.frac_width,
-            **mode
+            **mode,
         )
 
     def cast(self, x: FixedPoint) -> FixedPoint:
@@ -45,13 +47,15 @@ class QFormat:
         return x
 
     def cast_float(self, x: float, mode: dict[str, Any] = MODE) -> float:
-        return float(FixedPoint(
-            x,
-            signed=self.is_signed,
-            m=self.int_width,
-            n=self.frac_width,
-            **mode
-        ))
+        return float(
+            FixedPoint(
+                x,
+                signed=self.is_signed,
+                m=self.int_width,
+                n=self.frac_width,
+                **mode,
+            )
+        )
 
     def __str__(self) -> str:
         prefix = 'UQ'[self.is_signed:]

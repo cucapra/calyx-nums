@@ -2,13 +2,17 @@ import math
 import random
 from dataclasses import dataclass
 from enum import Enum
-from more_itertools import pairwise
 from typing import Generic, Protocol, SupportsFloat, TypeVar
+
+from more_itertools import pairwise
 
 from .ast import Expr, FPCore, Number, Operation, Symbol
 
+
 class Comparable(SupportsFloat, Protocol):
-    def __lt__(self, other, /) -> bool: ...
+    def __lt__(self, other, /) -> bool:
+        ...
+
 
 class Rel(Enum):
     LT = '<'
@@ -21,7 +25,7 @@ class Rel(Enum):
             self.LT: self.LT,
             self.LE: self.LT,
             self.GE: self.GT,
-            self.GT: self.GT
+            self.GT: self.GT,
         }[self]
 
     def rev(self):
@@ -29,10 +33,12 @@ class Rel(Enum):
             self.LT: self.GT,
             self.LE: self.GE,
             self.GE: self.LE,
-            self.GT: self.LT
+            self.GT: self.LT,
         }[self]
 
+
 Num = TypeVar('Num', bound=Comparable)
+
 
 @dataclass
 class Interval(Generic[Num]):
@@ -44,6 +50,7 @@ class Interval(Generic[Num]):
             self.right = min(self.right, rhs)
         else:
             self.left = max(self.left, rhs)
+
 
 def domain(pre: Expr[Num], min: Num, max: Num):
     intervals: dict[str, Interval[Num]] = {}
@@ -74,12 +81,14 @@ def domain(pre: Expr[Num], min: Num, max: Num):
 
     return intervals
 
+
 def sample(domain: Interval[float]) -> float:
     while True:
         value = random.uniform(domain.left, domain.right)
 
         if domain.left < value < domain.right:
             return value
+
 
 def sample_args(bench: FPCore[float], n: int) -> list[list[float]]:
     for prop in bench.props:
