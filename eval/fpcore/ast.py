@@ -1,7 +1,8 @@
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from itertools import chain
-from typing import Generic, Optional, SupportsFloat, TypeVar
+from typing import Generic, Optional, SupportsFloat, TypeVar, Union
 
 Num = TypeVar('Num', bound=SupportsFloat)
 
@@ -9,12 +10,14 @@ Ctx = dict[str, Num]
 Lib = dict[str, Callable[..., Num]]
 
 
-class Expr(Generic[Num]):
+class Expr(ABC, Generic[Num]):
+    @abstractmethod
     def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def __str__(self) -> str:
-        raise NotImplementedError
+        ...
 
 
 @dataclass
@@ -89,13 +92,22 @@ class Let(Expr[Num]):
         return f'(let{star} ({binders}) {self.body})'
 
 
+Data = Union[str, Expr[Num], list['Data[Num]']]
+
+
 @dataclass
 class Property(Generic[Num]):
     name: str
-    data: Expr[Num]
+    data: Data[Num]
 
     def __str__(self) -> str:
-        return f'{self.name} {self.data}'
+        def s_expr(data: Data[Num]) -> str:
+            if isinstance(data, list):
+                return '({})'.format(' '.join(map(s_expr, data)))
+            else:
+                return str(data)
+
+        return f'{self.name} {s_expr(self.data)}'
 
 
 @dataclass

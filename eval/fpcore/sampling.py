@@ -6,7 +6,7 @@ from typing import Generic, Protocol, SupportsFloat, TypeVar
 
 from more_itertools import pairwise
 
-from .ast import Expr, FPCore, Number, Operation, Symbol
+from .ast import Data, FPCore, Number, Operation, Symbol
 
 
 class Comparable(SupportsFloat, Protocol):
@@ -52,10 +52,10 @@ class Interval(Generic[Num]):
             self.left = max(self.left, rhs)
 
 
-def domain(pre: Expr[Num], min: Num, max: Num):
+def domain(pre: Data[Num], min: Num, max: Num):
     intervals: dict[str, Interval[Num]] = {}
 
-    def walk(expr: Expr[Num]):
+    def walk(expr: Data[Num]):
         assert isinstance(expr, Operation)
 
         if expr.op == 'and':
@@ -94,6 +94,7 @@ def sample_args(bench: FPCore[float], n: int) -> list[list[float]]:
     for prop in bench.props:
         if prop.name == ':pre':
             domains = domain(prop.data, -math.inf, math.inf)
+
             break
     else:
         raise RuntimeError('No domain specified')
