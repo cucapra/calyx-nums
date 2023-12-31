@@ -1,16 +1,16 @@
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TypedDict, Union
 
 from fixedpoint import FixedPoint
 
-MODE = {
-    'overflow': 'wrap',
-    'rounding': 'down',
-    'overflow_alert': 'ignore',
-    'mismatch_alert': 'error',
-    'implicit_cast_alert': 'error',
-}
+SupportsFixedPoint = Union[int, float, str]
+
+
+class RoundingMode(TypedDict, total=False):
+    overflow: str
+    rounding: str
+    overflow_alert: str
 
 
 @dataclass
@@ -32,30 +32,19 @@ class QFormat:
     def width(self) -> int:
         return self.int_width + self.frac_width
 
-    def decode(self, bits: int, mode: dict[str, Any] = MODE) -> FixedPoint:
+    def cast(self, x: SupportsFixedPoint, mode: RoundingMode) -> FixedPoint:
         return FixedPoint(
-            hex(bits),
+            x,
             signed=self.is_signed,
             m=self.int_width,
             n=self.frac_width,
+            implicit_cast_alert='error',
+            mismatch_alert='error',
             **mode,
         )
 
-    def cast(self, x: FixedPoint) -> FixedPoint:
-        x.resize(self.int_width, self.frac_width)
-
-        return x
-
-    def cast_float(self, x: float, mode: dict[str, Any] = MODE) -> float:
-        return float(
-            FixedPoint(
-                x,
-                signed=self.is_signed,
-                m=self.int_width,
-                n=self.frac_width,
-                **mode,
-            )
-        )
+    def decode(self, bits: int, mode: RoundingMode = {}) -> FixedPoint:
+        return self.cast(hex(bits), mode)
 
     def __str__(self) -> str:
         prefix = 'UQ'[self.is_signed:]
