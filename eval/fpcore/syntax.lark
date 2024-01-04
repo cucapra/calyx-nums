@@ -19,7 +19,7 @@ binder: "[" SYMBOL expr "]"
 number: RATIONAL | DECNUM | HEXNUM
 symbol: SYMBOL
 
-property: /:pre|:spec|:alt/ expr
+property: /:(pre|spec|alt)(?=\s)/ expr
         | PROPERTY data
 
 ?data: symbol
