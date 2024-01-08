@@ -109,7 +109,7 @@ impl Mangle for Format {
     where
         W: fmt::Write,
     {
-        init_list!(w, "Format", self.width, self.frac_width, self.is_signed)
+        init_list!(w, "Format", self.scale, self.width, self.is_signed)
     }
 }
 

@@ -6,18 +6,66 @@ use std::str::FromStr;
 
 use itertools::PeekingNext;
 
-/// A fixed-point number format.
+/// A fixed-point number format with `width` total bits and a scaling factor of
+/// 2^`scale`.
 pub struct Format {
-    pub width: u64,
-    pub frac_width: u64,
+    pub scale: i32,
+    pub width: u32,
     pub is_signed: bool,
+}
+
+impl Format {
+    /// Computes the widths of the integer and fractional parts of the format,
+    /// returning `None` if either part contains implicit zero bits.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use calyx_nums::format::Format;
+    /// #
+    /// let format = Format { scale: -1, width: 4, is_signed: false };
+    ///
+    /// assert_eq!(format.parts(), Some((3, 1)));
+    /// assert_eq!(Format { scale: 1, ..format }.parts(), None);
+    /// assert_eq!(Format { scale: -5, ..format }.parts(), None);
+    /// ```
+    pub fn parts(&self) -> Option<(u32, u32)> {
+        let frac_width = self.scale.unsigned_abs();
+        let int_width = self.width.checked_sub(frac_width)?;
+
+        (self.scale <= 0).then_some((int_width, frac_width))
+    }
+
+    pub fn msb(&self) -> i64 {
+        i64::from(self.scale) + i64::from(self.width) - 1
+    }
+
+    pub fn lsb(&self) -> i64 {
+        i64::from(self.scale)
+    }
+
+    /// Computes the positions of the most- and least-significant bits of the
+    /// format, as per the VHDL fixed-point data types.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use calyx_nums::format::Format;
+    /// #
+    /// let format = Format { scale: -1, width: 4, is_signed: false };
+    ///
+    /// assert_eq!(format.vhdl(), (2, -1));
+    /// ```
+    pub fn vhdl(&self) -> (i64, i64) {
+        (self.msb(), self.lsb())
+    }
 }
 
 impl Default for Format {
     fn default() -> Self {
         Format {
+            scale: 0,
             width: 32,
-            frac_width: 0,
             is_signed: false,
         }
     }
@@ -39,12 +87,12 @@ impl FromStr for Format {
         let rest = iter.as_str();
         let split = rest.find('.').ok_or(ParseFormatError)?;
 
-        let int_width = u64::from_str_radix(&rest[..split], 10)?;
-        let frac_width = u64::from_str_radix(&rest[split + 1..], 10)?;
+        let int_width = u16::from_str_radix(&rest[..split], 10)?;
+        let frac_width = u16::from_str_radix(&rest[split + 1..], 10)?;
 
         Ok(Format {
-            width: int_width + frac_width,
-            frac_width,
+            scale: -i32::from(frac_width),
+            width: u32::from(int_width) + u32::from(frac_width),
             is_signed,
         })
     }

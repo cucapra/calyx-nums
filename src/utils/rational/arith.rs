@@ -223,7 +223,7 @@ where
 }
 
 impl Rational {
-    /// Creates a `Rational` with value `2^k`.
+    /// Creates a `Rational` with value 2^`k`.
     pub fn power_of_two(k: i64) -> Rational {
         let mut val = BigUint::zero();
 
@@ -237,45 +237,62 @@ impl Rational {
     }
 
     /// Rounds towards zero.
-    pub fn truncate(&self, frac_width: u64) -> Rational {
+    pub fn truncate(&self, lsb: i64) -> Rational {
         let numer = self.mag.numer();
         let denom = self.mag.denom();
 
-        let val = (numer << frac_width) / denom;
+        if lsb < 0 {
+            let shift = lsb.unsigned_abs();
+            let val = (numer << shift) / denom;
 
-        Rational::new(self.sign, val, BigUint::one() << frac_width)
+            Rational::new(self.sign, val, BigUint::one() << shift)
+        } else {
+            let val = numer / (denom << lsb);
+
+            Rational::new(self.sign, val << lsb, BigUint::one())
+        }
     }
 
     /// Rounds away from zero.
-    pub fn round_away(&self, frac_width: u64) -> Rational {
+    pub fn round_away(&self, lsb: i64) -> Rational {
         let numer = self.mag.numer();
         let denom = self.mag.denom();
 
-        let val = (numer << frac_width).div_ceil(denom);
+        if lsb < 0 {
+            let shift = lsb.unsigned_abs();
+            let val = (numer << shift).div_ceil(denom);
 
-        Rational::new(self.sign, val, BigUint::one() << frac_width)
+            Rational::new(self.sign, val, BigUint::one() << shift)
+        } else {
+            let val = numer.div_ceil(&(denom << lsb));
+
+            Rational::new(self.sign, val << lsb, BigUint::one())
+        }
     }
 
     /// Rounds towards negative infinity.
-    pub fn floor(&self, frac_width: u64) -> Rational {
+    pub fn floor(&self, lsb: i64) -> Rational {
         if self.is_negative() {
-            self.round_away(frac_width)
+            self.round_away(lsb)
         } else {
-            self.truncate(frac_width)
+            self.truncate(lsb)
         }
     }
 
     /// Rounds towards positive infinity.
-    pub fn ceil(&self, frac_width: u64) -> Rational {
+    pub fn ceil(&self, lsb: i64) -> Rational {
         if self.is_negative() {
-            self.truncate(frac_width)
+            self.truncate(lsb)
         } else {
-            self.round_away(frac_width)
+            self.round_away(lsb)
         }
     }
 
-    /// Computes the floor of the base-2 log of `self`. Panics if `self` is not
-    /// strictly positive.
+    /// Computes the floor of the base-2 log of `self`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not strictly positive.
     pub fn floor_log2(&self) -> i64 {
         assert!(!self.is_negative() && !self.is_zero());
 
@@ -294,8 +311,11 @@ impl Rational {
         (n_bits - bump as u64) as i64 - d_bits as i64
     }
 
-    /// Computes the ceiling of the base-2 log of `self`. Panics if `self` is
-    /// not strictly positive.
+    /// Computes the ceiling of the base-2 log of `self`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not strictly positive.
     pub fn ceil_log2(&self) -> i64 {
         assert!(!self.is_negative() && !self.is_zero());
 
@@ -330,26 +350,44 @@ mod tests {
 
         for mode in [Rational::floor, Rational::ceil] {
             for val in [&pos_five_quarters, &neg_five_quarters] {
-                assert_eq!(&mode(val, 2), val);
+                assert_eq!(&mode(val, -2), val);
             }
         }
 
         assert_eq!(
-            pos_five_quarters.ceil(1),
+            pos_five_quarters.ceil(-1),
             rational_from_prims(Sign::Pos, 3, 2)
         );
         assert_eq!(
-            pos_five_quarters.floor(1),
-            rational_from_prims(Sign::Pos, 1, 1)
+            pos_five_quarters.ceil(1),
+            rational_from_prims(Sign::Pos, 2, 1)
         );
 
         assert_eq!(
-            neg_five_quarters.ceil(1),
+            pos_five_quarters.floor(-1),
+            rational_from_prims(Sign::Pos, 1, 1)
+        );
+        assert_eq!(
+            pos_five_quarters.floor(1),
+            rational_from_prims(Sign::Pos, 0, 1)
+        );
+
+        assert_eq!(
+            neg_five_quarters.ceil(-1),
             rational_from_prims(Sign::Neg, 1, 1)
         );
         assert_eq!(
-            neg_five_quarters.floor(1),
+            neg_five_quarters.ceil(1),
+            rational_from_prims(Sign::Neg, 0, 1)
+        );
+
+        assert_eq!(
+            neg_five_quarters.floor(-1),
             rational_from_prims(Sign::Neg, 3, 2)
+        );
+        assert_eq!(
+            neg_five_quarters.floor(1),
+            rational_from_prims(Sign::Neg, 2, 1)
         );
     }
 

@@ -16,12 +16,12 @@ const PROLOGUE: &str = "\
 dieonerrormode = on!;
 display = dyadic!;
 
-w = parse(__argv[0]);
+s = parse(__argv[0]);
 
 procedure rnd(x) {
     return [
-        floor(inf(x) * 2^w) / 2^w;
-        ceil(sup(x) * 2^w) / 2^w
+        floor(inf(x) / 2^s) * 2^s;
+        ceil(sup(x) / 2^s) * 2^s
     ];
 };
 ";
@@ -55,7 +55,7 @@ fn run_script(
     format: &Format,
 ) -> CalyxResult<HashMap<ast::NodeId, [ast::Rational; 2]>> {
     let cmd = script.as_bytes();
-    let arg = [format.frac_width.to_string()];
+    let arg = [format.scale.to_string()];
 
     let result = sollya::sollya(cmd, &arg)
         .map_err(|err| Error::misc(format!("Sollya error: {err}")))?;

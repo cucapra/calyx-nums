@@ -28,7 +28,7 @@ pub fn build_table(
         format!("{left}"),
         format!("{right}"),
         format!("{size}"),
-        format!("{}", format.frac_width),
+        format!("{}", format.scale),
     ];
 
     let result = sollya::sollya(cmd, &args)

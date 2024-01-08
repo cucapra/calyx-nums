@@ -8,7 +8,7 @@ use num::{BigUint, Zero};
 /// Packs a sequence of values, each of the given width, into a single bit
 /// vector. The first element of the sequence occupies the most-significant
 /// position.
-pub fn pack<I>(values: I, width: u64) -> BigUint
+pub fn pack<I>(values: I, width: u32) -> BigUint
 where
     I: IntoIterator<Item = BigUint>,
 {

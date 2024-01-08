@@ -4,7 +4,7 @@ use super::stdlib::{self, Primitive};
 use crate::format::Format;
 
 pub fn add(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::compile::STD_ADD,
         (0, true) => &stdlib::binary_operators::STD_SADD,
         (_, false) => &stdlib::binary_operators::STD_FP_ADD,
@@ -13,7 +13,7 @@ pub fn add(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn sub(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_SUB,
         (0, true) => &stdlib::binary_operators::STD_SSUB,
         (_, false) => &stdlib::binary_operators::STD_FP_SUB,
@@ -22,7 +22,7 @@ pub fn sub(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn mul(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::binary_operators::STD_MULT_PIPE,
         (0, true) => &stdlib::binary_operators::STD_SMULT_PIPE,
         (_, false) => &stdlib::binary_operators::STD_FP_MULT_PIPE,
@@ -31,7 +31,7 @@ pub fn mul(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn div(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::binary_operators::STD_DIV_PIPE_QUOTIENT,
         (0, true) => &stdlib::binary_operators::STD_SDIV_PIPE_QUOTIENT,
         (_, false) => &stdlib::binary_operators::STD_FP_DIV_PIPE_QUOTIENT,
@@ -40,7 +40,7 @@ pub fn div(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn gt(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_GT,
         (0, true) => &stdlib::binary_operators::STD_SGT,
         (_, false) => &stdlib::binary_operators::STD_FP_GT,
@@ -49,7 +49,7 @@ pub fn gt(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn lt(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_LT,
         (0, true) => &stdlib::binary_operators::STD_SLT,
         (_, false) => &stdlib::core::STD_LT, // missing STD_FP_LT
@@ -58,7 +58,7 @@ pub fn lt(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn eq(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_EQ,
         (0, true) => &stdlib::binary_operators::STD_SEQ,
         (_, false) => &stdlib::core::STD_EQ, // missing STD_FP_EQ
@@ -67,7 +67,7 @@ pub fn eq(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn neq(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_NEQ,
         (0, true) => &stdlib::binary_operators::STD_SNEQ,
         (_, false) => &stdlib::core::STD_NEQ, // missing STD_FP_NEQ
@@ -76,7 +76,7 @@ pub fn neq(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn ge(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_GE,
         (0, true) => &stdlib::binary_operators::STD_SGE,
         (_, false) => &stdlib::core::STD_GE, // missing STD_FP_GE
@@ -85,7 +85,7 @@ pub fn ge(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn le(format: &Format) -> &'static Primitive<'static> {
-    match (format.frac_width, format.is_signed) {
+    match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_LE,
         (0, true) => &stdlib::binary_operators::STD_SLE,
         (_, false) => &stdlib::core::STD_LE, // missing STD_FP_LE
@@ -94,7 +94,7 @@ pub fn le(format: &Format) -> &'static Primitive<'static> {
 }
 
 pub fn sqrt(format: &Format) -> &'static Primitive<'static> {
-    match format.frac_width {
+    match format.scale {
         0 => &stdlib::math::STD_SQRT,
         _ => &stdlib::math::STD_FP_SQRT,
     }

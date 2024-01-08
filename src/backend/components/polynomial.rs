@@ -26,13 +26,13 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         vec![
             ir::PortDef::new(
                 "in",
-                self.0.format.width,
+                u64::from(self.0.format.width),
                 ir::Direction::Input,
                 Default::default(),
             ),
             ir::PortDef::new(
                 "out",
-                self.0.format.width,
+                u64::from(self.0.format.width),
                 ir::Direction::Output,
                 stable,
             ),

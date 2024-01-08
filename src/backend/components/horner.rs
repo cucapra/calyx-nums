@@ -28,19 +28,19 @@ impl ComponentBuilder for Horner<'_> {
         vec![
             ir::PortDef::new(
                 "in",
-                self.format.width,
+                u64::from(self.format.width),
                 ir::Direction::Input,
                 Default::default(),
             ),
             ir::PortDef::new(
                 "lut",
-                u64::from(self.degree + 1) * self.format.width,
+                u64::from(self.degree + 1) * u64::from(self.format.width),
                 ir::Direction::Input,
                 Default::default(),
             ),
             ir::PortDef::new(
                 "out",
-                self.format.width,
+                u64::from(self.format.width),
                 ir::Direction::Output,
                 stable,
             ),
@@ -67,8 +67,8 @@ impl ComponentBuilder for Horner<'_> {
         let mut builder = ir::Builder::new(&mut component, lib);
 
         structure!(builder;
-            let acc = prim std_reg(self.format.width);
-            let add = prim std_add(self.format.width);
+            let acc = prim std_reg(u64::from(self.format.width));
+            let add = prim std_add(u64::from(self.format.width));
             let high = constant(1, 1);
         );
 
@@ -85,9 +85,9 @@ impl ComponentBuilder for Horner<'_> {
         let coefficients: Vec<_> = (0..=self.degree)
             .map(|i| {
                 let params = [
-                    u64::from(self.degree + 1) * self.format.width,
-                    self.format.width,
-                    u64::from(i) * self.format.width,
+                    u64::from(self.degree + 1) * u64::from(self.format.width),
+                    u64::from(self.format.width),
+                    u64::from(i) * u64::from(self.format.width),
                 ];
 
                 builder.add_primitive("sel", select, &params)

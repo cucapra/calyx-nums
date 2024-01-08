@@ -1,4 +1,6 @@
-// Usage: sollya remez.sollya --args <fn> <degree> <left> <right> <count> <frac-width>
+// Usage:
+//   sollya remez.sollya --args <fn> <degree> <left> <right> <count> <scale>
+//
 
 dieonerrormode = on!;
 display = dyadic!;
@@ -8,13 +10,13 @@ n = parse(__argv[1]);
 l = parse(__argv[2]);
 r = parse(__argv[3]);
 c = parse(__argv[4]);
-w = parse(__argv[5]);
+s = parse(__argv[5]);
 
 stride = (r - l) / c;
-W = [||];
+formats = [||];
 
 for i from 0 to n do
-    W = W :. w;
+    formats = formats :. -s;
 
 for i from 0 to c - 1 do {
     var x, y, p, j;
@@ -22,7 +24,7 @@ for i from 0 to c - 1 do {
     x = l + stride * i;
     y = x + stride;
 
-    p = fpminimax(f, n, W, [x;y], fixed, absolute);
+    p = fpminimax(f, n, formats, [x;y], fixed, absolute);
 
     for j from 0 to n do {
         if j != 0 then

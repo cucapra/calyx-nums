@@ -49,14 +49,24 @@ pub struct Primitive<'a> {
 }
 
 impl Primitive<'_> {
+    /// Constructs a parameter vector to instantiate the primitive for the given
+    /// format.
+    ///
+    /// # Panics
+    ///
+    /// May panic if the primitive does not support the format.
     pub fn build_params(&self, format: &Format) -> SmallVec<[u64; 3]> {
         match self.params {
-            Parameters::Bitnum => smallvec![format.width],
-            Parameters::FixedPoint => smallvec![
-                format.width,
-                format.width - format.frac_width,
-                format.frac_width
-            ],
+            Parameters::Bitnum => smallvec![u64::from(format.width)],
+            Parameters::FixedPoint => {
+                let (int_width, frac_width) = format.parts().unwrap();
+
+                smallvec![
+                    u64::from(format.width),
+                    u64::from(int_width),
+                    u64::from(frac_width)
+                ]
+            }
         }
     }
 }

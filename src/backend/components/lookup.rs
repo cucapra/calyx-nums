@@ -90,13 +90,13 @@ impl ComponentBuilder for LookupTable<'_> {
         vec![
             ir::PortDef::new(
                 "in",
-                self.format.width,
+                u64::from(self.format.width),
                 ir::Direction::Input,
                 Default::default(),
             ),
             ir::PortDef::new(
                 "out",
-                u64::from(self.degree + 1) * self.format.width,
+                u64::from(self.degree + 1) * u64::from(self.format.width),
                 ir::Direction::Output,
                 Default::default(),
             ),
@@ -115,16 +115,18 @@ impl ComponentBuilder for LookupTable<'_> {
         let mut component = ir::Component::new(name, ports, false, true, None);
         let mut builder = ir::Builder::new(&mut component, lib);
 
-        let width = u64::from(self.degree + 1) * self.format.width;
+        let global = u64::from(self.format.width);
+        let width = u64::from(self.degree + 1) * u64::from(self.format.width);
+
         let primitive =
             builder.add_primitive("lut", lut, &[width, self.spec.idx_width]);
 
         structure!(builder;
-            let sub = prim std_sub(self.format.width);
-            let rsh = prim std_rsh(self.format.width);
-            let slice = prim std_slice(self.format.width, self.spec.idx_width);
-            let left = constant(self.spec.subtrahend, self.format.width);
-            let shift = constant(self.spec.idx_lsb, self.format.width);
+            let sub = prim std_sub(global);
+            let rsh = prim std_rsh(global);
+            let slice = prim std_slice(global, self.spec.idx_width);
+            let left = constant(self.spec.subtrahend, global);
+            let shift = constant(self.spec.idx_lsb, global);
         );
 
         let signature = &builder.component.signature;

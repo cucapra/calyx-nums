@@ -50,10 +50,9 @@ impl AddressSpec {
         domain: &TableDomain,
         format: &Format,
     ) -> Result<(), DomainError> {
-        let int_width = format.width - format.frac_width;
-
-        let bound =
-            Rational::power_of_two(int_width as i64 - format.is_signed as i64);
+        let bound = Rational::power_of_two(
+            format.msb() + 1 - i64::from(format.is_signed),
+        );
 
         if domain.right > bound {
             return Err(DomainError::new(
@@ -116,13 +115,13 @@ impl TableDomain {
         format: &Format,
         rows: u32,
     ) -> Result<(TableDomain, Rational), DomainError> {
-        let a = left.floor(format.frac_width);
-        let b = right.ceil(format.frac_width);
+        let a = left.floor(format.lsb());
+        let b = right.ceil(format.lsb());
 
         let n = ((&b - &a) / Rational::from(rows)).ceil_log2();
         let stride = Rational::power_of_two(n);
 
-        if n.is_negative() && n.unsigned_abs() > format.frac_width {
+        if n < format.lsb() {
             return Err(DomainError::new(
                 DomainErrorKind::StrideNotRepresentable,
                 stride,
@@ -137,7 +136,7 @@ impl TableDomain {
             &a * (&b + &b - &diameter) / (a + b)
         };
 
-        let left = q.round_away(format.frac_width);
+        let left = q.round_away(format.lsb());
         let right = &left + diameter;
 
         Ok((TableDomain { left, right }, stride))

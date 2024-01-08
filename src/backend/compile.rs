@@ -38,7 +38,7 @@ fn compile_number(
         .with_pos(num)
     })?;
 
-    let cell = ctx.builder.add_constant(val, ctx.format.width);
+    let cell = ctx.builder.add_constant(val, u64::from(ctx.format.width));
     let port = cell.borrow().get("out");
 
     Ok(port)
@@ -51,7 +51,7 @@ fn compile_constant(
     match constant {
         ast::Constant::Math(_) => unimplemented!(),
         ast::Constant::Bool(val) => {
-            let params = [1, val.into()];
+            let params = [1, u64::from(val)];
 
             let cell = ctx.builder.add_primitive("const", "std_const", &params);
             let port = cell.borrow().get("out");
@@ -272,7 +272,7 @@ fn compile_benchmark(
 
     let mut ports = vec![ir::PortDef::new(
         "out",
-        format.width,
+        u64::from(format.width),
         ir::Direction::Output,
         Default::default(),
     )];
@@ -280,7 +280,7 @@ fn compile_benchmark(
     ports.extend(def.args.iter().map(|arg| {
         ir::PortDef::new(
             arg.var.id,
-            format.width,
+            u64::from(format.width),
             ir::Direction::Input,
             Default::default(),
         )
