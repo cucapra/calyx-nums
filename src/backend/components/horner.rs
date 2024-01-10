@@ -69,7 +69,6 @@ impl ComponentBuilder for Horner<'_> {
         structure!(builder;
             let acc = prim std_reg(u64::from(self.format.width));
             let add = prim std_add(u64::from(self.format.width));
-            let high = constant(1, 1);
         );
 
         let mul = {
@@ -82,7 +81,7 @@ impl ComponentBuilder for Horner<'_> {
             )
         };
 
-        let coefficients: Vec<_> = (0..=self.degree)
+        let selects: Vec<_> = (0..=self.degree)
             .map(|i| {
                 let params = [
                     u64::from(self.degree + 1) * u64::from(self.format.width),
@@ -94,66 +93,74 @@ impl ComponentBuilder for Horner<'_> {
             })
             .collect();
 
-        let (leading, addends) = coefficients.split_first().unwrap();
+        let (leading, addends) = selects.split_first().unwrap();
 
-        let init = {
-            let group = builder.add_group("init");
+        let [in_, out, left, right] =
+            ["in", "out", "left", "right"].map(ir::Id::new);
 
-            let assigns = build_assignments!(builder;
-                acc["in"] = ? leading["out"];
-                acc["write_en"] = ? high["out"];
-                group["done"] = ? acc["done"];
-            );
+        let init = ir::Control::invoke(
+            acc.clone(),
+            vec![(in_, leading.borrow().get(out))],
+            vec![],
+        );
 
-            group.borrow_mut().assignments.extend(assigns);
+        let multiplies: Vec<_> = iter::repeat_with(|| {
+            let signature = &builder.component.signature;
 
-            group
-        };
+            ir::Control::invoke(
+                mul.clone(),
+                vec![
+                    (left, signature.borrow().get(in_)),
+                    (right, acc.borrow().get(out)),
+                ],
+                vec![],
+            )
+        })
+        .take(addends.len())
+        .collect();
 
-        let mads: Vec<_> = addends
+        let accumulates: Vec<_> = addends
             .iter()
             .map(|addend| {
-                let mad = builder.add_group("mad");
-
-                let signature = &builder.component.signature;
+                let group = builder.add_comb_group("addend");
 
                 let assigns = build_assignments!(builder;
-                    mul["left"] = ? signature["in"];
-                    mul["right"] = ? acc["out"];
-                    mul["go"] = ? high["out"];
-                    add["left"] = ? addend["out"];
-                    add["right"] = ? mul["out"];
-                    acc["in"] = ? add["out"];
-                    acc["write_en"] = ? mul["done"];
-                    mad["done"] = ? acc["done"];
+                    add[left] = ? addend[out];
+                    add[right] = ? mul[out];
                 );
 
-                mad.borrow_mut().assignments.extend(assigns);
+                group.borrow_mut().assignments.extend(assigns);
 
-                mad
+                ir::Control::Invoke(ir::Invoke {
+                    comp: acc.clone(),
+                    inputs: vec![(in_, add.borrow().get(out))],
+                    outputs: vec![],
+                    attributes: Default::default(),
+                    comb_group: Some(group),
+                    ref_cells: vec![],
+                })
             })
             .collect();
 
         let signature = &builder.component.signature;
 
-        for cell in coefficients {
+        for cell in selects {
             let [assign] = build_assignments!(builder;
-                cell["in"] = ? signature["lut"];
+                cell[in_] = ? signature["lut"];
             );
 
             builder.component.continuous_assignments.push(assign);
         }
 
         let [assign] = build_assignments!(builder;
-            signature["out"] = ? acc["out"];
+            signature[out] = ? acc[out];
         );
 
         builder.component.continuous_assignments.push(assign);
 
         *component.control.borrow_mut() = ir::Control::seq(
             iter::once(init)
-                .chain(mads)
-                .map(ir::Control::enable)
+                .chain(itertools::interleave(multiplies, accumulates))
                 .collect(),
         );
 
