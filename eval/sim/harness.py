@@ -12,10 +12,10 @@ def single(
 
     mem = main.mem_d1(mem_name, width, argc, argc.bit_length(), True)
     bench = main.comp_instance('bench', comp_name, False)
-    write = main.group('write')
+    run = main.group('run')
 
     for i, arg in enumerate(args):
-        tmp = main.reg(f'tmp{i}', width)
+        tmp = main.reg(f'arg{i}', width)
         read = main.group(f'read{i}')
 
         with read:
@@ -24,20 +24,29 @@ def single(
             tmp.write_en = 1
             read.done = tmp.done
 
-        with write:
+        with run:
             bench[arg] = tmp.out
 
         main.control += read
 
-    with write:
-        if not comb:
-            bench.go = cb.HI
+    result = main.reg('result', width)
+    write = main.group('write')
 
+    with run:
+        if not comb:
+            bench.go = ~bench.done @ cb.HI
+
+        result.in_ = bench.out
+        result.write_en = 1 if comb else bench.done
+        run.done = result.done
+
+    with write:
         mem.addr0 = 0
-        mem.write_data = bench.out
-        mem.write_en = 1 if comb else bench.done @ 1
+        mem.write_data = result.out
+        mem.write_en = 1
         write.done = mem.done
 
+    main.control += run
     main.control += write
 
     top_level.program.imports = []  # Suppress imports
@@ -90,12 +99,12 @@ def batch(
         inc.done = idx.done
 
     bench = main.comp_instance('bench', comp_name, False)
-    write = main.group('write')
+    run = main.group('run')
 
     reads = []
 
     for i, arg in enumerate(args):
-        tmp = main.reg(f'tmp{i}', width)
+        tmp = main.reg(f'arg{i}', width)
         read = main.group(f'read{i}')
 
         with read:
@@ -105,24 +114,32 @@ def batch(
             tmp.write_en = 1
             read.done = tmp.done
 
-        with write:
+        with run:
             bench[arg] = tmp.out
 
         reads.append(read)
 
-    with write:
-        if not comb:
-            bench.go = cb.HI
+    result = main.reg('result', width)
+    write = main.group('write')
 
+    with run:
+        if not comb:
+            bench.go = ~bench.done @ cb.HI
+
+        result.in_ = bench.out
+        result.write_en = 1 if comb else bench.done
+        run.done = result.done
+
+    with write:
         mem.addr0 = idx.out
         mem.addr1 = cb.const(arg_width, 0)
-        mem.write_data = bench.out
-        mem.write_en = cb.HI if comb else bench.done @ cb.HI
+        mem.write_data = result.out
+        mem.write_en = cb.HI
         write.done = mem.done
 
     main.control += init
     main.control += cb.while_with(
-        cb.CellAndGroup(lt, cond), reads + [write, inc]
+        cb.CellAndGroup(lt, cond), reads + [run, write, inc]
     )
 
     top_level.program.imports = []
