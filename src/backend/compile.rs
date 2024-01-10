@@ -287,7 +287,7 @@ fn compile_benchmark(
     }));
 
     let mut component = ir::Component::new(name, ports, false, false, None);
-    let mut builder = ir::Builder::new(&mut component, lib);
+    let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
     let mut context = Context {
         builder: &mut builder,

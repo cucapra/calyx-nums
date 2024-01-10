@@ -1,6 +1,7 @@
 //! Glue code for polynomials.
 
 use calyx_ir::{self as ir, build_assignments};
+use calyx_utils::CalyxResult;
 
 use super::{ComponentBuilder, ComponentManager, Horner, LookupTable};
 use crate::utils::mangling::mangle;
@@ -44,7 +45,7 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         name: ir::Id,
         cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> calyx_utils::CalyxResult<ir::Component> {
+    ) -> CalyxResult<ir::Component> {
         let horner = Horner {
             format: self.0.format,
             degree: self.0.degree,
@@ -56,7 +57,7 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);
-        let mut builder = ir::Builder::new(&mut component, lib);
+        let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
         let lookup =
             builder.add_component(ir::Id::new("lookup"), lookup, lookup_ports);

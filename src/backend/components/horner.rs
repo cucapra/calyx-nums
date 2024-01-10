@@ -57,7 +57,7 @@ impl ComponentBuilder for Horner<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);
-        let mut builder = ir::Builder::new(&mut component, lib);
+        let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
         structure!(builder;
             let acc = prim std_reg(u64::from(self.format.width));

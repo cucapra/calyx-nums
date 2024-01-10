@@ -115,7 +115,7 @@ impl ComponentBuilder for LookupTable<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, false, true, None);
-        let mut builder = ir::Builder::new(&mut component, lib);
+        let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
         let global = u64::from(self.format.width);
         let width = u64::from(self.degree + 1) * u64::from(self.format.width);
