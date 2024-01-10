@@ -7,7 +7,7 @@ use calyx_utils::CalyxResult;
 
 use super::{ComponentBuilder, ComponentManager};
 use crate::backend::builtins;
-use crate::backend::primitives::select;
+use crate::backend::primitives::{NamedPrimitive, PartSelect};
 use crate::format::Format;
 use crate::utils::mangling::mangle;
 
@@ -53,14 +53,7 @@ impl ComponentBuilder for Horner<'_> {
         _cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<ir::Component> {
-        let select = ir::Id::new("select");
-
-        if lib.find_primitive(select).is_none() {
-            let primitive = select::compile_select(select);
-
-            lib.add_inline_primitive(primitive).set_source();
-        }
-
+        let select = PartSelect::add(lib);
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);

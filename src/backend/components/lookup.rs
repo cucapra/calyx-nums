@@ -5,7 +5,7 @@ use calyx_utils::{CalyxResult, Error};
 
 use super::{ComponentBuilder, ComponentManager};
 use crate::backend::libm::Function;
-use crate::backend::primitives::lut;
+use crate::backend::primitives::{lut, NamedPrimitive, PartSelect};
 use crate::format::Format;
 use crate::functions::addressing::{AddressSpec, TableDomain};
 use crate::functions::remez;
@@ -109,6 +109,8 @@ impl ComponentBuilder for LookupTable<'_> {
         _cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<ir::Component> {
+        PartSelect::add(lib);
+
         let lut = self.build_primitive(lib)?;
         let ports = self.signature();
 
@@ -118,15 +120,15 @@ impl ComponentBuilder for LookupTable<'_> {
         let global = u64::from(self.format.width);
         let width = u64::from(self.degree + 1) * u64::from(self.format.width);
 
+        let spec = self.spec;
+
         let primitive =
-            builder.add_primitive("lut", lut, &[width, self.spec.idx_width]);
+            builder.add_primitive("lut", lut, &[width, spec.idx_width]);
 
         structure!(builder;
             let sub = prim std_sub(global);
-            let rsh = prim std_rsh(global);
-            let slice = prim std_slice(global, self.spec.idx_width);
-            let left = constant(self.spec.subtrahend, global);
-            let shift = constant(self.spec.idx_lsb, global);
+            let sel = prim select(global, spec.idx_width, spec.idx_lsb);
+            let left = constant(spec.subtrahend, global);
         );
 
         let signature = &builder.component.signature;
@@ -134,10 +136,8 @@ impl ComponentBuilder for LookupTable<'_> {
         let assigns = build_assignments!(builder;
             sub["left"] = ? signature["in"];
             sub["right"] = ? left["out"];
-            rsh["left"] = ? sub["out"];
-            rsh["right"] = ? shift["out"];
-            slice["in"] = ? rsh["out"];
-            primitive["idx"] = ? slice["out"];
+            sel["in"] = ? sub["out"];
+            primitive["idx"] = ? sel["out"];
             signature["out"] = ? primitive["out"];
         );
 
