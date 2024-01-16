@@ -6,7 +6,9 @@ use num::bigint::{BigInt, BigUint, ParseBigIntError};
 use num::rational::Ratio;
 use num::traits::{Num, Pow, Zero};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+use crate::utils::mangling::Mangle;
+
+#[derive(Clone, Copy, Debug, Mangle, PartialEq, Eq)]
 pub enum Sign {
     Pos,
     Neg,

@@ -7,6 +7,7 @@ use std::string::FromUtf8Error;
 use std::{fmt, thread};
 
 use crate::fpcore::ast;
+use crate::utils::mangling::Mangle;
 
 /// Invokes Sollya with the given command.
 pub fn sollya<S>(cmd: &[u8], args: &[S]) -> Result<String, SollyaError>
@@ -121,7 +122,7 @@ impl From<FromUtf8Error> for SollyaError {
 }
 
 /// A built-in function recognized by Sollya.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Mangle)]
 #[rustfmt::skip]
 pub enum SollyaFunction {
     Sin,  Cos,   Tan,  Sinh,  Cosh,  Tanh,

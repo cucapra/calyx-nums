@@ -6,6 +6,7 @@ use calyx_utils as utils;
 
 use crate::format::Format;
 use crate::fpcore::ast::Rational;
+use crate::utils::mangling::Mangle;
 
 /// A specification for obtaining table indices from raw input values.
 pub struct AddressSpec {
@@ -101,6 +102,7 @@ impl AddressSpec {
 }
 
 /// An input domain for a lookup table.
+#[derive(Mangle)]
 pub struct TableDomain {
     pub left: Rational,
     pub right: Rational,

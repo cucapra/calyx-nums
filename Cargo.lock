@@ -125,6 +125,7 @@ dependencies = [
  "argh",
  "calyx-frontend",
  "calyx-ir",
+ "calyx-nums-macros",
  "calyx-utils",
  "env_logger",
  "itertools",
@@ -137,6 +138,15 @@ dependencies = [
  "smallvec",
  "strum",
  "strum_macros",
+]
+
+[[package]]
+name = "calyx-nums-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
 ]
 
 [[package]]

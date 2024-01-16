@@ -6,8 +6,11 @@ use std::str::FromStr;
 
 use itertools::PeekingNext;
 
+use crate::utils::mangling::Mangle;
+
 /// A fixed-point number format with `width` total bits and a scaling factor of
 /// 2^`scale`.
+#[derive(Mangle)]
 pub struct Format {
     pub scale: i32,
     pub width: u32,

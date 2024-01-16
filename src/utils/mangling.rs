@@ -2,13 +2,9 @@
 
 use std::fmt;
 
-use num::BigUint;
+use crate::fpcore::ast::Rational;
 
-use super::sollya::SollyaFunction;
-use crate::format::Format;
-use crate::fpcore::ast::{Rational, Sign};
-use crate::fpcore::metadata::CalyxImpl;
-use crate::functions::TableDomain;
+pub use calyx_nums_macros::Mangle;
 
 /// Encodes context information into an identifier. The resulting identifier is
 /// a valid name in the IA-64 C++ ABI's name mangling scheme.
@@ -83,7 +79,7 @@ macro_rules! impl_mangle_unsigned {
     )*};
 }
 
-impl_mangle_unsigned!(usize, u8, u16, u32, u64, BigUint);
+impl_mangle_unsigned!(usize, u8, u16, u32, u64, num::BigUint);
 
 macro_rules! impl_mangle_signed {
     ($($type:ty),*) => {$(
@@ -104,67 +100,11 @@ macro_rules! impl_mangle_signed {
 
 impl_mangle_signed!(isize, i8, i16, i32, i64);
 
-impl Mangle for Format {
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        init_list!(w, "Format", self.scale, self.width, self.is_signed)
-    }
-}
-
-impl Mangle for Sign {
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        write!(w, "L4Sign{}E", *self as u8)
-    }
-}
-
 impl Mangle for Rational {
     fn mangle<W>(&self, w: &mut W) -> fmt::Result
     where
         W: fmt::Write,
     {
         init_list!(w, "Rational", self.sign, self.mag.numer(), self.mag.denom())
-    }
-}
-
-impl Mangle for SollyaFunction {
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        write!(w, "L14SollyaFunction{}E", *self as u8)
-    }
-}
-
-impl Mangle for TableDomain {
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        init_list!(w, "TableDomain", self.left, self.right)
-    }
-}
-
-impl Mangle for CalyxImpl {
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        write!(w, "tl9CalyxImpl")?;
-
-        match self {
-            CalyxImpl::Lut { lut_size } => {
-                init_list!(w, "Lut", lut_size)?;
-            }
-            CalyxImpl::Poly { degree, lut_size } => {
-                init_list!(w, "Poly", degree, lut_size)?;
-            }
-        };
-
-        write!(w, "E")
     }
 }
