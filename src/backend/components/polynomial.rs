@@ -66,17 +66,31 @@ impl ComponentBuilder for PiecewisePoly<'_> {
 
         let signature = &builder.component.signature;
 
-        let assigns = build_assignments!(builder;
+        let [lookup_in, component_out] = build_assignments!(builder;
             lookup["in"] = ? signature["in"];
-            horner["in"] = ? signature["in"];
-            horner["lut"] = ? lookup["out"];
             signature["out"] = ? horner["out"];
         );
 
-        builder.component.continuous_assignments.extend(assigns);
+        builder.component.continuous_assignments.push(component_out);
 
-        *component.control.borrow_mut() =
-            ir::Control::invoke(horner, Vec::new(), Vec::new());
+        let inputs = vec![
+            (ir::Id::new("in"), signature.borrow().get("in")),
+            (ir::Id::new("lut"), lookup.borrow().get("out")),
+        ];
+
+        let group = builder.add_comb_group("index");
+        group.borrow_mut().assignments.push(lookup_in);
+
+        let invoke = ir::Invoke {
+            comp: horner,
+            inputs,
+            outputs: Vec::new(),
+            attributes: Default::default(),
+            comb_group: Some(group),
+            ref_cells: Vec::new(),
+        };
+
+        *component.control.borrow_mut() = ir::Control::Invoke(invoke);
 
         Ok(component)
     }
