@@ -1,5 +1,6 @@
 import json
 import subprocess
+from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Union
@@ -56,7 +57,17 @@ def compile(
     return proc.stdout
 
 
-def simulate(futil: str, data: str, args: list[str] = []) -> Any:
+class Simulator(Enum):
+    IVERILOG = 'icarus-verilog'
+    VERILATOR = 'verilog'
+
+
+def simulate(
+    futil: str,
+    data: str,
+    args: list[str] = [],
+    sim: Simulator = Simulator.IVERILOG,
+) -> Any:
     with TemporaryDirectory() as tmp:
         file = Path(tmp, 'data.json')
         file.write_text(data)
@@ -65,7 +76,7 @@ def simulate(futil: str, data: str, args: list[str] = []) -> Any:
             'fud', 'exec',
             '--from', 'calyx',
             '--to', 'dat',
-            '--through', 'icarus-verilog',
+            '--through', sim.value,
             '-s', 'verilog.data', file,
             *args,
         ], check=True, text=True, input=futil, stdout=subprocess.PIPE)

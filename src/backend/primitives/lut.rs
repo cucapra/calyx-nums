@@ -17,10 +17,12 @@ where
         .fold(Zero::zero(), |acc, value| (acc << width) | value)
 }
 
-pub fn compile_lut<T: LowerHex>(name: ir::Id, values: &[T]) -> ir::Primitive {
-    let width = ir::Id::new("WIDTH");
-    let idx_size = ir::Id::new("IDX_SIZE");
-
+pub fn compile_lut<T: LowerHex>(
+    name: ir::Id,
+    idx_width: u64,
+    out_width: u64,
+    values: &[T],
+) -> ir::Primitive {
     let mut data = ir::Attributes::default();
     let mut share = ir::Attributes::default();
 
@@ -29,17 +31,17 @@ pub fn compile_lut<T: LowerHex>(name: ir::Id, values: &[T]) -> ir::Primitive {
 
     ir::Primitive {
         name,
-        params: vec![width, idx_size],
+        params: vec![],
         signature: vec![
             ir::PortDef::new(
                 "idx",
-                ir::Width::Param { value: idx_size },
+                ir::Width::Const { value: idx_width },
                 ir::Direction::Input,
                 data,
             ),
             ir::PortDef::new(
                 "out",
-                ir::Width::Param { value: width },
+                ir::Width::Const { value: out_width },
                 ir::Direction::Output,
                 Default::default(),
             ),
@@ -47,18 +49,30 @@ pub fn compile_lut<T: LowerHex>(name: ir::Id, values: &[T]) -> ir::Primitive {
         attributes: share,
         is_comb: true,
         latency: None,
-        body: Some(format_body(values)),
+        body: Some(format_body(idx_width, out_width, values)),
     }
 }
 
-fn format_body<T: LowerHex>(values: &[T]) -> String {
-    let mut body = String::from("always_comb begin\n    case (idx)\n");
+fn format_body<T: LowerHex>(
+    idx_width: u64,
+    out_width: u64,
+    values: &[T],
+) -> String {
+    let mut body = String::from(concat!(
+        "always_comb begin\n",
+        "    unique case (idx)\n",
+    ));
 
     for (i, val) in values.iter().enumerate() {
-        writeln!(body, "      'd{i} : out = 'h{val:x};").unwrap();
+        writeln!(body, "      {idx_width}'d{i}: out = {out_width}'h{val:x};")
+            .unwrap();
     }
 
-    body.push_str("    endcase\n  end");
+    body.push_str(concat!(
+        "      default out = 'x;\n",
+        "    endcase\n",
+        "  end",
+    ));
 
     body
 }

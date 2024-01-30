@@ -66,7 +66,10 @@ impl LookupTable<'_> {
             self.size,
         ));
 
-        let primitive = lut::compile_lut(name, &values);
+        let width = u64::from(self.degree + 1) * u64::from(self.format.width);
+
+        let primitive =
+            lut::compile_lut(name, self.spec.idx_width, width, &values);
 
         lib.add_inline_primitive(primitive).set_source();
 
@@ -117,13 +120,10 @@ impl ComponentBuilder for LookupTable<'_> {
         let mut component = ir::Component::new(name, ports, false, true, None);
         let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
+        let primitive = builder.add_primitive("lut", lut, &[]);
+
         let global = u64::from(self.format.width);
-        let width = u64::from(self.degree + 1) * u64::from(self.format.width);
-
         let spec = self.spec;
-
-        let primitive =
-            builder.add_primitive("lut", lut, &[width, spec.idx_width]);
 
         structure!(builder;
             let sub = prim std_sub(global);
