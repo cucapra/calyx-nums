@@ -12,9 +12,9 @@ pub struct Opts {
     #[argh(positional)]
     pub file: Option<PathBuf>,
 
-    /// path to the primitives library
+    /// add directory to library search path
     #[argh(option, short = 'l')]
-    pub lib_path: PathBuf,
+    pub lib_path: Vec<PathBuf>,
 
     /// output file
     #[argh(option, short = 'o')]

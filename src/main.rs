@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::PathBuf;
 
 use calyx_frontend::{parser::CalyxParser, Workspace};
 use calyx_ir as ir;
@@ -12,7 +12,7 @@ use calyx_nums::backend;
 use calyx_nums::fpcore::FPCoreParser;
 use calyx_nums::opts::Opts;
 
-const STD_IMPORTS: &[&str] = &[
+const IMPORTS: &[&str] = &[
     backend::stdlib::compile::IMPORT,
     backend::stdlib::core::IMPORT,
     backend::stdlib::binary_operators::IMPORT,
@@ -21,27 +21,45 @@ const STD_IMPORTS: &[&str] = &[
 
 fn build_workspace(
     imports: &[&str],
-    lib_path: &Path,
+    search_paths: &[PathBuf],
 ) -> CalyxResult<Workspace> {
+    let mut stack: Vec<_> = imports
+        .iter()
+        .map(|import| {
+            search_paths
+                .iter()
+                .find_map(|lib_path| {
+                    let import = lib_path.join(import).canonicalize().ok()?;
+
+                    import.exists().then_some((import, lib_path))
+                })
+                .ok_or(Error::invalid_file(format!(
+                    "Unresolved import `{import}`"
+                )))
+        })
+        .collect::<CalyxResult<_>>()?;
+
     let mut workspace = Workspace::default();
     let mut imported = HashSet::new();
 
-    let mut deps: Vec<_> =
-        imports.iter().map(|import| lib_path.join(import)).collect();
+    workspace.original_imports = stack
+        .iter()
+        .map(|(import, _)| import.to_string_lossy().into_owned())
+        .collect();
 
-    while let Some(dep) = deps.pop() {
-        if imported.contains(&dep) {
+    while let Some((import, lib_path)) = stack.pop() {
+        if imported.contains(&import) {
             continue;
         }
 
-        let parent = dep.parent().unwrap();
-        let namespace = CalyxParser::parse_file(&dep)?;
+        let namespace = CalyxParser::parse_file(&import)?;
+        let parent = import.parent().unwrap();
 
         let next = workspace
             .merge_namespace(namespace, false, parent, true, lib_path)?;
 
-        deps.extend(next.into_iter().map(|(source, _)| source));
-        imported.insert(dep);
+        stack.extend(next.into_iter().map(|(import, _)| (import, lib_path)));
+        imported.insert(import);
     }
 
     Ok(workspace)
@@ -73,10 +91,10 @@ fn main() -> CalyxResult<()> {
 
     let benchmarks = FPCoreParser::parse_file(filename.to_string(), src)
         .map_err(|err| {
-            Error::misc(format!("Syntax error:\n{}", err.with_path(&filename)))
+            Error::misc(format!("Syntax error\n{}", err.with_path(&filename)))
         })?;
 
-    let workspace = build_workspace(STD_IMPORTS, &opts.lib_path)?;
+    let workspace = build_workspace(IMPORTS, &opts.lib_path)?;
     let ctx = backend::compile_fpcore(&benchmarks, &opts, workspace.lib)?;
 
     let mut out: Box<dyn Write> = if let Some(path) = opts.output {
@@ -85,7 +103,7 @@ fn main() -> CalyxResult<()> {
         Box::new(io::stdout())
     };
 
-    for import in STD_IMPORTS {
+    for import in workspace.original_imports {
         writeln!(out, "import \"{}\";", import)?;
     }
 
