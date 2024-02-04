@@ -5,10 +5,10 @@ use log::LevelFilter;
 
 use crate::format::Format;
 
-/// Calyx back end for FPCore.
+/// FPCore frontend for Calyx.
 #[derive(FromArgs)]
 pub struct Opts {
-    /// input FPCore benchmark
+    /// input file
     #[argh(positional)]
     pub file: Option<PathBuf>,
 
