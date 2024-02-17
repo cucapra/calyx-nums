@@ -5,7 +5,7 @@ use calyx_utils::{CalyxResult, Error};
 
 use super::{ComponentBuilder, ComponentManager};
 use crate::backend::libm::Function;
-use crate::backend::primitives::{lut, NamedPrimitive, PartSelect};
+use crate::backend::primitives::lut;
 use crate::format::Format;
 use crate::functions::addressing::{AddressSpec, TableDomain};
 use crate::functions::remez;
@@ -112,8 +112,6 @@ impl ComponentBuilder for LookupTable<'_> {
         _cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<ir::Component> {
-        PartSelect::add(lib);
-
         let lut = self.build_primitive(lib)?;
         let ports = self.signature();
 
@@ -127,7 +125,12 @@ impl ComponentBuilder for LookupTable<'_> {
 
         structure!(builder;
             let sub = prim std_sub(global);
-            let sel = prim select(global, spec.idx_width, spec.idx_lsb);
+            let slice = prim std_bit_slice(
+                global,
+                spec.idx_lsb,
+                spec.idx_lsb + spec.idx_width - 1,
+                spec.idx_width
+            );
             let left = constant(spec.subtrahend, global);
         );
 
@@ -136,8 +139,8 @@ impl ComponentBuilder for LookupTable<'_> {
         let assigns = build_assignments!(builder;
             sub["left"] = ? signature["in"];
             sub["right"] = ? left["out"];
-            sel["in"] = ? sub["out"];
-            primitive["idx"] = ? sel["out"];
+            slice["in"] = ? sub["out"];
+            primitive["idx"] = ? slice["out"];
             signature["out"] = ? primitive["out"];
         );
 

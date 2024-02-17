@@ -9,7 +9,7 @@ from fpcore.rand import random_fpcore
 from interp.fixed import FIXED
 from qformat import QFormat, RoundingMode
 from sim import harness
-from sim.run import compile, format_data, simulate
+from sim import run as runner
 
 
 def run(
@@ -19,17 +19,12 @@ def run(
     nums: Path,
     lib: Path,
 ) -> int:
-    bench = compile(benchmark, fmt, nums, lib)
+    compiled = runner.compile(benchmark, fmt, nums, lib)
 
-    name = benchmark.name or 'anonymous'
-    comb = f'comb component {name}' in bench
+    prog = harness.wrap(benchmark, compiled, fmt, 'mem')
+    data = runner.format_data('mem', vals, fmt)
 
-    args = [arg.var for arg in benchmark.args]
-
-    main = harness.single(name, comb, args, 'mem', fmt.width)
-    data = format_data('mem', vals, fmt)
-
-    result = simulate(bench + main, data)
+    result = runner.simulate(prog, data)
 
     return result['memories']['mem'][0]
 

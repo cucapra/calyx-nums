@@ -1,16 +1,21 @@
+from typing import Any, Optional
+
 import calyx.builder as cb
-from calyx.py_ast import Stdlib
+from calyx.py_ast import Program, Stdlib
+
+from fpcore.ast import FPCore
+from qformat import QFormat
 
 
 def single(
     comp_name: str, comb: bool, args: list[str], mem_name: str, width: int
-) -> str:
+) -> Program:
     top_level = cb.Builder()
     main = top_level.component('main')
 
     argc = len(args)
 
-    mem = main.mem_d1(mem_name, width, argc, argc.bit_length(), True)
+    mem = main.comb_mem_d1(mem_name, width, argc, argc.bit_length(), True)
     bench = main.comp_instance('bench', comp_name, False)
     run = main.group('run')
 
@@ -49,9 +54,7 @@ def single(
     main.control += run
     main.control += write
 
-    top_level.program.imports = []  # Suppress imports
-
-    return top_level.program.doc()
+    return top_level.program
 
 
 def batch(
@@ -61,7 +64,7 @@ def batch(
     count: int,
     mem_name: str,
     width: int,
-) -> str:
+) -> Program:
     top_level = cb.Builder()
     main = top_level.component('main')
 
@@ -70,8 +73,12 @@ def batch(
     arg_width = argc.bit_length()
     idx_width = count.bit_length()
 
+    top_level.import_("primitives/memories/comb.futil")
+
     mem = main.cell(
-        mem_name, Stdlib.mem_d2(width, count, argc, idx_width, arg_width), True
+        mem_name,
+        Stdlib.comb_mem_d2(width, count, argc, idx_width, arg_width),
+        True,
     )
 
     lt = main.lt(idx_width, 'lt')
@@ -142,6 +149,27 @@ def batch(
         cb.CellAndGroup(lt, cond), reads + [run, write, inc]
     )
 
-    top_level.program.imports = []
+    return top_level.program
 
-    return top_level.program.doc()
+
+def wrap(
+    fpcore: FPCore[Any],
+    futil: str,
+    fmt: QFormat,
+    mem: str,
+    count: Optional[int] = None,
+) -> str:
+    name = fpcore.name or 'anonymous'
+    comb = f'comb component {name}' in futil
+
+    args = [arg.var for arg in fpcore.args]
+
+    if count is None:
+        main = single(name, comb, args, mem, fmt.width)
+    else:
+        main = batch(name, comb, args, count, mem, fmt.width)
+
+    imports = '\n'.join(i.doc() for i in main.imports)
+    components = '\n'.join(c.doc() for c in main.components)
+
+    return f'{imports}\n{futil}{components}'
