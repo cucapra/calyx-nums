@@ -15,9 +15,6 @@ use crate::format::Format;
 use crate::fpcore::ast;
 use crate::opts::Opts;
 
-/// Prefix for components generated from anonymous benchmarks.
-const ANONYMOUS_PREFIX: &str = "anonymous";
-
 /// A compiled expression.
 ///
 /// The output port is valid after executing the control program, as long as
@@ -299,7 +296,7 @@ fn compile_benchmark(
     let name = def
         .name
         .as_ref()
-        .map_or_else(|| name_gen.gen_name(ANONYMOUS_PREFIX), |sym| sym.id);
+        .map_or_else(|| name_gen.gen_name("main"), |sym| sym.id);
 
     let mut ports = vec![ir::PortDef::new(
         "out",

@@ -10,18 +10,20 @@ from qformat import QFormat
 def single(
     comp_name: str, comb: bool, args: list[str], mem_name: str, width: int
 ) -> Program:
-    top_level = cb.Builder()
-    main = top_level.component('main')
+    builder = cb.Builder()
+
+    harness = builder.component('harness')
+    harness.attribute('toplevel', 1)
 
     argc = len(args)
 
-    mem = main.comb_mem_d1(mem_name, width, argc, argc.bit_length(), True)
-    bench = main.comp_instance('bench', comp_name, False)
-    run = main.group('run')
+    mem = harness.comb_mem_d1(mem_name, width, argc, argc.bit_length(), True)
+    bench = harness.comp_instance('bench', comp_name, False)
+    run = harness.group('run')
 
     for i, arg in enumerate(args):
-        tmp = main.reg(f'arg{i}', width)
-        read = main.group(f'read{i}')
+        tmp = harness.reg(f'arg{i}', width)
+        read = harness.group(f'read{i}')
 
         with read:
             mem.addr0 = i
@@ -32,10 +34,10 @@ def single(
         with run:
             bench[arg] = tmp.out
 
-        main.control += read
+        harness.control += read
 
-    result = main.reg('result', width)
-    write = main.group('write')
+    result = harness.reg('result', width)
+    write = harness.group('write')
 
     with run:
         if not comb:
@@ -51,10 +53,10 @@ def single(
         mem.write_en = 1
         write.done = mem.done
 
-    main.control += run
-    main.control += write
+    harness.control += run
+    harness.control += write
 
-    return top_level.program
+    return builder.program
 
 
 def batch(
@@ -65,26 +67,28 @@ def batch(
     mem_name: str,
     width: int,
 ) -> Program:
-    top_level = cb.Builder()
-    main = top_level.component('main')
+    builder = cb.Builder()
+
+    harness = builder.component('harness')
+    harness.attribute('toplevel', 1)
 
     argc = len(args)
 
     arg_width = argc.bit_length()
     idx_width = count.bit_length()
 
-    top_level.import_("primitives/memories/comb.futil")
+    builder.import_('primitives/memories/comb.futil')
 
-    mem = main.cell(
+    mem = harness.cell(
         mem_name,
         Stdlib.comb_mem_d2(width, count, argc, idx_width, arg_width),
         True,
     )
 
-    lt = main.lt(idx_width, 'lt')
-    idx = main.reg('idx', idx_width)
-    init = main.group('init')
-    cond = main.comb_group('cond')
+    lt = harness.lt(idx_width, 'lt')
+    idx = harness.reg('idx', idx_width)
+    init = harness.group('init')
+    cond = harness.comb_group('cond')
 
     with init:
         idx.in_ = 0
@@ -95,8 +99,8 @@ def batch(
         lt.left = idx.out
         lt.right = count
 
-    add = main.add(idx_width, 'add')
-    inc = main.group('inc')
+    add = harness.add(idx_width, 'add')
+    inc = harness.group('inc')
 
     with inc:
         add.left = idx.out
@@ -105,14 +109,14 @@ def batch(
         idx.write_en = 1
         inc.done = idx.done
 
-    bench = main.comp_instance('bench', comp_name, False)
-    run = main.group('run')
+    bench = harness.comp_instance('bench', comp_name, False)
+    run = harness.group('run')
 
     reads = []
 
     for i, arg in enumerate(args):
-        tmp = main.reg(f'arg{i}', width)
-        read = main.group(f'read{i}')
+        tmp = harness.reg(f'arg{i}', width)
+        read = harness.group(f'read{i}')
 
         with read:
             mem.addr0 = idx.out
@@ -126,8 +130,8 @@ def batch(
 
         reads.append(read)
 
-    result = main.reg('result', width)
-    write = main.group('write')
+    result = harness.reg('result', width)
+    write = harness.group('write')
 
     with run:
         if not comb:
@@ -144,12 +148,12 @@ def batch(
         mem.write_en = cb.HI
         write.done = mem.done
 
-    main.control += init
-    main.control += cb.while_with(
+    harness.control += init
+    harness.control += cb.while_with(
         cb.CellAndGroup(lt, cond), reads + [run, write, inc]
     )
 
-    return top_level.program
+    return builder.program
 
 
 def wrap(
@@ -159,7 +163,7 @@ def wrap(
     mem: str,
     count: Optional[int] = None,
 ) -> str:
-    name = fpcore.name or 'anonymous'
+    name = fpcore.name or 'main'
     comb = f'comb component {name}' in futil
 
     args = [arg.var for arg in fpcore.args]
