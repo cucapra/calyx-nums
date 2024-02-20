@@ -27,12 +27,12 @@ argument = {
     | (open ~ symbol ~ dimension+ ~ close)
 }
 
-binder      = { "[" ~ symbol ~ expr ~ "]" }
-update_rule = { "[" ~ symbol ~ expr ~ expr ~ "]" }
-condition   = { "[" ~ symbol ~ expr ~ "]" }
+binding     = { "[" ~ symbol ~ expr ~ "]" }
+mut_var     = { "[" ~ symbol ~ expr ~ expr ~ "]" }
+index_var   = { "[" ~ symbol ~ expr ~ "]" }
 
-rules       = { update_rule* }
-conditions  = { condition* }
+mut_vars    = { mut_var* }
+index_vars  = { index_var* }
 
 if_kwd          = @{ "if"           ~ !symbol_continue }
 let_kwd         = @{ "let" ~ "*"?   ~ !symbol_continue }
@@ -50,13 +50,13 @@ expr = {
     | number
     | symbol
     | (open ~ if_kwd ~ expr ~ expr ~ expr ~ close)
-    | (open ~ let_kwd ~ open ~ binder* ~ close ~ expr ~ close)
-    | (open ~ while_kwd ~ expr ~ open ~ rules ~ close ~ expr ~ close)
-    | (open ~ for_kwd ~ open ~ conditions ~ close
-        ~ open ~ rules ~ close ~ expr ~ close)
-    | (open ~ tensor_star_kwd ~ open ~ conditions ~ close
-        ~ open ~ rules ~ close ~ expr ~ close)
-    | (open ~ tensor_kwd ~ open ~ conditions ~ close ~ expr ~ close)
+    | (open ~ let_kwd ~ open ~ binding* ~ close ~ expr ~ close)
+    | (open ~ while_kwd ~ expr ~ open ~ mut_vars ~ close ~ expr ~ close)
+    | (open ~ for_kwd ~ open ~ index_vars ~ close
+        ~ open ~ mut_vars ~ close ~ expr ~ close)
+    | (open ~ tensor_star_kwd ~ open ~ index_vars ~ close
+        ~ open ~ mut_vars ~ close ~ expr ~ close)
+    | (open ~ tensor_kwd ~ open ~ index_vars ~ close ~ expr ~ close)
     | (open ~ cast_kwd ~ expr ~ close)
     | (open ~ array_kwd ~ expr* ~ close)
     | (open ~ annotation ~ expr ~ close)
@@ -106,7 +106,7 @@ property = {
     | (spec_kwd ~ expr)
     | (alt_kwd ~ expr)
     | (math_lib_kwd ~ symbol)
-    | (example_kwd ~ open ~ binder* ~ close)
+    | (example_kwd ~ open ~ binding* ~ close)
     | (domain_kwd ~ open ~ number ~ number ~ close)
     | (impl_kwd ~ strategy)
     | (property_name ~ data)

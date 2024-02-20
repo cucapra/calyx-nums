@@ -45,14 +45,14 @@ where
 
 pub struct PassManager<'pm, 'ast> {
     opts: &'pm Opts,
-    defs: &'ast [ast::BenchmarkDef],
+    defs: &'ast [ast::FPCore],
     cache: Cache<'ast>,
 }
 
 impl<'pm, 'ast> PassManager<'pm, 'ast> {
     pub fn new(
         opts: &'pm Opts,
-        defs: &'ast [ast::BenchmarkDef],
+        defs: &'ast [ast::FPCore],
     ) -> PassManager<'pm, 'ast> {
         PassManager {
             opts,
@@ -65,7 +65,7 @@ impl<'pm, 'ast> PassManager<'pm, 'ast> {
         self.opts
     }
 
-    pub fn ast(&self) -> &'ast [ast::BenchmarkDef] {
+    pub fn ast(&self) -> &'ast [ast::FPCore] {
         self.defs
     }
 

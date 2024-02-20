@@ -46,7 +46,7 @@ impl MathLib {
             lib,
         };
 
-        builder.visit_benchmarks(pm.ast())?;
+        builder.visit_definitions(pm.ast())?;
 
         Ok(MathLib {
             components: builder.cm.into_components(),
@@ -220,7 +220,7 @@ impl DomainHint<'_> {
 pub struct Function {
     kind: SollyaFunction,
     uid: ast::NodeId,
-    span: utils::GPosIdx,
+    span: ast::Span,
 }
 
 impl Function {
@@ -237,6 +237,6 @@ impl fmt::Display for Function {
 
 impl utils::WithPos for Function {
     fn copy_span(&self) -> utils::GPosIdx {
-        self.span
+        self.span.copy_span()
     }
 }

@@ -25,7 +25,7 @@ impl Pass<'_> for TypeCheck {
         };
 
         for def in pm.ast() {
-            builder.check_benchmark(def)?;
+            builder.check_definition(def)?;
         }
 
         Ok(TypeCheck {
@@ -48,7 +48,7 @@ struct Builder<'a> {
 }
 
 impl Builder<'_> {
-    fn check_benchmark(&mut self, def: &ast::BenchmarkDef) -> CalyxResult<()> {
+    fn check_definition(&mut self, def: &ast::FPCore) -> CalyxResult<()> {
         self.expect(&def.body, Type::Number)
     }
 
@@ -71,7 +71,7 @@ impl Builder<'_> {
                         },
                     )
                 }
-                Binding::Let(binder) => Ok(self.types[&binder.expr.uid]),
+                Binding::Let(binding) => Ok(self.types[&binding.expr.uid]),
             },
             ast::ExprKind::Op(op, args) => {
                 let (ty, arg_ty, arity) = match op.kind {
@@ -110,22 +110,22 @@ impl Builder<'_> {
             }
             ast::ExprKind::If {
                 cond,
-                if_true,
-                if_false,
+                true_branch,
+                false_branch,
             } => {
                 self.expect(cond, Type::Boolean)?;
 
-                let true_ty = self.check_expression(if_true)?;
-                let false_ty = self.check_expression(if_false)?;
+                let true_ty = self.check_expression(true_branch)?;
+                let false_ty = self.check_expression(false_branch)?;
 
                 (true_ty == false_ty).then_some(true_ty).ok_or_else(|| {
                     Error::misc("Branches have incompatible types")
-                        .with_pos(if_false.as_ref())
+                        .with_pos(false_branch.as_ref())
                 })
             }
-            ast::ExprKind::Let { binders, body, .. } => {
-                for binder in binders {
-                    self.check_expression(&binder.expr)?;
+            ast::ExprKind::Let { bindings, body, .. } => {
+                for binding in bindings {
+                    self.check_expression(&binding.expr)?;
                 }
 
                 self.check_expression(body)

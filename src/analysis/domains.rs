@@ -41,7 +41,7 @@ impl Pass<'_> for DomainInference {
             script: String::from(PROLOGUE),
         };
 
-        builder.visit_benchmarks(pm.ast())?;
+        builder.visit_definitions(pm.ast())?;
         builder.script.push_str(EPILOGUE);
 
         Ok(DomainInference {
@@ -173,10 +173,7 @@ impl Builder<'_> {
 impl<'ast> Visitor<'ast> for Builder<'ast> {
     type Error = Error;
 
-    fn visit_benchmark(
-        &mut self,
-        def: &'ast ast::BenchmarkDef,
-    ) -> CalyxResult<()> {
+    fn visit_definition(&mut self, def: &'ast ast::FPCore) -> CalyxResult<()> {
         for arg in &def.args {
             let (left, right) = arg
                 .props
@@ -208,7 +205,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
             ast::ExprKind::Id(_) => {
                 let binding = match self.resolved.names[&expr.uid] {
                     Binding::Argument(arg) => SollyaVar::from(arg),
-                    Binding::Let(binder) => SollyaVar::from(&binder.expr),
+                    Binding::Let(binding) => SollyaVar::from(&binding.expr),
                 };
 
                 self.script_assign(expr, binding);
@@ -246,9 +243,9 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                     self.script_unary(expr, function, &args[0]);
                 }
             }
-            ast::ExprKind::Let { binders, body, .. } => {
-                for binder in binders {
-                    self.visit_binder(binder)?;
+            ast::ExprKind::Let { bindings, body, .. } => {
+                for binding in bindings {
+                    self.visit_binding(binding)?;
                 }
 
                 self.visit_expression(body)?;
@@ -270,8 +267,8 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
 #[derive(Clone, Copy)]
 struct SollyaVar(ast::NodeId);
 
-impl From<&ast::ArgumentDef> for SollyaVar {
-    fn from(value: &ast::ArgumentDef) -> Self {
+impl From<&ast::Argument> for SollyaVar {
+    fn from(value: &ast::Argument) -> Self {
         SollyaVar(value.uid)
     }
 }

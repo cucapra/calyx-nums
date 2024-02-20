@@ -5,39 +5,39 @@ use super::ast;
 pub trait Visitor<'ast> {
     type Error;
 
-    fn visit_benchmarks<I>(&mut self, defs: I) -> Result<(), Self::Error>
+    fn visit_definitions<I>(&mut self, defs: I) -> Result<(), Self::Error>
     where
-        I: IntoIterator<Item = &'ast ast::BenchmarkDef>,
+        I: IntoIterator<Item = &'ast ast::FPCore>,
     {
-        visit_benchmarks(self, defs)
+        visit_definitions(self, defs)
     }
 
-    fn visit_benchmark(
+    fn visit_definition(
         &mut self,
-        def: &'ast ast::BenchmarkDef,
+        def: &'ast ast::FPCore,
     ) -> Result<(), Self::Error> {
-        visit_benchmark(self, def)
+        visit_definition(self, def)
     }
 
-    fn visit_binder(
+    fn visit_binding(
         &mut self,
-        binder: &'ast ast::Binder,
+        binding: &'ast ast::Binding,
     ) -> Result<(), Self::Error> {
-        visit_binder(self, binder)
+        visit_binding(self, binding)
     }
 
-    fn visit_update(
+    fn visit_mutable_var(
         &mut self,
-        update: &'ast ast::UpdateRule,
+        var: &'ast ast::MutableVar,
     ) -> Result<(), Self::Error> {
-        visit_update(self, update)
+        visit_mutable_var(self, var)
     }
 
-    fn visit_condition(
+    fn visit_induction_var(
         &mut self,
-        cond: &'ast ast::Condition,
+        var: &'ast ast::InductionVar,
     ) -> Result<(), Self::Error> {
-        visit_condition(self, cond)
+        visit_induction_var(self, var)
     }
 
     fn visit_expression(
@@ -48,45 +48,45 @@ pub trait Visitor<'ast> {
     }
 }
 
-pub fn visit_benchmarks<'ast, V, I>(v: &mut V, defs: I) -> Result<(), V::Error>
+pub fn visit_definitions<'ast, V, I>(v: &mut V, defs: I) -> Result<(), V::Error>
 where
     V: Visitor<'ast> + ?Sized,
-    I: IntoIterator<Item = &'ast ast::BenchmarkDef>,
+    I: IntoIterator<Item = &'ast ast::FPCore>,
 {
     for def in defs {
-        v.visit_benchmark(def)?;
+        v.visit_definition(def)?;
     }
 
     Ok(())
 }
 
-pub fn visit_benchmark<'ast, V: Visitor<'ast> + ?Sized>(
+pub fn visit_definition<'ast, V: Visitor<'ast> + ?Sized>(
     v: &mut V,
-    def: &'ast ast::BenchmarkDef,
+    def: &'ast ast::FPCore,
 ) -> Result<(), V::Error> {
     v.visit_expression(&def.body)
 }
 
-pub fn visit_binder<'ast, V: Visitor<'ast> + ?Sized>(
+pub fn visit_binding<'ast, V: Visitor<'ast> + ?Sized>(
     v: &mut V,
-    binder: &'ast ast::Binder,
+    binding: &'ast ast::Binding,
 ) -> Result<(), V::Error> {
-    v.visit_expression(&binder.expr)
+    v.visit_expression(&binding.expr)
 }
 
-pub fn visit_update<'ast, V: Visitor<'ast> + ?Sized>(
+pub fn visit_mutable_var<'ast, V: Visitor<'ast> + ?Sized>(
     v: &mut V,
-    update: &'ast ast::UpdateRule,
+    var: &'ast ast::MutableVar,
 ) -> Result<(), V::Error> {
-    v.visit_expression(&update.init)?;
-    v.visit_expression(&update.update)
+    v.visit_expression(&var.init)?;
+    v.visit_expression(&var.update)
 }
 
-pub fn visit_condition<'ast, V: Visitor<'ast> + ?Sized>(
+pub fn visit_induction_var<'ast, V: Visitor<'ast> + ?Sized>(
     v: &mut V,
-    cond: &'ast ast::Condition,
+    var: &'ast ast::InductionVar,
 ) -> Result<(), V::Error> {
-    v.visit_expression(&cond.val)
+    v.visit_expression(&var.size)
 }
 
 pub fn visit_expression<'ast, V: Visitor<'ast> + ?Sized>(
@@ -106,62 +106,62 @@ pub fn visit_expression<'ast, V: Visitor<'ast> + ?Sized>(
         }
         ast::ExprKind::If {
             cond,
-            if_true,
-            if_false,
+            true_branch,
+            false_branch,
         } => {
             v.visit_expression(cond)?;
-            v.visit_expression(if_true)?;
-            v.visit_expression(if_false)
+            v.visit_expression(true_branch)?;
+            v.visit_expression(false_branch)
         }
         ast::ExprKind::Let {
-            binders,
+            bindings,
             body,
             sequential: _,
         } => {
-            for binder in binders {
-                v.visit_binder(binder)?;
+            for binding in bindings {
+                v.visit_binding(binding)?;
             }
 
             v.visit_expression(body)
         }
         ast::ExprKind::While {
             cond,
-            rules,
+            vars,
             body,
             sequential: _,
         } => {
             v.visit_expression(cond)?;
 
-            for rule in rules {
-                v.visit_update(rule)?;
+            for var in vars {
+                v.visit_mutable_var(var)?;
             }
 
             v.visit_expression(body)
         }
         ast::ExprKind::For {
-            conditions,
-            rules,
+            indices,
+            vars,
             body,
             sequential: _,
         }
         | ast::ExprKind::TensorStar {
-            conditions,
-            rules,
+            indices,
+            vars,
             body,
         } => {
-            for cond in conditions {
-                v.visit_condition(cond)?;
+            for var in indices {
+                v.visit_induction_var(var)?;
             }
 
-            for rule in rules {
-                v.visit_update(rule)?;
+            for var in vars {
+                v.visit_mutable_var(var)?;
             }
 
             v.visit_expression(body)
         }
-        ast::ExprKind::Tensor { conditions, body } => {
-            for cond in conditions {
-                v.visit_condition(cond)?;
+        ast::ExprKind::Tensor { indices, body } => {
+            for var in indices {
+                v.visit_induction_var(var)?;
             }
 
             v.visit_expression(body)

@@ -12,12 +12,12 @@ const SPECIAL_INDENT: isize = 4;
 const TOP_LEVEL_INDENT: isize = 1;
 
 pub struct Printer<'ast> {
-    defs: &'ast [BenchmarkDef],
+    defs: &'ast [FPCore],
     width: usize,
 }
 
 impl<'ast> Printer<'ast> {
-    pub fn new(defs: &'ast [BenchmarkDef], width: usize) -> Printer<'ast> {
+    pub fn new(defs: &'ast [FPCore], width: usize) -> Printer<'ast> {
         Printer { defs, width }
     }
 }
@@ -37,7 +37,7 @@ impl fmt::Display for Printer<'_> {
     }
 }
 
-impl BenchmarkDef {
+impl FPCore {
     fn pretty<'a, D, A>(&'a self, allocator: &'a D) -> DocBuilder<'a, D, A>
     where
         D: DocAllocator<'a, A>,
@@ -87,7 +87,7 @@ impl Dimension {
     }
 }
 
-impl ArgumentDef {
+impl Argument {
     fn pretty<'a, D, A>(&'a self, allocator: &'a D) -> DocBuilder<'a, D, A>
     where
         D: DocAllocator<'a, A>,
@@ -120,7 +120,7 @@ impl ArgumentDef {
     }
 }
 
-impl Binder {
+impl Binding {
     fn pretty<'a, D, A>(&'a self, allocator: &'a D) -> DocBuilder<'a, D, A>
     where
         D: DocAllocator<'a, A>,
@@ -135,7 +135,7 @@ impl Binder {
     }
 }
 
-impl UpdateRule {
+impl MutableVar {
     fn pretty<'a, D, A>(&'a self, allocator: &'a D) -> DocBuilder<'a, D, A>
     where
         D: DocAllocator<'a, A>,
@@ -152,7 +152,7 @@ impl UpdateRule {
     }
 }
 
-impl Condition {
+impl InductionVar {
     fn pretty<'a, D, A>(&'a self, allocator: &'a D) -> DocBuilder<'a, D, A>
     where
         D: DocAllocator<'a, A>,
@@ -162,7 +162,7 @@ impl Condition {
         self.var
             .pretty(allocator)
             .append(allocator.space())
-            .append(self.val.pretty(allocator))
+            .append(self.size.pretty(allocator))
             .brackets()
     }
 }
@@ -193,21 +193,21 @@ impl Expression {
                 .parens(),
             ExprKind::If {
                 cond,
-                if_true,
-                if_false,
+                true_branch,
+                false_branch,
             } => allocator
                 .text("if")
                 .append(allocator.space())
                 .append(cond.pretty(allocator))
                 .append(allocator.line())
-                .append(if_true.pretty(allocator))
+                .append(true_branch.pretty(allocator))
                 .append(allocator.line())
-                .append(if_false.pretty(allocator))
+                .append(false_branch.pretty(allocator))
                 .nest(SPECIAL_INDENT)
                 .group()
                 .parens(),
             ExprKind::Let {
-                binders,
+                bindings,
                 body,
                 sequential,
             } => allocator
@@ -216,9 +216,9 @@ impl Expression {
                 .append(
                     allocator
                         .intersperse(
-                            binders
+                            bindings
                                 .iter()
-                                .map(|binder| binder.pretty(allocator)),
+                                .map(|binding| binding.pretty(allocator)),
                             allocator.line(),
                         )
                         .align()
@@ -232,7 +232,7 @@ impl Expression {
                 .parens(),
             ExprKind::While {
                 cond,
-                rules,
+                vars,
                 body,
                 sequential,
             } => allocator
@@ -243,7 +243,7 @@ impl Expression {
                 .append(
                     allocator
                         .intersperse(
-                            rules.iter().map(|rule| rule.pretty(allocator)),
+                            vars.iter().map(|var| var.pretty(allocator)),
                             allocator.line(),
                         )
                         .align()
@@ -256,14 +256,14 @@ impl Expression {
                 .group()
                 .parens(),
             ExprKind::For {
-                conditions,
-                rules,
+                indices,
+                vars,
                 body,
                 ..
             }
             | ExprKind::TensorStar {
-                conditions,
-                rules,
+                indices,
+                vars,
                 body,
             } => allocator
                 .text(match &self.kind {
@@ -280,9 +280,7 @@ impl Expression {
                 .append(
                     allocator
                         .intersperse(
-                            conditions
-                                .iter()
-                                .map(|cond| cond.pretty(allocator)),
+                            indices.iter().map(|var| var.pretty(allocator)),
                             allocator.line(),
                         )
                         .align()
@@ -293,7 +291,7 @@ impl Expression {
                 .append(
                     allocator
                         .intersperse(
-                            rules.iter().map(|rule| rule.pretty(allocator)),
+                            vars.iter().map(|var| var.pretty(allocator)),
                             allocator.line(),
                         )
                         .align()
@@ -305,15 +303,13 @@ impl Expression {
                 .nest(STANDARD_INDENT)
                 .group()
                 .parens(),
-            ExprKind::Tensor { conditions, body } => allocator
+            ExprKind::Tensor { indices, body } => allocator
                 .text("tensor")
                 .append(allocator.space())
                 .append(
                     allocator
                         .intersperse(
-                            conditions
-                                .iter()
-                                .map(|cond| cond.pretty(allocator)),
+                            indices.iter().map(|var| var.pretty(allocator)),
                             allocator.line(),
                         )
                         .align()
@@ -516,15 +512,15 @@ impl Property {
                 .append(sym.pretty(allocator))
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Example(binders) => allocator
+            Property::Example(bindings) => allocator
                 .text(":example")
                 .append(allocator.softline())
                 .append(
                     allocator
                         .intersperse(
-                            binders
+                            bindings
                                 .iter()
-                                .map(|binder| binder.pretty(allocator)),
+                                .map(|binding| binding.pretty(allocator)),
                             allocator.line(),
                         )
                         .align()

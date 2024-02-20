@@ -16,7 +16,7 @@ impl FPCoreParser {
     pub fn parse_file(
         name: String,
         src: String,
-    ) -> Result<Vec<ast::BenchmarkDef>, Box<Error<Rule>>> {
+    ) -> Result<Vec<ast::FPCore>, Box<Error<Rule>>> {
         let file = GlobalPositionTable::as_mut().add_file(name, src);
         let src = GlobalPositionTable::as_ref().get_source(file);
 
@@ -35,16 +35,16 @@ impl FPCoreParser {
         Ok(())
     }
 
-    fn file(input: Node) -> ParseResult<Vec<ast::BenchmarkDef>> {
+    fn file(input: Node) -> ParseResult<Vec<ast::FPCore>> {
         Ok(match_nodes!(input.into_children();
-            [fpcore(benchmarks).., EOI(_)] => benchmarks.collect(),
+            [fpcore(defs).., EOI(_)] => defs.collect(),
         ))
     }
 
-    fn fpcore(input: Node) -> ParseResult<ast::BenchmarkDef> {
+    fn fpcore(input: Node) -> ParseResult<ast::FPCore> {
         Ok(match_nodes!(input.into_children();
             [symbol_opt(name), argument_list(args), property(props).., expr(body)] => {
-                ast::BenchmarkDef {
+                ast::FPCore {
                     name,
                     args,
                     props: props.collect(),
@@ -61,7 +61,7 @@ impl FPCoreParser {
         ))
     }
 
-    fn argument_list(input: Node) -> ParseResult<Vec<ast::ArgumentDef>> {
+    fn argument_list(input: Node) -> ParseResult<Vec<ast::Argument>> {
         Ok(match_nodes!(input.into_children();
             [argument(args)..] => args.collect(),
         ))
@@ -74,23 +74,23 @@ impl FPCoreParser {
         ))
     }
 
-    fn argument(input: Node) -> ParseResult<ast::ArgumentDef> {
+    fn argument(input: Node) -> ParseResult<ast::Argument> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var)] => ast::ArgumentDef {
+            [symbol(var)] => ast::Argument {
                 var,
                 props: Vec::new(),
                 dims: Vec::new(),
                 uid: ast::NodeId::new(),
             },
             [annotation(props), symbol(var), dimension(dims)..] => {
-                ast::ArgumentDef {
+                ast::Argument {
                     var,
                     props,
                     dims: dims.collect(),
                     uid: ast::NodeId::new(),
                 }
             },
-            [symbol(var), dimension(dims)..] => ast::ArgumentDef {
+            [symbol(var), dimension(dims)..] => ast::Argument {
                 var,
                 props: Vec::new(),
                 dims: dims.collect(),
@@ -99,35 +99,35 @@ impl FPCoreParser {
         ))
     }
 
-    fn binder(input: Node) -> ParseResult<ast::Binder> {
+    fn binding(input: Node) -> ParseResult<ast::Binding> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(expr)] => ast::Binder { var, expr },
+            [symbol(var), expr(expr)] => ast::Binding { var, expr },
         ))
     }
 
-    fn update_rule(input: Node) -> ParseResult<ast::UpdateRule> {
+    fn mut_var(input: Node) -> ParseResult<ast::MutableVar> {
         Ok(match_nodes!(input.into_children();
             [symbol(var), expr(init), expr(update)] => {
-                ast::UpdateRule { var, init, update }
+                ast::MutableVar { var, init, update }
             },
         ))
     }
 
-    fn condition(input: Node) -> ParseResult<ast::Condition> {
+    fn index_var(input: Node) -> ParseResult<ast::InductionVar> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(val)] => ast::Condition { var, val },
+            [symbol(var), expr(size)] => ast::InductionVar { var, size },
         ))
     }
 
-    fn rules(input: Node) -> ParseResult<Vec<ast::UpdateRule>> {
+    fn mut_vars(input: Node) -> ParseResult<Vec<ast::MutableVar>> {
         Ok(match_nodes!(input.into_children();
-            [update_rule(rules)..] => rules.collect(),
+            [mut_var(vars)..] => vars.collect(),
         ))
     }
 
-    fn conditions(input: Node) -> ParseResult<Vec<ast::Condition>> {
+    fn index_vars(input: Node) -> ParseResult<Vec<ast::InductionVar>> {
         Ok(match_nodes!(input.into_children();
-            [condition(conditions)..] => conditions.collect(),
+            [index_var(vars)..] => vars.collect(),
         ))
     }
 
@@ -181,46 +181,46 @@ impl FPCoreParser {
             [operation(op), expr(expressions)..] => {
                 ast::ExprKind::Op(op, expressions.collect())
             },
-            [if_kwd(_), expr(cond), expr(if_true), expr(if_false)] => {
+            [if_kwd(_), expr(cond), expr(true_branch), expr(false_branch)] => {
                 ast::ExprKind::If {
                     cond: Box::new(cond),
-                    if_true: Box::new(if_true),
-                    if_false: Box::new(if_false),
+                    true_branch: Box::new(true_branch),
+                    false_branch: Box::new(false_branch),
                 }
             },
-            [let_kwd(sequential), binder(binders).., expr(body)] => {
+            [let_kwd(sequential), binding(bindings).., expr(body)] => {
                 ast::ExprKind::Let {
-                    binders: binders.collect(),
+                    bindings: bindings.collect(),
                     body: Box::new(body),
                     sequential,
                 }
             },
-            [while_kwd(sequential), expr(cond), rules(rules), expr(body)] => {
+            [while_kwd(sequential), expr(cond), mut_vars(vars), expr(body)] => {
                 ast::ExprKind::While {
                     cond: Box::new(cond),
-                    rules,
+                    vars,
                     body: Box::new(body),
                     sequential,
                 }
             },
-            [for_kwd(sequential), conditions(conditions), rules(rules), expr(body)] => {
+            [for_kwd(sequential), index_vars(indices), mut_vars(vars), expr(body)] => {
                 ast::ExprKind::For {
-                    conditions,
-                    rules,
+                    indices,
+                    vars,
                     body: Box::new(body),
                     sequential,
                 }
             },
-            [tensor_kwd(_), conditions(conditions), expr(body)] => {
+            [tensor_kwd(_), index_vars(indices), expr(body)] => {
                 ast::ExprKind::Tensor {
-                    conditions,
+                    indices,
                     body: Box::new(body),
                 }
             },
-            [tensor_star_kwd(_), conditions(conditions), rules(rules), expr(body)] => {
+            [tensor_star_kwd(_), index_vars(indices), mut_vars(vars), expr(body)] => {
                 ast::ExprKind::TensorStar {
-                    conditions,
-                    rules,
+                    indices,
+                    vars,
                     body: Box::new(body),
                 }
             },
@@ -343,8 +343,8 @@ impl FPCoreParser {
             [spec_kwd(_), expr(spec)] => ast::Property::Spec(spec),
             [alt_kwd(_), expr(alt)] => ast::Property::Alt(alt),
             [math_lib_kwd(_), symbol(lib)] => ast::Property::MathLib(lib),
-            [example_kwd(_), binder(binders)..] => {
-                ast::Property::Example(binders.collect())
+            [example_kwd(_), binding(bindings)..] => {
+                ast::Property::Example(bindings.collect())
             },
             [domain_kwd(_), number(left), number(right)] => {
                 ast::Property::CalyxDomain(metadata::CalyxDomain {
@@ -609,12 +609,14 @@ where
     })
 }
 
-fn intern_span(input: &Node) -> GPosIdx {
+fn intern_span(input: &Node) -> ast::Span {
     let span = input.as_span();
 
-    GPosIdx(GlobalPositionTable::as_mut().add_pos(
+    let pos = GlobalPositionTable::as_mut().add_pos(
         *input.user_data(),
         span.start(),
         span.end(),
-    ))
+    );
+
+    ast::Span(GPosIdx(pos))
 }

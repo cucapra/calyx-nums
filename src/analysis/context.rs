@@ -7,8 +7,8 @@ use crate::fpcore::{ast, metadata, visitor, Visitor};
 
 #[derive(Clone, Copy)]
 pub enum Binding<'ast> {
-    Argument(&'ast ast::ArgumentDef),
-    Let(&'ast ast::Binder),
+    Argument(&'ast ast::Argument),
+    Let(&'ast ast::Binding),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -33,7 +33,7 @@ impl<'ast> Pass<'ast> for ContextResolution<'ast> {
             parent: Default::default(),
         };
 
-        builder.visit_benchmarks(pm.ast())?;
+        builder.visit_definitions(pm.ast())?;
 
         Ok(builder.result)
     }
@@ -78,10 +78,7 @@ impl<'ast> Builder<'ast> {
 impl<'ast> Visitor<'ast> for Builder<'ast> {
     type Error = Error;
 
-    fn visit_benchmark(
-        &mut self,
-        def: &'ast ast::BenchmarkDef,
-    ) -> CalyxResult<()> {
+    fn visit_definition(&mut self, def: &'ast ast::FPCore) -> CalyxResult<()> {
         let mut scope = HashMap::new();
 
         for arg in &def.args {
@@ -102,7 +99,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
 
         self.update_parent(&def.props);
 
-        visitor::visit_benchmark(self, def)
+        visitor::visit_definition(self, def)
     }
 
     fn visit_expression(
@@ -126,16 +123,16 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
             ast::ExprKind::Op(..) => visitor::visit_expression(self, expr),
             ast::ExprKind::If { .. } => visitor::visit_expression(self, expr),
             ast::ExprKind::Let {
-                binders,
+                bindings,
                 body,
                 sequential: false,
             } => {
                 let mut scope = HashMap::new();
 
-                for binder in binders {
-                    self.visit_expression(&binder.expr)?;
+                for binding in bindings {
+                    self.visit_expression(&binding.expr)?;
 
-                    scope.insert(binder.var.id, Binding::Let(binder));
+                    scope.insert(binding.var.id, Binding::Let(binding));
                 }
 
                 self.scopes.push(scope);
@@ -146,19 +143,19 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 Ok(())
             }
             ast::ExprKind::Let {
-                binders,
+                bindings,
                 body,
                 sequential: true,
             } => {
                 self.scopes.push(HashMap::new());
 
-                for binder in binders {
-                    self.visit_expression(&binder.expr)?;
+                for binding in bindings {
+                    self.visit_expression(&binding.expr)?;
 
                     self.scopes
                         .last_mut()
                         .unwrap()
-                        .insert(binder.var.id, Binding::Let(binder));
+                        .insert(binding.var.id, Binding::Let(binding));
                 }
 
                 self.visit_expression(body)?;

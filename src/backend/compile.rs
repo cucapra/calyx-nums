@@ -85,8 +85,8 @@ impl ExpressionBuilder<'_, '_> {
 
                 signature.get(sym.id)
             }
-            Binding::Let(binder) => {
-                let cell = &self.stores[&binder.expr.uid];
+            Binding::Let(binding) => {
+                let cell = &self.stores[&binding.expr.uid];
                 let port = cell.borrow().get("out");
 
                 port
@@ -208,13 +208,13 @@ impl ExpressionBuilder<'_, '_> {
 
     fn compile_let(
         &mut self,
-        binders: &[ast::Binder],
+        bindings: &[ast::Binding],
         body: &ast::Expression,
         sequential: bool,
     ) -> CalyxResult<Expression> {
         let (args, stores): (Vec<_>, Vec<_>) = itertools::process_results(
-            binders.iter().map(|binder| {
-                let expr = self.compile_expression(&binder.expr)?;
+            bindings.iter().map(|binding| {
+                let expr = self.compile_expression(&binding.expr)?;
 
                 let params = [expr.out.borrow().width];
                 let reg = self.builder.add_primitive("r", "std_reg", &params);
@@ -226,7 +226,7 @@ impl ExpressionBuilder<'_, '_> {
                     self.builder,
                 );
 
-                self.stores.insert(binder.expr.uid, reg);
+                self.stores.insert(binding.expr.uid, reg);
 
                 CalyxResult::Ok((expr.control, invoke))
             }),
@@ -269,10 +269,10 @@ impl ExpressionBuilder<'_, '_> {
                 self.compile_operation(op, expr.uid, args)
             }
             ast::ExprKind::Let {
-                binders,
+                bindings,
                 body,
                 sequential,
-            } => self.compile_let(binders, body, *sequential),
+            } => self.compile_let(bindings, body, *sequential),
             ast::ExprKind::Annotation { props: _, body } => {
                 self.compile_expression(body)
             }
@@ -287,8 +287,8 @@ struct GlobalContext<'a> {
     libm: &'a mut HashMap<ast::NodeId, Prototype>,
 }
 
-fn compile_benchmark(
-    def: &ast::BenchmarkDef,
+fn compile_definition(
+    def: &ast::FPCore,
     lib: &ir::LibrarySignatures,
     global: &mut GlobalContext,
     name_gen: &mut NameGenerator,
@@ -344,7 +344,7 @@ fn compile_benchmark(
 }
 
 pub fn compile_fpcore(
-    defs: &[ast::BenchmarkDef],
+    defs: &[ast::FPCore],
     opts: &Opts,
     mut lib: ir::LibrarySignatures,
 ) -> CalyxResult<ir::Context> {
@@ -372,7 +372,7 @@ pub fn compile_fpcore(
 
     for def in defs {
         let component =
-            compile_benchmark(def, &lib, &mut global, &mut name_gen)?;
+            compile_definition(def, &lib, &mut global, &mut name_gen)?;
 
         components.push(component);
     }

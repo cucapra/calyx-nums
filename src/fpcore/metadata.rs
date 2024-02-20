@@ -2,7 +2,7 @@
 
 use strum_macros::{EnumString, IntoStaticStr};
 
-use super::ast::{Binder, Expression, Number, Symbol};
+use super::ast::{Binding, Expression, Number, Symbol};
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -28,7 +28,7 @@ pub enum Property {
     /// Library to be used for mathematical operations.
     MathLib(Symbol),
     /// Example input.
-    Example(Vec<Binder>),
+    Example(Vec<Binding>),
     /// Input domain for generated math functions.
     CalyxDomain(CalyxDomain),
     /// Implementation strategy for generated math functions.

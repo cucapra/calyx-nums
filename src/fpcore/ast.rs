@@ -8,28 +8,29 @@ pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
 pub use super::literals::{Rational, Sign};
 pub use super::metadata::Property;
 
-/// An FPCore benchmark.
 #[derive(Debug)]
-pub struct BenchmarkDef {
-    /// Benchmark name.
+pub struct FPCore {
+    /// Operator name.
     pub name: Option<Symbol>,
     /// List of free variables.
-    pub args: Vec<ArgumentDef>,
+    pub args: Vec<Argument>,
     /// List of metadata properties.
     pub props: Vec<Property>,
-    /// Benchmark expression.
+    /// Operator body.
     pub body: Expression,
 }
 
 #[derive(Debug)]
 pub enum Dimension {
+    /// Variable to bind to dimension size.
     Id(Symbol),
+    /// Fixed dimension size.
     Num(Number),
 }
 
-/// A formal parameter to a benchmark.
+/// A formal parameter.
 #[derive(Debug)]
-pub struct ArgumentDef {
+pub struct Argument {
     pub var: Symbol,
     pub props: Vec<Property>,
     pub dims: Vec<Dimension>,
@@ -37,13 +38,13 @@ pub struct ArgumentDef {
 }
 
 #[derive(Debug)]
-pub struct Binder {
+pub struct Binding {
     pub var: Symbol,
     pub expr: Expression,
 }
 
 #[derive(Debug)]
-pub struct UpdateRule {
+pub struct MutableVar {
     /// Variable name.
     pub var: Symbol,
     /// Initial value.
@@ -52,13 +53,12 @@ pub struct UpdateRule {
     pub update: Expression,
 }
 
-/// A "less-than" condition.
 #[derive(Debug)]
-pub struct Condition {
+pub struct InductionVar {
     /// Variable name.
     pub var: Symbol,
-    /// Value to compare to.
-    pub val: Expression,
+    /// Number of iterations.
+    pub size: Expression,
 }
 
 #[derive(Debug)]
@@ -69,33 +69,33 @@ pub enum ExprKind {
     Op(Operation, Vec<Expression>),
     If {
         cond: Box<Expression>,
-        if_true: Box<Expression>,
-        if_false: Box<Expression>,
+        true_branch: Box<Expression>,
+        false_branch: Box<Expression>,
     },
     Let {
-        binders: Vec<Binder>,
+        bindings: Vec<Binding>,
         body: Box<Expression>,
         sequential: bool,
     },
     While {
         cond: Box<Expression>,
-        rules: Vec<UpdateRule>,
+        vars: Vec<MutableVar>,
         body: Box<Expression>,
         sequential: bool,
     },
     For {
-        conditions: Vec<Condition>,
-        rules: Vec<UpdateRule>,
+        indices: Vec<InductionVar>,
+        vars: Vec<MutableVar>,
         body: Box<Expression>,
         sequential: bool,
     },
     Tensor {
-        conditions: Vec<Condition>,
+        indices: Vec<InductionVar>,
         body: Box<Expression>,
     },
     TensorStar {
-        conditions: Vec<Condition>,
-        rules: Vec<UpdateRule>,
+        indices: Vec<InductionVar>,
+        vars: Vec<MutableVar>,
         body: Box<Expression>,
     },
     Cast(Box<Expression>),
@@ -110,20 +110,20 @@ pub enum ExprKind {
 pub struct Expression {
     pub kind: ExprKind,
     pub uid: NodeId,
-    pub span: GPosIdx,
+    pub span: Span,
 }
 
 /// A numeric literal.
 #[derive(Debug)]
 pub struct Number {
     pub value: Rational,
-    pub span: GPosIdx,
+    pub span: Span,
 }
 
 #[derive(Debug)]
 pub struct Symbol {
     pub id: Id,
-    pub span: GPosIdx,
+    pub span: Span,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -136,7 +136,7 @@ pub enum OpKind {
 #[derive(Debug)]
 pub struct Operation {
     pub kind: OpKind,
-    pub span: GPosIdx,
+    pub span: Span,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -160,26 +160,36 @@ impl NodeId {
     }
 }
 
+/// A region of source code.
+#[derive(Clone, Copy, Debug)]
+pub struct Span(pub(super) GPosIdx);
+
+impl WithPos for Span {
+    fn copy_span(&self) -> GPosIdx {
+        self.0
+    }
+}
+
 impl WithPos for Expression {
     fn copy_span(&self) -> GPosIdx {
-        self.span
+        self.span.0
     }
 }
 
 impl WithPos for Number {
     fn copy_span(&self) -> GPosIdx {
-        self.span
+        self.span.0
     }
 }
 
 impl WithPos for Symbol {
     fn copy_span(&self) -> GPosIdx {
-        self.span
+        self.span.0
     }
 }
 
 impl WithPos for Operation {
     fn copy_span(&self) -> GPosIdx {
-        self.span
+        self.span.0
     }
 }
