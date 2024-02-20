@@ -8,17 +8,17 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Index};
 pub fn derive_mangle(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
+    let (impl_generics, type_generics, where_clause) =
+        input.generics.split_for_impl();
+
     let name = &input.ident;
     let buffer = format_ident!("w");
 
     let statements = mangle_data(&buffer, name, &input.data);
 
     let expanded = quote! {
-        impl Mangle for #name {
-            fn mangle<W>(&self, #buffer: &mut W) -> ::std::fmt::Result
-            where
-                W: ::std::fmt::Write,
-            {
+        impl #impl_generics Mangle for #name #type_generics #where_clause {
+            fn mangle(&self, #buffer: &mut dyn ::std::fmt::Write) -> ::std::fmt::Result {
                 #statements
             }
         }

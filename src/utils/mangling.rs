@@ -35,9 +35,7 @@ pub trait Mangle {
     ///
     /// [`<expression>`]:
     ///     https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangle.expression
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write;
+    fn mangle(&self, w: &mut dyn fmt::Write) -> fmt::Result;
 }
 
 /// Formats an [`<expression>`] given an [`<identifier>`] and a list of
@@ -58,10 +56,7 @@ macro_rules! init_list {
 }
 
 impl Mangle for bool {
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
+    fn mangle(&self, w: &mut dyn fmt::Write) -> fmt::Result {
         write!(w, "Lb{}E", *self as u8)
     }
 }
@@ -69,10 +64,7 @@ impl Mangle for bool {
 macro_rules! impl_mangle_unsigned {
     ($($type:ty),*) => {$(
         impl Mangle for $type {
-            fn mangle<W>(&self, w: &mut W) -> fmt::Result
-            where
-                W: fmt::Write,
-            {
+            fn mangle(&self, w: &mut dyn fmt::Write) -> fmt::Result {
                 write!(w, "Lj{}E", self)
             }
         }
@@ -84,10 +76,7 @@ impl_mangle_unsigned!(usize, u8, u16, u32, u64, num::BigUint);
 macro_rules! impl_mangle_signed {
     ($($type:ty),*) => {$(
         impl Mangle for $type {
-            fn mangle<W>(&self, w: &mut W) -> fmt::Result
-            where
-                W: fmt::Write,
-            {
+            fn mangle(&self, w: &mut dyn fmt::Write) -> fmt::Result {
                 if *self < 0 {
                     write!(w, "Lin{}E", self.unsigned_abs())
                 } else {
@@ -100,11 +89,20 @@ macro_rules! impl_mangle_signed {
 
 impl_mangle_signed!(isize, i8, i16, i32, i64);
 
+impl<T: Mangle> Mangle for [T] {
+    fn mangle(&self, w: &mut dyn fmt::Write) -> fmt::Result {
+        write!(w, "il")?;
+
+        for expr in self {
+            expr.mangle(w)?;
+        }
+
+        write!(w, "E")
+    }
+}
+
 impl Mangle for Rational {
-    fn mangle<W>(&self, w: &mut W) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
+    fn mangle(&self, w: &mut dyn fmt::Write) -> fmt::Result {
         init_list!(w, "Rational", self.sign, self.mag.numer(), self.mag.denom())
     }
 }
