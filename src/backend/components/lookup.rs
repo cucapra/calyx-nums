@@ -103,6 +103,12 @@ impl ComponentBuilder for LookupTable<'_> {
                 ir::Direction::Output,
                 Default::default(),
             ),
+            ir::PortDef::new(
+                "arg",
+                u64::from(self.format.width),
+                ir::Direction::Output,
+                Default::default(),
+            ),
         ]
     }
 
@@ -134,17 +140,44 @@ impl ComponentBuilder for LookupTable<'_> {
             let left = constant(spec.subtrahend, global);
         );
 
+        let [in_, out] = ["in", "out"].map(ir::Id::new);
         let signature = &builder.component.signature;
 
         let assigns = build_assignments!(builder;
-            sub["left"] = ? signature["in"];
-            sub["right"] = ? left["out"];
-            slice["in"] = ? sub["out"];
-            primitive["idx"] = ? slice["out"];
-            signature["out"] = ? primitive["out"];
+            sub["left"] = ? signature[in_];
+            sub["right"] = ? left[out];
+            slice[in_] = ? sub[out];
+            primitive["idx"] = ? slice[out];
+            signature[out] = ? primitive[out];
         );
 
         builder.component.continuous_assignments.extend(assigns);
+
+        if spec.idx_lsb == 0 {
+            let zero = builder.add_constant(0, global);
+            let signature = &builder.component.signature;
+
+            let [assign] = build_assignments!(builder;
+                signature["arg"] = ? zero[out];
+            );
+
+            builder.component.continuous_assignments.push(assign);
+        } else {
+            structure!(builder;
+                let slice = prim std_slice(global, spec.idx_lsb);
+                let pad = prim std_pad(spec.idx_lsb, global);
+            );
+
+            let signature = &builder.component.signature;
+
+            let assigns = build_assignments!(builder;
+                slice[in_] = ? sub[out];
+                pad[in_] = ? slice[out];
+                signature["arg"] = ? pad[out];
+            );
+
+            builder.component.continuous_assignments.extend(assigns);
+        }
 
         Ok(component)
     }

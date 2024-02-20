@@ -74,7 +74,7 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         builder.component.continuous_assignments.push(component_out);
 
         let inputs = vec![
-            (ir::Id::new("in"), signature.borrow().get("in")),
+            (ir::Id::new("in"), lookup.borrow().get("arg")),
             (ir::Id::new("lut"), lookup.borrow().get("out")),
         ];
 

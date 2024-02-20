@@ -19,12 +19,11 @@ for i from 0 to n do
     formats = formats :. -s;
 
 for i from 0 to c - 1 do {
-    var x, y, p, j;
+    var break, p, j;
 
-    x = l + stride * i;
-    y = x + stride;
+    break = l + stride * i;
 
-    p = fpminimax(f, n, formats, [x;y], fixed, absolute);
+    p = fpminimax(f(break + _x_), n, formats, [0;stride], fixed, absolute);
 
     for j from 0 to n do {
         if j != 0 then
