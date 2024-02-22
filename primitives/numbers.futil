@@ -1,0 +1,27 @@
+extern "numbers.sv" {
+  comb primitive num_rpad<"share"=1>[
+    IN_WIDTH, OUT_WIDTH
+  ](@data in: IN_WIDTH) -> (out: OUT_WIDTH);
+
+  comb primitive num_sadd<"share"=1>[
+    LEFT_WIDTH, LEFT_LSB, RIGHT_WIDTH, RIGHT_LSB, OUT_WIDTH
+  ](
+    @data left: LEFT_WIDTH,
+    @data right: RIGHT_WIDTH
+  ) -> (
+    out: OUT_WIDTH
+  );
+
+  primitive num_smul<"state_share"=1>[
+    LEFT_WIDTH, RIGHT_WIDTH, OUT_WIDTH, OUT_LSB
+  ](
+    @write_together(1) @data left: LEFT_WIDTH,
+    @write_together(1) @data right: RIGHT_WIDTH,
+    @write_together(1) @interval(3) @go go: 1,
+    @reset reset: 1,
+    @clk clk: 1
+  ) -> (
+    @stable out: OUT_WIDTH,
+    @done done: 1
+  );
+}

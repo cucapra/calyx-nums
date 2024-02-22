@@ -9,6 +9,7 @@ use crate::fpcore::ast::Rational;
 use crate::utils::mangling::Mangle;
 
 /// A specification for obtaining table indices from raw input values.
+#[derive(Mangle)]
 pub struct AddressSpec {
     pub subtrahend: u64,
     pub idx_lsb: u64,

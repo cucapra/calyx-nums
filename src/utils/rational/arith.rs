@@ -236,6 +236,17 @@ impl Rational {
         }
     }
 
+    pub fn sgn(&self) -> Ordering {
+        if self.is_zero() {
+            return Ordering::Equal;
+        }
+
+        match self.sign {
+            Sign::Neg => Ordering::Less,
+            Sign::Pos => Ordering::Greater,
+        }
+    }
+
     /// Rounds towards zero.
     pub fn truncate(&self, lsb: i64) -> Rational {
         let numer = self.mag.numer();
@@ -294,7 +305,18 @@ impl Rational {
     ///
     /// Panics if `self` is not strictly positive.
     pub fn floor_log2(&self) -> i64 {
-        assert!(!self.is_negative() && !self.is_zero());
+        assert!(!self.is_negative());
+
+        self.floor_log2_abs()
+    }
+
+    /// Computes the floor of the base-2 log of the absolute value of `self`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is zero.
+    pub fn floor_log2_abs(&self) -> i64 {
+        assert!(!self.is_zero());
 
         let numer = self.mag.numer();
         let denom = self.mag.denom();
@@ -317,7 +339,18 @@ impl Rational {
     ///
     /// Panics if `self` is not strictly positive.
     pub fn ceil_log2(&self) -> i64 {
-        assert!(!self.is_negative() && !self.is_zero());
+        assert!(!self.is_negative());
+
+        self.ceil_log2_abs()
+    }
+
+    /// Computes the ceiling of the base-2 log of the absolute value of `self`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is zero.
+    pub fn ceil_log2_abs(&self) -> i64 {
+        assert!(!self.is_zero());
 
         let numer = self.mag.numer();
         let denom = self.mag.denom();

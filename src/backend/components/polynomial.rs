@@ -4,19 +4,23 @@ use calyx_ir::{self as ir, build_assignments};
 use calyx_utils::CalyxResult;
 
 use super::{ComponentBuilder, ComponentManager, Horner, LookupTable};
+use crate::functions::Datapath;
 use crate::utils::mangling::mangle;
 
-pub struct PiecewisePoly<'a>(pub LookupTable<'a>);
+pub struct PiecewisePoly<'a> {
+    pub table: LookupTable<'a>,
+    pub spec: Datapath,
+}
 
 impl ComponentBuilder for PiecewisePoly<'_> {
     fn name(&self) -> ir::Id {
         ir::Id::new(mangle!(
             "poly",
-            self.0.function.kind(),
-            self.0.format,
-            self.0.domain,
-            self.0.degree,
-            self.0.size,
+            self.table.data.spec,
+            self.table.data.formats,
+            self.table.format,
+            self.table.spec,
+            self.spec,
         ))
     }
 
@@ -27,13 +31,13 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         vec![
             ir::PortDef::new(
                 "in",
-                u64::from(self.0.format.width),
+                u64::from(self.table.format.width),
                 ir::Direction::Input,
                 Default::default(),
             ),
             ir::PortDef::new(
                 "out",
-                u64::from(self.0.format.width),
+                u64::from(self.table.format.width),
                 ir::Direction::Output,
                 stable,
             ),
@@ -47,11 +51,12 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<ir::Component> {
         let horner = Horner {
-            format: self.0.format,
-            degree: self.0.degree,
+            format: self.table.format,
+            spec: &self.spec,
+            in_width: self.table.spec.idx_lsb + 1,
         };
 
-        let (lookup, lookup_ports) = cm.get(&self.0, lib)?;
+        let (lookup, lookup_ports) = cm.get(&self.table, lib)?;
         let (horner, horner_ports) = cm.get(&horner, lib)?;
 
         let ports = self.signature();

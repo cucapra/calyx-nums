@@ -4,36 +4,101 @@ use std::iter;
 
 use calyx_ir::{self as ir, build_assignments, structure};
 use calyx_utils::CalyxResult;
+use itertools::{Itertools, Position};
 
-use super::{ComponentBuilder, ComponentManager};
-use crate::backend::builtins;
+use super::{Cast, ComponentBuilder, ComponentManager};
 use crate::format::Format;
+use crate::functions::Datapath;
 use crate::utils::mangling::mangle;
+
+const INLINE: ir::Attribute = ir::Attribute::Bool(ir::BoolAttr::Inline);
 
 pub struct Horner<'a> {
     pub format: &'a Format,
-    pub degree: u32,
+    pub spec: &'a Datapath,
+    pub in_width: u64,
+}
+
+impl Horner<'_> {
+    fn output_cast(
+        &self,
+        cm: &mut ComponentManager,
+        lib: &mut ir::LibrarySignatures,
+    ) -> CalyxResult<(ir::Id, Vec<ir::PortDef<u64>>)> {
+        let cast = Cast {
+            from: &Format {
+                scale: self.format.scale,
+                width: self.spec.sum_width,
+                is_signed: true,
+            },
+            to: self.format,
+        };
+
+        cm.get(&cast, lib)
+    }
+
+    fn table_casts(
+        &self,
+        cm: &mut ComponentManager,
+        lib: &mut ir::LibrarySignatures,
+    ) -> CalyxResult<Vec<(ir::Id, Vec<ir::PortDef<u64>>)>> {
+        let max_width = *self.spec.lut_widths.iter().max().unwrap();
+
+        self.spec
+            .lut_widths
+            .iter()
+            .with_position()
+            .map(|(pos, &width)| {
+                let to = if matches!(pos, Position::Last | Position::Only) {
+                    Format {
+                        scale: self.format.scale,
+                        width: self.spec.sum_width,
+                        is_signed: true,
+                    }
+                } else {
+                    Format {
+                        scale: self.format.scale,
+                        width: max_width,
+                        is_signed: true,
+                    }
+                };
+
+                let cast = Cast {
+                    from: &Format {
+                        scale: self.format.scale,
+                        width,
+                        is_signed: true,
+                    },
+                    to: &to,
+                };
+
+                cm.get(&cast, lib)
+            })
+            .collect()
+    }
 }
 
 impl ComponentBuilder for Horner<'_> {
     fn name(&self) -> ir::Id {
-        ir::Id::new(mangle!("horner", self.format, self.degree))
+        ir::Id::new(mangle!("horner", self.format, self.spec, self.in_width))
     }
 
     fn signature(&self) -> Vec<ir::PortDef<u64>> {
         let mut stable = ir::Attributes::default();
         stable.insert(ir::Attribute::Bool(ir::BoolAttr::Stable), 1);
 
+        let lut_width: u32 = self.spec.lut_widths.iter().sum();
+
         vec![
             ir::PortDef::new(
                 "in",
-                u64::from(self.format.width),
+                self.in_width,
                 ir::Direction::Input,
                 Default::default(),
             ),
             ir::PortDef::new(
                 "lut",
-                u64::from(self.degree + 1) * u64::from(self.format.width),
+                u64::from(lut_width),
                 ir::Direction::Input,
                 Default::default(),
             ),
@@ -49,46 +114,72 @@ impl ComponentBuilder for Horner<'_> {
     fn build(
         &self,
         name: ir::Id,
-        _cm: &mut ComponentManager,
+        cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<ir::Component> {
+        let table_casts = self.table_casts(cm, lib)?;
+        let output_cast = self.output_cast(cm, lib)?;
+
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);
         let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
+        assert!(self.format.scale <= 0);
+
         structure!(builder;
-            let acc = prim std_reg(u64::from(self.format.width));
-            let add = prim std_add(u64::from(self.format.width));
+            let acc = prim std_reg(u64::from(self.spec.sum_width));
+            let mul = prim num_smul(
+                self.in_width,
+                u64::from(self.spec.sum_width),
+                u64::from(self.spec.product_width),
+                u64::from(self.format.scale.unsigned_abs())
+            );
+            let add = prim num_sadd(
+                u64::from(*self.spec.lut_widths.iter().max().unwrap()),
+                0u64,
+                u64::from(self.spec.product_width),
+                0u64,
+                u64::from(self.spec.sum_width)
+            );
         );
 
-        let mul = {
-            let decl = builtins::mul(self.format);
-
-            builder.add_primitive(
-                decl.prefix_hint,
-                decl.name,
-                &decl.build_params(self.format),
-            )
-        };
-
-        let selects: Vec<_> = (0..=self.degree)
-            .map(|i| {
-                let params = [
-                    u64::from(self.degree + 1) * u64::from(self.format.width),
-                    u64::from(i) * u64::from(self.format.width),
-                    u64::from(i + 1) * u64::from(self.format.width) - 1,
-                    u64::from(self.format.width),
-                ];
-
-                builder.add_primitive("slice", "std_bit_slice", &params)
-            })
-            .collect();
-
-        let (leading, addends) = selects.split_first().unwrap();
+        let lut_width: u32 = self.spec.lut_widths.iter().sum();
 
         let [in_, out, left, right] =
             ["in", "out", "left", "right"].map(ir::Id::new);
+
+        let table_casts: Vec<_> = iter::zip(&self.spec.lut_widths, table_casts)
+            .rev()
+            .scan(0, |lsb, (&width, (id, ports))| {
+                structure!(builder;
+                    let slice = prim std_bit_slice(
+                        u64::from(lut_width),
+                        u64::from(*lsb),
+                        u64::from(*lsb + width - 1),
+                        u64::from(width)
+                    );
+                );
+
+                let cast = builder.add_component("cast".into(), id, ports);
+                cast.borrow_mut().add_attribute(INLINE, 1);
+
+                let signature = &builder.component.signature;
+
+                let assigns = build_assignments!(builder;
+                    slice[in_] = ? signature["lut"];
+                    cast[in_] = ? slice[out];
+                );
+
+                builder.component.continuous_assignments.extend(assigns);
+
+                *lsb += width;
+
+                Some(cast)
+            })
+            .collect();
+
+        let (leading, addends) = table_casts.split_first().unwrap();
 
         let init = ir::Control::invoke(
             acc.clone(),
@@ -96,7 +187,7 @@ impl ComponentBuilder for Horner<'_> {
             vec![],
         );
 
-        let multiplies: Vec<_> = iter::repeat_with(|| {
+        let products: Vec<_> = iter::repeat_with(|| {
             let signature = &builder.component.signature;
 
             ir::Control::invoke(
@@ -111,7 +202,7 @@ impl ComponentBuilder for Horner<'_> {
         .take(addends.len())
         .collect();
 
-        let accumulates: Vec<_> = addends
+        let sums: Vec<_> = addends
             .iter()
             .map(|addend| {
                 let group = builder.add_comb_group("addend");
@@ -134,25 +225,23 @@ impl ComponentBuilder for Horner<'_> {
             })
             .collect();
 
+        let (cast, ports) = output_cast;
+
+        let cast = builder.add_component("cast".into(), cast, ports);
+        cast.borrow_mut().add_attribute(INLINE, 1);
+
         let signature = &builder.component.signature;
 
-        for cell in selects {
-            let [assign] = build_assignments!(builder;
-                cell[in_] = ? signature["lut"];
-            );
-
-            builder.component.continuous_assignments.push(assign);
-        }
-
-        let [assign] = build_assignments!(builder;
-            signature[out] = ? acc[out];
+        let assigns = build_assignments!(builder;
+            cast[in_] = ? acc[out];
+            signature[out] = ? cast[out];
         );
 
-        builder.component.continuous_assignments.push(assign);
+        builder.component.continuous_assignments.extend(assigns);
 
         *component.control.borrow_mut() = ir::Control::seq(
             iter::once(init)
-                .chain(itertools::interleave(multiplies, accumulates))
+                .chain(itertools::interleave(products, sums))
                 .collect(),
         );
 

@@ -2,7 +2,6 @@
 
 use calyx_utils::{CalyxResult, Error};
 
-use crate::format::Format;
 use crate::fpcore::ast::Rational;
 use crate::utils::sollya::{self, SollyaFunction};
 
@@ -18,7 +17,7 @@ pub fn build_table(
     left: &Rational,
     right: &Rational,
     size: u32,
-    format: &Format,
+    scale: i32,
 ) -> CalyxResult<Vec<Vec<Rational>>> {
     let cmd = include_bytes!("scripts/remez.sollya");
 
@@ -28,7 +27,7 @@ pub fn build_table(
         format!("{left}"),
         format!("{right}"),
         format!("{size}"),
-        format!("{}", format.scale),
+        format!("{scale}"),
     ];
 
     let result = sollya::sollya(cmd, &args)

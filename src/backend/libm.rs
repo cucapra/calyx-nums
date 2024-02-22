@@ -6,13 +6,18 @@ use std::fmt;
 use calyx_ir as ir;
 use calyx_utils::{self as utils, CalyxResult, Error};
 
-use super::components::{ComponentManager, LookupTable, PiecewisePoly};
+use super::components::{
+    ComponentManager, LookupTable, PiecewisePoly, TableData,
+};
+
 use crate::analysis::{ContextResolution, DomainInference, PassManager};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
-use crate::functions::addressing::{AddressSpec, TableDomain};
+use crate::functions::{datapath, remez};
+use crate::functions::{AddressSpec, Datapath, HornerRanges, TableDomain};
+use crate::utils::mangling::Mangle;
 use crate::utils::sollya::SollyaFunction;
 
 pub struct Prototype {
@@ -140,6 +145,8 @@ impl<'a> Builder<'a> {
         domain: &DomainHint,
         strategy: &CalyxImpl,
     ) -> CalyxResult<()> {
+        let scale = self.format.scale;
+
         let (degree, size) = match *strategy {
             CalyxImpl::Lut { lut_size } => (0, lut_size),
             CalyxImpl::Poly { degree, lut_size } => (degree, lut_size),
@@ -147,13 +154,47 @@ impl<'a> Builder<'a> {
 
         let (spec, domain) = &domain.widen(function, self.format, size)?;
 
+        let values = &remez::build_table(
+            function.kind,
+            degree,
+            &domain.left,
+            &domain.right,
+            size,
+            scale,
+        )?;
+
+        let formats = &match strategy {
+            CalyxImpl::Lut { .. } => {
+                vec![*self.format]
+            }
+            CalyxImpl::Poly { .. } => {
+                datapath::table_ranges(values, degree as usize, scale)
+                    .iter()
+                    .map(|&width| Format {
+                        scale,
+                        width,
+                        is_signed: true,
+                    })
+                    .collect()
+            }
+        };
+
         let table = LookupTable {
-            function,
+            data: TableData {
+                values,
+                formats,
+                spec: &TableSpec {
+                    function: function.kind,
+                    degree,
+                    left: &domain.left,
+                    right: &domain.right,
+                    size,
+                    scale,
+                },
+            },
             format: self.format,
             spec,
-            domain,
-            degree,
-            size,
+            span: function.span,
         };
 
         let prefix_hint = ir::Id::new(function);
@@ -170,8 +211,21 @@ impl<'a> Builder<'a> {
                 }
             }
             CalyxImpl::Poly { .. } => {
+                let degree = degree as usize;
+
+                let HornerRanges {
+                    product_width,
+                    sum_width,
+                } = HornerRanges::from_table(values, degree, domain, scale);
+
+                let spec = Datapath {
+                    lut_widths: table.data.widths().collect(),
+                    product_width,
+                    sum_width,
+                };
+
                 let (name, signature) =
-                    self.cm.get(&PiecewisePoly(table), self.lib)?;
+                    self.cm.get(&PiecewisePoly { table, spec }, self.lib)?;
 
                 Prototype {
                     name,
@@ -217,16 +271,20 @@ impl DomainHint<'_> {
     }
 }
 
-pub struct Function {
+#[derive(Mangle)]
+struct TableSpec<'a> {
+    function: SollyaFunction,
+    degree: u32,
+    left: &'a ast::Rational,
+    right: &'a ast::Rational,
+    size: u32,
+    scale: i32,
+}
+
+struct Function {
     kind: SollyaFunction,
     uid: ast::NodeId,
     span: ast::Span,
-}
-
-impl Function {
-    pub fn kind(&self) -> SollyaFunction {
-        self.kind
-    }
 }
 
 impl fmt::Display for Function {

@@ -1,20 +1,20 @@
 //! Implementation of lookup tables as Verilog primitives.
 
 use std::fmt::{LowerHex, Write};
+use std::iter;
 
 use calyx_ir as ir;
 use num::{BigUint, Zero};
 
-/// Packs a sequence of values, each of the given width, into a single bit
-/// vector. The first element of the sequence occupies the most-significant
-/// position.
-pub fn pack<I>(values: I, width: u32) -> BigUint
+/// Packs a sequence of values into a single bit vector. The first element of
+/// the sequence occupies the most-significant position.
+pub fn pack<V, W>(values: V, widths: W) -> BigUint
 where
-    I: IntoIterator<Item = BigUint>,
+    V: IntoIterator<Item = BigUint>,
+    W: IntoIterator<Item = u32>,
 {
-    values
-        .into_iter()
-        .fold(Zero::zero(), |acc, value| (acc << width) | value)
+    iter::zip(values, widths)
+        .fold(Zero::zero(), |acc, (value, width)| (acc << width) | value)
 }
 
 pub fn compile_lut<T: LowerHex>(

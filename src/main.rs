@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::iter;
 use std::path::PathBuf;
 
 use calyx_frontend::{parser::CalyxParser, Workspace};
@@ -12,22 +13,26 @@ use calyx_nums::backend;
 use calyx_nums::fpcore::FPCoreParser;
 use calyx_nums::opts::Opts;
 
+const NUMERICS_LIB: &str = "primitives/numbers.futil";
+
 const IMPORTS: &[&str] = &[
     backend::stdlib::compile::IMPORT,
     backend::stdlib::core::IMPORT,
     backend::stdlib::binary_operators::IMPORT,
     backend::stdlib::math::IMPORT,
+    NUMERICS_LIB,
 ];
 
 fn build_workspace(
     imports: &[&str],
     search_paths: &[PathBuf],
 ) -> CalyxResult<Workspace> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
     let mut stack: Vec<_> = imports
         .iter()
         .map(|import| {
-            search_paths
-                .iter()
+            itertools::chain(search_paths, iter::once(&root))
                 .find_map(|lib_path| {
                     let import = lib_path.join(import).canonicalize().ok()?;
 

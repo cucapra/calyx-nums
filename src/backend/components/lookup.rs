@@ -1,23 +1,38 @@
 //! Coefficient lookup tables.
 
+use std::iter;
+
 use calyx_ir::{self as ir, build_assignments, structure};
 use calyx_utils::{CalyxResult, Error};
 
 use super::{ComponentBuilder, ComponentManager};
-use crate::backend::libm::Function;
 use crate::backend::primitives::lut;
 use crate::format::Format;
-use crate::functions::addressing::{AddressSpec, TableDomain};
-use crate::functions::remez;
-use crate::utils::mangling::mangle;
+use crate::fpcore::ast::{Rational, Span};
+use crate::functions::AddressSpec;
+use crate::utils::mangling::{mangle, Mangle};
+
+pub struct TableData<'a> {
+    pub values: &'a [Vec<Rational>],
+    pub formats: &'a [Format],
+    pub spec: &'a dyn Mangle,
+}
+
+impl TableData<'_> {
+    pub fn widths(&self) -> impl Iterator<Item = u32> + '_ {
+        self.formats.iter().map(|format| format.width)
+    }
+
+    pub fn width(&self) -> u32 {
+        self.widths().sum()
+    }
+}
 
 pub struct LookupTable<'a> {
-    pub function: &'a Function,
+    pub data: TableData<'a>,
     pub format: &'a Format,
     pub spec: &'a AddressSpec,
-    pub domain: &'a TableDomain,
-    pub degree: u32,
-    pub size: u32,
+    pub span: Span,
 }
 
 impl LookupTable<'_> {
@@ -25,51 +40,43 @@ impl LookupTable<'_> {
         &self,
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<ir::Id> {
-        let table = remez::build_table(
-            self.function.kind(),
-            self.degree,
-            &self.domain.left,
-            &self.domain.right,
-            self.size,
-            self.format,
-        )?;
-
         let format_error = |post| {
-            Error::misc(format!("Error in implementation of {}", self.function))
-                .with_pos(self.function)
+            Error::misc("Implementation error")
+                .with_pos(&self.span)
                 .with_post_msg(Some(post))
         };
 
-        let values: Vec<_> = table
+        let values: Vec<_> = self
+            .data
+            .values
             .iter()
             .map(|row| {
                 itertools::process_results(
-                    row.iter().map(|value| {
-                        value.to_format(self.format).ok_or_else(|| {
+                    iter::zip(row, self.data.formats).map(|(value, format)| {
+                        value.to_format(format).ok_or_else(|| {
                             format_error(format!(
                                 "Generated constant {value} is not \
                                  representable in the given format"
                             ))
                         })
                     }),
-                    |bits| lut::pack(bits, self.format.width),
+                    |bits| lut::pack(bits, self.data.widths()),
                 )
             })
             .collect::<CalyxResult<_>>()?;
 
         let name = ir::Id::new(mangle!(
             "lut",
-            self.function.kind(),
+            self.data.spec,
+            self.data.formats,
             self.format,
-            self.domain,
-            self.degree,
-            self.size,
+            self.spec,
         ));
 
-        let width = u64::from(self.degree + 1) * u64::from(self.format.width);
+        let out_width = u64::from(self.data.width());
 
         let primitive =
-            lut::compile_lut(name, self.spec.idx_width, width, &values);
+            lut::compile_lut(name, self.spec.idx_width, out_width, &values);
 
         lib.add_inline_primitive(primitive).set_source();
 
@@ -81,11 +88,10 @@ impl ComponentBuilder for LookupTable<'_> {
     fn name(&self) -> ir::Id {
         ir::Id::new(mangle!(
             "lookup",
-            self.function.kind(),
+            self.data.spec,
+            self.data.formats,
             self.format,
-            self.domain,
-            self.degree,
-            self.size,
+            self.spec,
         ))
     }
 
@@ -99,13 +105,13 @@ impl ComponentBuilder for LookupTable<'_> {
             ),
             ir::PortDef::new(
                 "out",
-                u64::from(self.degree + 1) * u64::from(self.format.width),
+                u64::from(self.data.width()),
                 ir::Direction::Output,
                 Default::default(),
             ),
             ir::PortDef::new(
                 "arg",
-                u64::from(self.format.width),
+                self.spec.idx_lsb + 1,
                 ir::Direction::Output,
                 Default::default(),
             ),
@@ -154,7 +160,7 @@ impl ComponentBuilder for LookupTable<'_> {
         builder.component.continuous_assignments.extend(assigns);
 
         if spec.idx_lsb == 0 {
-            let zero = builder.add_constant(0, global);
+            let zero = builder.add_constant(0, 1);
             let signature = &builder.component.signature;
 
             let [assign] = build_assignments!(builder;
@@ -165,7 +171,7 @@ impl ComponentBuilder for LookupTable<'_> {
         } else {
             structure!(builder;
                 let slice = prim std_slice(global, spec.idx_lsb);
-                let pad = prim std_pad(spec.idx_lsb, global);
+                let pad = prim std_pad(spec.idx_lsb, spec.idx_lsb + 1);
             );
 
             let signature = &builder.component.signature;
