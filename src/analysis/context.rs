@@ -9,6 +9,8 @@ use crate::fpcore::{ast, metadata, visitor, Visitor};
 pub enum Binding<'ast> {
     Argument(&'ast ast::Argument),
     Let(&'ast ast::Binding),
+    Mut(&'ast ast::MutableVar),
+    Index(&'ast ast::InductionVar),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -159,6 +161,60 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 }
 
                 self.visit_expression(body)?;
+
+                self.scopes.pop();
+
+                Ok(())
+            }
+            ast::ExprKind::While {
+                cond,
+                vars,
+                body,
+                sequential: false,
+            } => {
+                let mut scope = HashMap::new();
+
+                for var in vars {
+                    self.visit_expression(&var.init)?;
+
+                    scope.insert(var.var.id, Binding::Mut(var));
+                }
+
+                self.scopes.push(scope);
+                self.visit_expression(cond)?;
+                self.visit_expression(body)?;
+
+                for var in vars {
+                    self.visit_expression(&var.update)?;
+                }
+
+                self.scopes.pop();
+
+                Ok(())
+            }
+            ast::ExprKind::While {
+                cond,
+                vars,
+                body,
+                sequential: true,
+            } => {
+                self.scopes.push(HashMap::new());
+
+                for var in vars {
+                    self.visit_expression(&var.init)?;
+
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert(var.var.id, Binding::Mut(var));
+                }
+
+                self.visit_expression(cond)?;
+                self.visit_expression(body)?;
+
+                for var in vars {
+                    self.visit_expression(&var.update)?;
+                }
 
                 self.scopes.pop();
 

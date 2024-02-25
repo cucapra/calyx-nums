@@ -206,6 +206,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 let binding = match self.resolved.names[&expr.uid] {
                     Binding::Argument(arg) => SollyaVar::from(arg),
                     Binding::Let(binding) => SollyaVar::from(&binding.expr),
+                    _ => unimplemented!(),
                 };
 
                 self.script_assign(expr, binding);

@@ -91,6 +91,7 @@ impl ExpressionBuilder<'_, '_> {
 
                 port
             }
+            _ => unimplemented!(),
         };
 
         Expression::from_constant(port)

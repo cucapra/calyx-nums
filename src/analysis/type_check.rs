@@ -57,24 +57,25 @@ impl Builder<'_> {
         expr: &ast::Expression,
     ) -> CalyxResult<Type> {
         let ty = match &expr.kind {
-            ast::ExprKind::Num(_) => Ok(Type::Number),
+            ast::ExprKind::Num(_) => Type::Number,
             ast::ExprKind::Const(kind) => match kind {
-                ast::Constant::Math(_) => Ok(Type::Number),
-                ast::Constant::Bool(_) => Ok(Type::Boolean),
+                ast::Constant::Math(_) => Type::Number,
+                ast::Constant::Bool(_) => Type::Boolean,
             },
             ast::ExprKind::Id(_) => match self.context.names[&expr.uid] {
                 Binding::Argument(arg) => {
-                    arg.dims.is_empty().then_some(Type::Number).ok_or_else(
-                        || {
-                            Error::misc("Unsupported argument type")
-                                .with_pos(&arg.var)
-                        },
-                    )
+                    if !arg.dims.is_empty() {
+                        unimplemented!();
+                    }
+
+                    Type::Number
                 }
-                Binding::Let(binding) => Ok(self.types[&binding.expr.uid]),
+                Binding::Let(binding) => self.types[&binding.expr.uid],
+                Binding::Mut(var) => self.types[&var.init.uid],
+                Binding::Index(_) => Type::Number,
             },
             ast::ExprKind::Op(op, args) => {
-                let (ty, arg_ty, arity) = match op.kind {
+                let (ret_ty, arg_ty, arity) = match op.kind {
                     ast::OpKind::Math(op) => {
                         (Type::Number, Type::Number, op.arity())
                     }
@@ -88,25 +89,25 @@ impl Builder<'_> {
 
                         (Type::Boolean, arg_ty, op.arity())
                     }
-                    ast::OpKind::Tensor(_) => {
-                        return Err(
-                            Error::misc("Unsupported operation").with_pos(op)
-                        )
-                    }
+                    _ => unimplemented!(),
                 };
+
+                if args.len() != arity {
+                    let plural = if arity == 1 { "" } else { "s" };
+
+                    let msg = format!(
+                        "Expected {arity} argument{plural}, got {}",
+                        args.len(),
+                    );
+
+                    return Err(Error::misc(msg).with_pos(op));
+                }
 
                 for arg in args {
                     self.expect(arg, arg_ty)?;
                 }
 
-                (args.len() == arity).then_some(ty).ok_or_else(|| {
-                    Error::misc(format!(
-                        "Expected {arity} argument{}, got {}",
-                        if arity == 1 { "" } else { "s" },
-                        args.len()
-                    ))
-                    .with_pos(op)
-                })
+                ret_ty
             }
             ast::ExprKind::If {
                 cond,
@@ -115,34 +116,42 @@ impl Builder<'_> {
             } => {
                 self.expect(cond, Type::Boolean)?;
 
-                let true_ty = self.check_expression(true_branch)?;
-                let false_ty = self.check_expression(false_branch)?;
+                let ty = self.check_expression(true_branch)?;
+                self.expect(false_branch, ty)?;
 
-                (true_ty == false_ty).then_some(true_ty).ok_or_else(|| {
-                    Error::misc("Branches have incompatible types")
-                        .with_pos(false_branch.as_ref())
-                })
+                ty
             }
             ast::ExprKind::Let { bindings, body, .. } => {
                 for binding in bindings {
                     self.check_expression(&binding.expr)?;
                 }
 
-                self.check_expression(body)
+                self.check_expression(body)?
             }
-            ast::ExprKind::While { .. } => unimplemented!(),
-            ast::ExprKind::For { .. } => unimplemented!(),
-            ast::ExprKind::Tensor { .. } | ast::ExprKind::TensorStar { .. } => {
-                Err(Error::misc("Unsupported construct `tensor`"))
+            ast::ExprKind::While {
+                cond, vars, body, ..
+            } => {
+                for var in vars {
+                    self.check_expression(&var.init)?;
+                }
+
+                for var in vars {
+                    self.expect(&var.update, self.types[&var.init.uid])?;
+                }
+
+                self.expect(cond, Type::Boolean)?;
+                self.check_expression(body)?
             }
-            ast::ExprKind::Array(..) => {
-                Err(Error::misc("Unsupported construct `array`"))
+            ast::ExprKind::Cast(body) => {
+                self.expect(body, Type::Number)?;
+
+                Type::Number
             }
-            ast::ExprKind::Cast(body) => self.check_expression(body),
             ast::ExprKind::Annotation { body, .. } => {
-                self.check_expression(body)
+                self.check_expression(body)?
             }
-        }?;
+            _ => unimplemented!(),
+        };
 
         self.types.insert(expr.uid, ty);
 
@@ -150,15 +159,15 @@ impl Builder<'_> {
     }
 
     fn expect(&mut self, expr: &ast::Expression, ty: Type) -> CalyxResult<()> {
-        if self.check_expression(expr)? == ty {
-            Ok(())
-        } else {
+        if self.check_expression(expr)? != ty {
             let msg = match ty {
                 Type::Boolean => "Expected boolean",
                 Type::Number => "Expected number",
             };
 
-            Err(Error::misc(msg).with_pos(expr))
+            return Err(Error::misc(msg).with_pos(expr));
         }
+
+        Ok(())
     }
 }
