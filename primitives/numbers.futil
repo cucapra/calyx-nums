@@ -3,6 +3,10 @@ extern "numbers.sv" {
     IN_WIDTH, OUT_WIDTH
   ](@data in: IN_WIDTH) -> (out: OUT_WIDTH);
 
+  comb primitive num_neg<"share"=1>[
+    WIDTH
+  ](@data in: WIDTH) -> (out: WIDTH);
+
   comb primitive num_sadd<"share"=1>[
     LEFT_WIDTH, LEFT_LSB, RIGHT_WIDTH, RIGHT_LSB, OUT_WIDTH
   ](

@@ -5,7 +5,7 @@ use smallvec::{smallvec, SmallVec};
 use crate::format::Format;
 
 pub enum Parameters {
-    Bitnum,
+    Integer,
     FixedPoint,
 }
 
@@ -57,7 +57,7 @@ impl Primitive<'_> {
     /// May panic if the primitive does not support the format.
     pub fn build_params(&self, format: &Format) -> SmallVec<[u64; 3]> {
         match self.params {
-            Parameters::Bitnum => smallvec![u64::from(format.width)],
+            Parameters::Integer => smallvec![u64::from(format.width)],
             Parameters::FixedPoint => {
                 let (int_width, frac_width) = format.parts().unwrap();
 
@@ -80,7 +80,7 @@ pub mod compile {
         name: "std_add",
         prefix_hint: "add",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 }
@@ -94,7 +94,7 @@ pub mod core {
         name: "std_sub",
         prefix_hint: "sub",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -102,7 +102,7 @@ pub mod core {
         name: "std_gt",
         prefix_hint: "gt",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -110,7 +110,7 @@ pub mod core {
         name: "std_lt",
         prefix_hint: "lt",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -118,7 +118,7 @@ pub mod core {
         name: "std_eq",
         prefix_hint: "eq",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -126,7 +126,7 @@ pub mod core {
         name: "std_neq",
         prefix_hint: "neq",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -134,7 +134,7 @@ pub mod core {
         name: "std_ge",
         prefix_hint: "ge",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -142,7 +142,7 @@ pub mod core {
         name: "std_le",
         prefix_hint: "le",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 }
@@ -272,7 +272,7 @@ pub mod binary_operators {
         name: "std_mult_pipe",
         prefix_hint: "mul",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: false,
     };
 
@@ -283,7 +283,7 @@ pub mod binary_operators {
             args: Arguments::BINARY_DEFAULT,
             output: "out_remainder",
         },
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: false,
     };
 
@@ -294,7 +294,7 @@ pub mod binary_operators {
             args: Arguments::BINARY_DEFAULT,
             output: "out_quotient",
         },
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: false,
     };
 
@@ -302,7 +302,7 @@ pub mod binary_operators {
         name: "std_sadd",
         prefix_hint: "add",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -310,7 +310,7 @@ pub mod binary_operators {
         name: "std_ssub",
         prefix_hint: "sub",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -318,7 +318,7 @@ pub mod binary_operators {
         name: "std_smult_pipe",
         prefix_hint: "mul",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: false,
     };
 
@@ -329,7 +329,7 @@ pub mod binary_operators {
             args: Arguments::BINARY_DEFAULT,
             output: "out_remainder",
         },
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: false,
     };
 
@@ -340,7 +340,7 @@ pub mod binary_operators {
             args: Arguments::BINARY_DEFAULT,
             output: "out_quotient",
         },
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: false,
     };
 
@@ -348,7 +348,7 @@ pub mod binary_operators {
         name: "std_sgt",
         prefix_hint: "gt",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -356,7 +356,7 @@ pub mod binary_operators {
         name: "std_slt",
         prefix_hint: "lt",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -364,7 +364,7 @@ pub mod binary_operators {
         name: "std_seq",
         prefix_hint: "eq",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -372,7 +372,7 @@ pub mod binary_operators {
         name: "std_sneq",
         prefix_hint: "neq",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -380,7 +380,7 @@ pub mod binary_operators {
         name: "std_sge",
         prefix_hint: "ge",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 
@@ -388,7 +388,7 @@ pub mod binary_operators {
         name: "std_sle",
         prefix_hint: "le",
         signature: Signature::BINARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: true,
     };
 }
@@ -410,7 +410,21 @@ pub mod math {
         name: "sqrt",
         prefix_hint: "sqrt",
         signature: Signature::UNARY_DEFAULT,
-        params: Parameters::Bitnum,
+        params: Parameters::Integer,
         is_comb: false,
+    };
+}
+
+pub mod numbers {
+    use super::*;
+
+    pub const IMPORT: &str = "primitives/numbers.futil";
+
+    pub const NUM_NEG: Primitive = Primitive {
+        name: "num_neg",
+        prefix_hint: "neg",
+        signature: Signature::UNARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
     };
 }

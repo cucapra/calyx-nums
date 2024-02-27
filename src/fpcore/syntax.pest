@@ -60,7 +60,7 @@ expr = {
     | (open ~ cast_kwd ~ expr ~ close)
     | (open ~ array_kwd ~ expr* ~ close)
     | (open ~ annotation ~ expr ~ close)
-    | (open ~ operation ~ expr+ ~ close)
+    | (open ~ operation ~ close)
 }
 
 number = {
@@ -71,6 +71,11 @@ number = {
 }
 
 annotation = { bang_kwd ~ property* }
+
+operation = {
+      (minus ~ expr ~ expr?)
+    | (operator ~ expr+)
+}
 
 name_kwd        = @{ ":name"            ~ !symbol_continue }
 description_kwd = @{ ":description"     ~ !symbol_continue }
@@ -199,7 +204,9 @@ tensor_op = {
     "size" | "dim" | "ref"
 }
 
-operation = ${
+minus = @{ "-" ~ !symbol_continue }
+
+operator = ${
     (mathematical_op | testing_op | tensor_op) ~ !symbol_continue
 }
 

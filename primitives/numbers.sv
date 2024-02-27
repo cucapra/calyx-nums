@@ -12,6 +12,15 @@ module num_rpad #(
   assign out = {in, {EXTEND{1'b0}}};
 endmodule
 
+module num_neg #(
+    parameter int WIDTH = 32
+) (
+    input  logic [WIDTH-1:0] in,
+    output logic [WIDTH-1:0] out
+);
+  assign out = -in;
+endmodule
+
 module num_sadd #(
     parameter int LEFT_WIDTH = 32,
     parameter int LEFT_LSB = 0,

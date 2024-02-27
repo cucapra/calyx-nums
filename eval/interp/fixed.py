@@ -1,8 +1,32 @@
 import math
-import operator
-from collections.abc import Callable
+from typing import Optional
 
 from fixedpoint import FixedPoint
+
+
+def add(a: FixedPoint, b: FixedPoint) -> FixedPoint:
+    result = a + b
+    result.resize(a.m, a.n)
+
+    return result
+
+
+def mul(a: FixedPoint, b: FixedPoint) -> FixedPoint:
+    result = a * b
+    result.resize(a.m, a.n)
+
+    return result
+
+
+def minus(a: FixedPoint, b: Optional[FixedPoint] = None) -> FixedPoint:
+    if b is None:
+        result = -a
+    else:
+        result = a - b
+
+    result.resize(a.m, a.n)
+
+    return result
 
 
 def sqrt(x: FixedPoint) -> FixedPoint:
@@ -12,20 +36,10 @@ def sqrt(x: FixedPoint) -> FixedPoint:
     return new
 
 
-def resize(x: FixedPoint, m: int, n: int) -> FixedPoint:
-    x.resize(m, n)
-
-    return x
-
-
-def _wrap(fn: Callable[..., FixedPoint]):
-    return lambda x, *args: resize(fn(x, *args), x.m, x.n)
-
-
 FIXED = {
-    '+': _wrap(operator.add),
-    '-': _wrap(operator.sub),
-    '*': _wrap(operator.mul),
+    '+': add,
+    '-': minus,
+    '*': mul,
     'sqrt': sqrt,
     'cast': lambda x: x,
 }

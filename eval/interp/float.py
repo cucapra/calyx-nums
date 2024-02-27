@@ -1,9 +1,18 @@
 import math
 import operator
+from typing import Optional
+
+
+def minus(a: float, b: Optional[float] = None) -> float:
+    if b is None:
+        return -a
+    else:
+        return a - b
+
 
 BINARY64 = {
     '+': operator.add,
-    '-': operator.sub,
+    '-': minus,
     '*': operator.mul,
     '/': operator.truediv,
     'fabs': math.fabs,

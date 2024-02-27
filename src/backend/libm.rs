@@ -87,6 +87,7 @@ impl Visitor<'_> for Builder<'_> {
                         | ast::MathOp::Sub
                         | ast::MathOp::Mul
                         | ast::MathOp::Div
+                        | ast::MathOp::Neg
                         | ast::MathOp::Sqrt
                 ) {
                     let f = Function {

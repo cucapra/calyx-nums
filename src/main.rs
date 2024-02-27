@@ -13,14 +13,12 @@ use calyx_nums::backend;
 use calyx_nums::fpcore::FPCoreParser;
 use calyx_nums::opts::Opts;
 
-const NUMERICS_LIB: &str = "primitives/numbers.futil";
-
 const IMPORTS: &[&str] = &[
     backend::stdlib::compile::IMPORT,
     backend::stdlib::core::IMPORT,
     backend::stdlib::binary_operators::IMPORT,
     backend::stdlib::math::IMPORT,
-    NUMERICS_LIB,
+    backend::stdlib::numbers::IMPORT,
 ];
 
 fn build_workspace(

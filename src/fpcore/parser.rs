@@ -178,9 +178,7 @@ impl FPCoreParser {
             [number(num)] => ast::ExprKind::Num(num),
             [constant(constant)] => ast::ExprKind::Const(constant),
             [symbol(sym)] => ast::ExprKind::Id(sym),
-            [operation(op), expr(expressions)..] => {
-                ast::ExprKind::Op(op, expressions.collect())
-            },
+            [operation(op)] => op,
             [if_kwd(_), expr(cond), expr(true_branch), expr(false_branch)] => {
                 ast::ExprKind::If {
                     cond: Box::new(cond),
@@ -260,6 +258,26 @@ impl FPCoreParser {
     fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {
         Ok(match_nodes!(input.into_children();
             [bang_kwd(_), property(props)..] => props.collect(),
+        ))
+    }
+
+    fn operation(input: Node) -> ParseResult<ast::ExprKind> {
+        Ok(match_nodes!(input.into_children();
+            [minus(span), expr(arg)] => {
+                let kind = ast::OpKind::Math(ast::MathOp::Neg);
+                let args = vec![arg];
+
+                ast::ExprKind::Op(ast::Operation { kind, span }, args)
+            },
+            [minus(span), expr(minuend), expr(subtrahend)] => {
+                let kind = ast::OpKind::Math(ast::MathOp::Sub);
+                let args = vec![minuend, subtrahend];
+
+                ast::ExprKind::Op(ast::Operation { kind, span }, args)
+            },
+            [operator(op), expr(args)..] => {
+                ast::ExprKind::Op(op, args.collect())
+            },
         ))
     }
 
@@ -559,7 +577,11 @@ impl FPCoreParser {
         Ok(input.as_str())
     }
 
-    fn operation(input: Node) -> ParseResult<ast::Operation> {
+    fn minus(input: Node) -> ParseResult<ast::Span> {
+        Ok(intern_span(&input))
+    }
+
+    fn operator(input: Node) -> ParseResult<ast::Operation> {
         let span = intern_span(&input);
 
         let kind = match_nodes!(input.into_children();

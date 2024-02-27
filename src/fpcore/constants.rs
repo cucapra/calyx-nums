@@ -1,5 +1,7 @@
 //! Built-in operations and constants.
 
+#![allow(unreachable_patterns)]
+
 use strum_macros::{EnumString, IntoStaticStr};
 
 #[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
@@ -9,6 +11,7 @@ pub enum MathOp {
     #[strum(to_string = "-")] Sub,
     #[strum(to_string = "*")] Mul,
     #[strum(to_string = "/")] Div,
+    #[strum(to_string = "-")] Neg,
     #[strum(to_string = "fabs")] FAbs,
     #[strum(to_string = "fma")] FMA,
     #[strum(to_string = "exp")] Exp,
@@ -59,6 +62,7 @@ impl MathOp {
             MathOp::Sub => 2,
             MathOp::Mul => 2,
             MathOp::Div => 2,
+            MathOp::Neg => 1,
             MathOp::FAbs => 1,
             MathOp::FMA => 3,
             MathOp::Exp => 1,

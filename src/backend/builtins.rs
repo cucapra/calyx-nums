@@ -39,6 +39,10 @@ pub fn div(format: &Format) -> &'static Primitive<'static> {
     }
 }
 
+pub fn neg(_: &Format) -> &'static Primitive<'static> {
+    &stdlib::numbers::NUM_NEG
+}
+
 pub fn gt(format: &Format) -> &'static Primitive<'static> {
     match (format.scale, format.is_signed) {
         (0, false) => &stdlib::core::STD_GT,

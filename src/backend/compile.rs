@@ -107,6 +107,7 @@ impl ExpressionBuilder<'_, '_> {
                 ast::MathOp::Sub => Some(builtins::sub(self.format)),
                 ast::MathOp::Mul => Some(builtins::mul(self.format)),
                 ast::MathOp::Div => Some(builtins::div(self.format)),
+                ast::MathOp::Neg => Some(builtins::neg(self.format)),
                 ast::MathOp::Sqrt => Some(builtins::sqrt(self.format)),
                 _ => None,
             },
