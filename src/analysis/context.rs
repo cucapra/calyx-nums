@@ -214,6 +214,11 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
 
                 for var in vars {
                     self.visit_expression(&var.update)?;
+
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert(var.var.id, Binding::Mut(var));
                 }
 
                 self.scopes.pop();
