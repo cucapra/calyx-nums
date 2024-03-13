@@ -9,7 +9,7 @@ use itertools::Itertools;
 
 use super::builtins;
 use super::libm::{MathLib, Prototype};
-use super::stdlib::{Arguments, Primitive, Signature};
+use super::stdlib::{self, Arguments, Primitive, Signature};
 use crate::analysis::{Binding, ContextResolution, PassManager, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
@@ -60,18 +60,15 @@ impl ExpressionBuilder<'_, '_> {
     }
 
     fn compile_constant(&mut self, constant: ast::Constant) -> Expression {
-        match constant {
+        let params = match constant {
             ast::Constant::Math(_) => unimplemented!(),
-            ast::Constant::Bool(val) => {
-                let params = [1, u64::from(val)];
+            ast::Constant::Bool(val) => [1, u64::from(val)],
+        };
 
-                let cell =
-                    self.builder.add_primitive("const", "std_const", &params);
-                let port = cell.borrow().get("out");
+        let cell = self.builder.add_primitive("const", "std_const", &params);
+        let port = cell.borrow().get("out");
 
-                Expression::from_constant(port)
-            }
-        }
+        Expression::from_constant(port)
     }
 
     fn compile_symbol(
@@ -97,36 +94,104 @@ impl ExpressionBuilder<'_, '_> {
         Expression::from_constant(port)
     }
 
-    fn get_primitive_operation(
-        &self,
-        op: &ast::Operation,
-    ) -> Option<&'static Primitive<'static>> {
-        match op.kind {
-            ast::OpKind::Math(op) => match op {
-                ast::MathOp::Add => Some(builtins::add(self.format)),
-                ast::MathOp::Sub => Some(builtins::sub(self.format)),
-                ast::MathOp::Mul => Some(builtins::mul(self.format)),
-                ast::MathOp::Div => Some(builtins::div(self.format)),
-                ast::MathOp::Neg => Some(builtins::neg(self.format)),
-                ast::MathOp::Sqrt => Some(builtins::sqrt(self.format)),
-                _ => None,
-            },
-            ast::OpKind::Test(op) => match op {
-                ast::TestOp::Lt => Some(builtins::lt(self.format)),
-                ast::TestOp::Gt => Some(builtins::gt(self.format)),
-                ast::TestOp::Leq => Some(builtins::le(self.format)),
-                ast::TestOp::Geq => Some(builtins::ge(self.format)),
-                ast::TestOp::Eq => Some(builtins::eq(self.format)),
-                ast::TestOp::Neq => Some(builtins::neq(self.format)),
-                _ => None,
-            },
-            ast::OpKind::Tensor(_) => None,
-        }
+    fn compile_variadic_operation(
+        &mut self,
+        op: ast::TestOp,
+        args: &[ast::Expression],
+    ) -> CalyxResult<Expression> {
+        let mut control = Vec::new();
+        let mut assignments = Vec::new();
+
+        let args: Vec<_> = args
+            .iter()
+            .map(|arg| {
+                let expr = self.compile_expression(arg)?;
+
+                control.push(expr.control);
+                assignments.extend(expr.assignments);
+
+                Ok(expr.out)
+            })
+            .collect::<CalyxResult<_>>()?;
+
+        let control = collapse(control, ir::Control::par);
+
+        let mut reduce = |left, right, decl: &Primitive| {
+            let prim = self.builder.add_primitive(
+                decl.prefix_hint,
+                decl.name,
+                &decl.build_params(self.format),
+            );
+
+            let out = prim.borrow().get("out");
+
+            let assigns =
+                [("left", left), ("right", right)].map(|(dst, src)| {
+                    self.builder.build_assignment(
+                        prim.borrow().get(dst),
+                        src,
+                        ir::Guard::True,
+                    )
+                });
+
+            assignments.extend(assigns);
+
+            out
+        };
+
+        let args = match op {
+            ast::TestOp::Lt
+            | ast::TestOp::Gt
+            | ast::TestOp::Leq
+            | ast::TestOp::Geq
+            | ast::TestOp::Eq => {
+                let decl = match op {
+                    ast::TestOp::Lt => builtins::lt(self.format),
+                    ast::TestOp::Gt => builtins::gt(self.format),
+                    ast::TestOp::Leq => builtins::le(self.format),
+                    ast::TestOp::Geq => builtins::ge(self.format),
+                    ast::TestOp::Eq => builtins::eq(self.format),
+                    _ => unreachable!(),
+                };
+
+                args.into_iter()
+                    .tuple_windows()
+                    .map(|(left, right)| reduce(left, right, decl))
+                    .collect()
+            }
+            ast::TestOp::Neq => {
+                let decl = builtins::neq(self.format);
+
+                args.into_iter()
+                    .tuple_combinations()
+                    .map(|(left, right)| reduce(left, right, decl))
+                    .collect()
+            }
+            ast::TestOp::And | ast::TestOp::Or => args,
+            _ => unreachable!(),
+        };
+
+        let decl = if matches!(op, ast::TestOp::Or) {
+            &stdlib::core::STD_OR
+        } else {
+            &stdlib::core::STD_AND
+        };
+
+        let out = args
+            .into_iter()
+            .tree_fold1(|left, right| reduce(left, right, decl))
+            .unwrap();
+
+        Ok(Expression {
+            control,
+            assignments,
+            out,
+        })
     }
 
-    fn compile_operation(
+    fn compile_library_operation(
         &mut self,
-        op: &ast::Operation,
+        op: ast::OpKind,
         uid: ast::NodeId,
         args: &[ast::Expression],
     ) -> CalyxResult<Expression> {
@@ -140,26 +205,42 @@ impl ExpressionBuilder<'_, '_> {
                 |iter| iter.multiunzip(),
             )?;
 
-        let (cell, signature, is_comb) =
-            if let Some(decl) = self.get_primitive_operation(op) {
-                let prim = self.builder.add_primitive(
-                    decl.prefix_hint,
-                    decl.name,
-                    &decl.build_params(self.format),
-                );
+        let decl = match op {
+            ast::OpKind::Math(op) => match op {
+                ast::MathOp::Add => Some(builtins::add(self.format)),
+                ast::MathOp::Sub => Some(builtins::sub(self.format)),
+                ast::MathOp::Mul => Some(builtins::mul(self.format)),
+                ast::MathOp::Div => Some(builtins::div(self.format)),
+                ast::MathOp::Neg => Some(&stdlib::numbers::NUM_NEG),
+                ast::MathOp::Sqrt => Some(builtins::sqrt(self.format)),
+                _ => None,
+            },
+            ast::OpKind::Test(op) => match op {
+                ast::TestOp::Not => Some(&stdlib::core::STD_NOT),
+                _ => None,
+            },
+            ast::OpKind::Tensor(_) => None,
+        };
 
-                (prim, &decl.signature, decl.is_comb)
-            } else if let Some(proto) = self.libm.remove(&uid) {
-                let comp = self.builder.add_component(
-                    proto.prefix_hint,
-                    proto.name,
-                    proto.signature,
-                );
+        let (cell, signature, is_comb) = if let Some(decl) = decl {
+            let prim = self.builder.add_primitive(
+                decl.prefix_hint,
+                decl.name,
+                &decl.build_params(self.format),
+            );
 
-                (comp, &Signature::UNARY_DEFAULT, proto.is_comb)
-            } else {
-                unimplemented!()
-            };
+            (prim, &decl.signature, decl.is_comb)
+        } else if let Some(proto) = self.libm.remove(&uid) {
+            let comp = self.builder.add_component(
+                proto.prefix_hint,
+                proto.name,
+                proto.signature,
+            );
+
+            (comp, &Signature::UNARY_DEFAULT, proto.is_comb)
+        } else {
+            unimplemented!()
+        };
 
         let inputs = match signature.args {
             Arguments::Unary { input } => {
@@ -206,6 +287,20 @@ impl ExpressionBuilder<'_, '_> {
             assignments,
             out,
         })
+    }
+
+    fn compile_operation(
+        &mut self,
+        op: ast::OpKind,
+        uid: ast::NodeId,
+        args: &[ast::Expression],
+    ) -> CalyxResult<Expression> {
+        match op {
+            ast::OpKind::Test(op) if op.is_variadic() => {
+                self.compile_variadic_operation(op, args)
+            }
+            _ => self.compile_library_operation(op, uid, args),
+        }
     }
 
     fn compile_let(
@@ -268,7 +363,7 @@ impl ExpressionBuilder<'_, '_> {
             }
             ast::ExprKind::Id(sym) => Ok(self.compile_symbol(sym, expr.uid)),
             ast::ExprKind::Op(op, args) => {
-                self.compile_operation(op, expr.uid, args)
+                self.compile_operation(op.kind, expr.uid, args)
             }
             ast::ExprKind::Let {
                 bindings,

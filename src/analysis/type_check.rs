@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::ops::Index;
 
 use calyx_utils::{CalyxResult, Error};
@@ -77,7 +78,7 @@ impl Builder<'_> {
             ast::ExprKind::Op(op, args) => {
                 let (ret_ty, arg_ty, arity) = match op.kind {
                     ast::OpKind::Math(op) => {
-                        (Type::Number, Type::Number, op.arity())
+                        (Type::Number, Type::Number, Arity::Fixed(op.arity()))
                     }
                     ast::OpKind::Test(op) => {
                         let arg_ty = match op {
@@ -87,18 +88,31 @@ impl Builder<'_> {
                             _ => Type::Number,
                         };
 
-                        (Type::Boolean, arg_ty, op.arity())
+                        let arity = if op.is_variadic() {
+                            Arity::Variadic
+                        } else {
+                            Arity::UNARY
+                        };
+
+                        (Type::Boolean, arg_ty, arity)
                     }
                     _ => unimplemented!(),
                 };
 
-                if args.len() != arity {
-                    let plural = if arity == 1 { "" } else { "s" };
+                let count = args.len();
 
-                    let msg = format!(
-                        "Expected {arity} argument{plural}, got {}",
-                        args.len(),
-                    );
+                if !arity.check(count) {
+                    let msg = match arity {
+                        Arity::Variadic => {
+                            format!("Expected 2+ arguments, got {count}")
+                        }
+                        Arity::UNARY => {
+                            format!("Expected 1 argument, got {count}")
+                        }
+                        Arity::Fixed(arity) => {
+                            format!("Expected {arity} arguments, got {count}")
+                        }
+                    };
 
                     return Err(Error::misc(msg).with_pos(op));
                 }
@@ -169,5 +183,23 @@ impl Builder<'_> {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Arity {
+    Variadic,
+    Fixed(NonZeroUsize),
+}
+
+impl Arity {
+    const UNARY: Arity =
+        Arity::Fixed(unsafe { NonZeroUsize::new_unchecked(1) });
+
+    fn check(self, count: usize) -> bool {
+        match self {
+            Arity::Variadic => count >= 2,
+            Arity::Fixed(arity) => count == arity.get(),
+        }
     }
 }

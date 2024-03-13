@@ -5,6 +5,7 @@ use smallvec::{smallvec, SmallVec};
 use crate::format::Format;
 
 pub enum Parameters {
+    Boolean,
     Integer,
     FixedPoint,
 }
@@ -57,6 +58,7 @@ impl Primitive<'_> {
     /// May panic if the primitive does not support the format.
     pub fn build_params(&self, format: &Format) -> SmallVec<[u64; 3]> {
         match self.params {
+            Parameters::Boolean => smallvec![1],
             Parameters::Integer => smallvec![u64::from(format.width)],
             Parameters::FixedPoint => {
                 let (int_width, frac_width) = format.parts().unwrap();
@@ -89,6 +91,30 @@ pub mod core {
     use super::*;
 
     pub const IMPORT: &str = "primitives/core.futil";
+
+    pub const STD_NOT: Primitive = Primitive {
+        name: "std_not",
+        prefix_hint: "com",
+        signature: Signature::UNARY_DEFAULT,
+        params: Parameters::Boolean,
+        is_comb: true,
+    };
+
+    pub const STD_AND: Primitive = Primitive {
+        name: "std_and",
+        prefix_hint: "con",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Boolean,
+        is_comb: true,
+    };
+
+    pub const STD_OR: Primitive = Primitive {
+        name: "std_or",
+        prefix_hint: "dis",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Boolean,
+        is_comb: true,
+    };
 
     pub const STD_SUB: Primitive = Primitive {
         name: "std_sub",

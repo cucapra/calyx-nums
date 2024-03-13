@@ -2,6 +2,8 @@
 
 #![allow(unreachable_patterns)]
 
+use std::num::NonZeroUsize;
+
 use strum_macros::{EnumString, IntoStaticStr};
 
 #[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
@@ -56,8 +58,8 @@ pub enum MathOp {
 }
 
 impl MathOp {
-    pub fn arity(&self) -> usize {
-        match self {
+    pub fn arity(self) -> NonZeroUsize {
+        let arity = match self {
             MathOp::Add => 2,
             MathOp::Sub => 2,
             MathOp::Mul => 2,
@@ -104,7 +106,9 @@ impl MathOp {
             MathOp::Trunc => 1,
             MathOp::Round => 1,
             MathOp::NearbyInt => 1,
-        }
+        };
+
+        unsafe { NonZeroUsize::new_unchecked(arity) }
     }
 }
 
@@ -128,23 +132,18 @@ pub enum TestOp {
 }
 
 impl TestOp {
-    pub fn arity(&self) -> usize {
-        match self {
-            TestOp::Lt => 2,
-            TestOp::Gt => 2,
-            TestOp::Leq => 2,
-            TestOp::Geq => 2,
-            TestOp::Eq => 2,
-            TestOp::Neq => 2,
-            TestOp::And => 2,
-            TestOp::Or => 2,
-            TestOp::Not => 1,
-            TestOp::IsFinite => 1,
-            TestOp::IsInf => 1,
-            TestOp::IsNan => 1,
-            TestOp::IsNormal => 1,
-            TestOp::SignBit => 1,
-        }
+    pub fn is_variadic(self) -> bool {
+        matches!(
+            self,
+            TestOp::Lt
+                | TestOp::Gt
+                | TestOp::Leq
+                | TestOp::Geq
+                | TestOp::Eq
+                | TestOp::Neq
+                | TestOp::And
+                | TestOp::Or
+        )
     }
 }
 
