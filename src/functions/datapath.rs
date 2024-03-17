@@ -2,7 +2,6 @@
 
 use std::{cmp, iter};
 
-use super::TableDomain;
 use crate::fpcore::ast::Rational;
 use crate::utils::interval::Interval;
 use crate::utils::mangling::Mangle;
@@ -19,7 +18,6 @@ impl Datapath {
     pub fn from_table(
         table: &[Vec<Rational>],
         degree: usize,
-        domain: &TableDomain,
         scale: i32,
     ) -> Datapath {
         let lut_widths = table_ranges(table, degree, scale);
@@ -27,7 +25,7 @@ impl Datapath {
         let HornerRanges {
             product_width,
             sum_width,
-        } = HornerRanges::from_table(table, degree, domain, scale);
+        } = HornerRanges::from_table(table, degree, scale);
 
         Datapath {
             lut_widths,
@@ -42,7 +40,7 @@ pub fn table_ranges(
     degree: usize,
     scale: i32,
 ) -> Vec<u32> {
-    let mut widths = vec![0; degree + 1];
+    let mut widths = vec![1; degree + 1];
 
     for row in table {
         for (value, max_width) in iter::zip(row, &mut widths) {
@@ -62,22 +60,18 @@ impl HornerRanges {
     pub fn from_table(
         table: &[Vec<Rational>],
         degree: usize,
-        domain: &TableDomain,
         scale: i32,
     ) -> HornerRanges {
-        let stride =
-            (&domain.right - &domain.left) / Rational::from(table.len());
-
         let init = HornerRanges {
-            product_width: 0,
-            sum_width: 0,
+            product_width: 1,
+            sum_width: 1,
         };
 
         table.iter().fold(init, |max, approx| {
             let HornerRanges {
                 product_width,
                 sum_width,
-            } = HornerRanges::from_approx(approx, degree, &stride, scale);
+            } = HornerRanges::from_approx(approx, degree, scale);
 
             let product_width = cmp::max(max.product_width, product_width);
             let sum_width = cmp::max(max.sum_width, sum_width);
@@ -93,7 +87,6 @@ impl HornerRanges {
     fn from_approx(
         approx: &[Rational],
         degree: usize,
-        stride: &Rational,
         scale: i32,
     ) -> HornerRanges {
         let mut product_width = 0;
@@ -102,8 +95,8 @@ impl HornerRanges {
         let mut sigma = Interval::from(&approx[degree]);
 
         for i in (0..degree).rev() {
-            let pi =
-                Interval::new(Rational::from(0u32), stride.clone()) * sigma;
+            let pi = Interval::new(-Rational::from(1u32), Rational::from(1u32))
+                * sigma;
 
             product_width = product_width
                 .max(signed_width(&pi.inf, scale))

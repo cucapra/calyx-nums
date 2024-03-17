@@ -125,15 +125,13 @@ impl ComponentBuilder for Horner<'_> {
         let mut component = ir::Component::new(name, ports, true, false, None);
         let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
-        assert!(self.format.scale <= 0);
-
         structure!(builder;
             let acc = prim std_reg(u64::from(self.spec.sum_width));
             let mul = prim num_smul(
                 self.in_width,
                 u64::from(self.spec.sum_width),
                 u64::from(self.spec.product_width),
-                u64::from(self.format.scale.unsigned_abs())
+                self.in_width - 1
             );
             let add = prim num_sadd(
                 u64::from(*self.spec.lut_widths.iter().max().unwrap()),

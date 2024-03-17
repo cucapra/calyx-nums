@@ -1,6 +1,6 @@
 //! Coefficient lookup tables.
 
-use std::iter;
+use std::{cmp, iter};
 
 use calyx_ir::{self as ir, build_assignments, structure};
 use calyx_utils::{CalyxResult, Error};
@@ -111,7 +111,7 @@ impl ComponentBuilder for LookupTable<'_> {
             ),
             ir::PortDef::new(
                 "arg",
-                self.spec.idx_lsb + 1,
+                cmp::max(self.spec.idx_lsb, 1),
                 ir::Direction::Output,
                 Default::default(),
             ),
@@ -169,20 +169,42 @@ impl ComponentBuilder for LookupTable<'_> {
 
             builder.component.continuous_assignments.push(assign);
         } else {
+            let msb = spec.idx_lsb - 1;
+
             structure!(builder;
-                let slice = prim std_slice(global, spec.idx_lsb);
-                let pad = prim std_pad(spec.idx_lsb, spec.idx_lsb + 1);
+                let high = prim std_bit_slice(global, msb, msb, 1);
+                let com = prim std_not(1);
             );
 
-            let signature = &builder.component.signature;
+            if spec.idx_lsb == 1 {
+                let signature = &builder.component.signature;
 
-            let assigns = build_assignments!(builder;
-                slice[in_] = ? sub[out];
-                pad[in_] = ? slice[out];
-                signature["arg"] = ? pad[out];
-            );
+                let assigns = build_assignments!(builder;
+                    high[in_] = ? sub[out];
+                    com[in_] = ? high[out];
+                    signature["arg"] = ? com[out];
+                );
 
-            builder.component.continuous_assignments.extend(assigns);
+                builder.component.continuous_assignments.extend(assigns);
+            } else {
+                structure!(builder;
+                    let low = prim std_slice(global, msb);
+                    let cat = prim std_cat(1, msb, spec.idx_lsb);
+                );
+
+                let signature = &builder.component.signature;
+
+                let assigns = build_assignments!(builder;
+                    high[in_] = ? sub[out];
+                    com[in_] = ? high[out];
+                    low[in_] = ? sub[out];
+                    cat["left"] = ? com[out];
+                    cat["right"] = ? low[out];
+                    signature["arg"] = ? cat[out];
+                );
+
+                builder.component.continuous_assignments.extend(assigns);
+            }
         }
 
         Ok(component)

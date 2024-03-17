@@ -212,12 +212,10 @@ impl<'a> Builder<'a> {
                 }
             }
             CalyxImpl::Poly { .. } => {
-                let degree = degree as usize;
-
                 let HornerRanges {
                     product_width,
                     sum_width,
-                } = HornerRanges::from_table(values, degree, domain, scale);
+                } = HornerRanges::from_table(values, degree as usize, scale);
 
                 let spec = Datapath {
                     lut_widths: table.data.widths().collect(),

@@ -1,5 +1,7 @@
 //! Glue code for polynomials.
 
+use std::cmp;
+
 use calyx_ir::{self as ir, build_assignments};
 use calyx_utils::CalyxResult;
 
@@ -53,7 +55,7 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         let horner = Horner {
             format: self.table.format,
             spec: &self.spec,
-            in_width: self.table.spec.idx_lsb + 1,
+            in_width: cmp::max(self.table.spec.idx_lsb, 1),
         };
 
         let (lookup, lookup_ports) = cm.get(&self.table, lib)?;
