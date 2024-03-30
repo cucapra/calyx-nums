@@ -19,15 +19,15 @@ pub struct Context<'ast> {
     pub strategy: Option<&'ast metadata::CalyxImpl>,
 }
 
-pub struct ContextResolution<'ast> {
+pub struct NameResolution<'ast> {
     pub names: HashMap<ast::NodeId, Binding<'ast>>,
     pub props: HashMap<ast::NodeId, Context<'ast>>,
 }
 
-impl<'ast> Pass<'ast> for ContextResolution<'ast> {
+impl<'ast> Pass<'ast> for NameResolution<'ast> {
     fn run(pm: &PassManager<'_, 'ast>) -> CalyxResult<Self> {
         let mut builder = Builder {
-            result: ContextResolution {
+            result: NameResolution {
                 names: HashMap::new(),
                 props: HashMap::new(),
             },
@@ -42,7 +42,7 @@ impl<'ast> Pass<'ast> for ContextResolution<'ast> {
 }
 
 struct Builder<'ast> {
-    result: ContextResolution<'ast>,
+    result: NameResolution<'ast>,
     scopes: Vec<HashMap<Id, Binding<'ast>>>,
     parent: Context<'ast>,
 }

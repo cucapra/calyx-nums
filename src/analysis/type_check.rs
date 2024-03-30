@@ -4,7 +4,7 @@ use std::ops::Index;
 
 use calyx_utils::{CalyxResult, Error};
 
-use super::context::{Binding, ContextResolution};
+use super::bindings::{Binding, NameResolution};
 use super::passes::{Pass, PassManager};
 use crate::fpcore::ast;
 
@@ -21,7 +21,7 @@ pub struct TypeCheck {
 impl Pass<'_> for TypeCheck {
     fn run(pm: &PassManager) -> CalyxResult<Self> {
         let mut builder = Builder {
-            context: pm.get_analysis()?,
+            bindings: pm.get_analysis()?,
             types: HashMap::new(),
         };
 
@@ -44,7 +44,7 @@ impl Index<ast::NodeId> for TypeCheck {
 }
 
 struct Builder<'a> {
-    context: &'a ContextResolution<'a>,
+    bindings: &'a NameResolution<'a>,
     types: HashMap<ast::NodeId, Type>,
 }
 
@@ -63,7 +63,7 @@ impl Builder<'_> {
                 ast::Constant::Math(_) => Type::Number,
                 ast::Constant::Bool(_) => Type::Boolean,
             },
-            ast::ExprKind::Id(_) => match self.context.names[&expr.uid] {
+            ast::ExprKind::Id(_) => match self.bindings.names[&expr.uid] {
                 Binding::Argument(arg) => {
                     if !arg.dims.is_empty() {
                         unimplemented!();

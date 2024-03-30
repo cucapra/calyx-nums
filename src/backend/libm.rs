@@ -10,7 +10,7 @@ use super::components::{
     ComponentManager, LookupTable, PiecewisePoly, TableData,
 };
 
-use crate::analysis::{ContextResolution, DomainInference, PassManager};
+use crate::analysis::{NameResolution, PassManager, RangeAnalysis};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
@@ -43,8 +43,8 @@ impl MathLib {
             cm: ComponentManager::new(),
             prototypes: HashMap::new(),
             format: &opts.format,
-            context: pm.get_analysis()?,
-            domains: opts
+            bindings: pm.get_analysis()?,
+            ranges: opts
                 .infer_domains
                 .then(|| pm.get_analysis())
                 .transpose()?,
@@ -64,8 +64,8 @@ struct Builder<'a> {
     cm: ComponentManager,
     prototypes: HashMap<ast::NodeId, Prototype>,
     format: &'a Format,
-    context: &'a ContextResolution<'a>,
-    domains: Option<&'a DomainInference>,
+    bindings: &'a NameResolution<'a>,
+    ranges: Option<&'a RangeAnalysis>,
     lib: &'a mut ir::LibrarySignatures,
 }
 
@@ -98,7 +98,7 @@ impl Visitor<'_> for Builder<'_> {
                         span: op.span,
                     };
 
-                    let context = self.context.props[&expr.uid];
+                    let context = self.bindings.props[&expr.uid];
 
                     let domain =
                         self.choose_domain(&f, args, context.domain)?;
@@ -127,8 +127,8 @@ impl<'a> Builder<'a> {
         let (left, right) = hint
             .map(|domain| (&domain.left.value, &domain.right.value))
             .or_else(|| {
-                self.domains.map(|domains| {
-                    let [left, right] = &domains[args[0].uid];
+                self.ranges.map(|ranges| {
+                    let [left, right] = &ranges[args[0].uid];
 
                     (left, right)
                 })

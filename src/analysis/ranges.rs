@@ -5,7 +5,7 @@ use std::ops::Index;
 use calyx_utils::{CalyxResult, Error};
 use itertools::Itertools;
 
-use super::context::{Binding, ContextResolution};
+use super::bindings::{Binding, NameResolution};
 use super::passes::{Pass, PassManager};
 use super::type_check::TypeCheck;
 use crate::format::Format;
@@ -28,24 +28,24 @@ procedure rnd(x) {
 
 const EPILOGUE: &str = "quit;\n";
 
-pub struct DomainInference {
-    domains: HashMap<ast::NodeId, [ast::Rational; 2]>,
+pub struct RangeAnalysis {
+    ranges: HashMap<ast::NodeId, [ast::Rational; 2]>,
 }
 
-impl Pass<'_> for DomainInference {
+impl Pass<'_> for RangeAnalysis {
     fn run(pm: &PassManager) -> CalyxResult<Self> {
         pm.get_analysis::<TypeCheck>()?;
 
         let mut builder = Builder {
-            resolved: pm.get_analysis()?,
+            bindings: pm.get_analysis()?,
             script: String::from(PROLOGUE),
         };
 
         builder.visit_definitions(pm.ast())?;
         builder.script.push_str(EPILOGUE);
 
-        Ok(DomainInference {
-            domains: run_script(&builder.script, &pm.opts().format)?,
+        Ok(RangeAnalysis {
+            ranges: run_script(&builder.script, &pm.opts().format)?,
         })
     }
 }
@@ -84,16 +84,16 @@ fn parse_response_line(
     Some((uid, [left, right]))
 }
 
-impl Index<ast::NodeId> for DomainInference {
+impl Index<ast::NodeId> for RangeAnalysis {
     type Output = [ast::Rational; 2];
 
     fn index(&self, index: ast::NodeId) -> &Self::Output {
-        &self.domains[&index]
+        &self.ranges[&index]
     }
 }
 
 struct Builder<'ast> {
-    resolved: &'ast ContextResolution<'ast>,
+    bindings: &'ast NameResolution<'ast>,
     script: String,
 }
 
@@ -203,7 +203,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 self.script_point(expr, &num.value);
             }
             ast::ExprKind::Id(_) => {
-                let binding = match self.resolved.names[&expr.uid] {
+                let binding = match self.bindings.names[&expr.uid] {
                     Binding::Argument(arg) => SollyaVar::from(arg),
                     Binding::Let(binding) => SollyaVar::from(&binding.expr),
                     _ => unimplemented!(),

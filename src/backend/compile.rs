@@ -10,7 +10,7 @@ use itertools::Itertools;
 use super::builtins;
 use super::libm::{MathLib, Prototype};
 use super::stdlib::{self, Arguments, Primitive, Signature};
-use crate::analysis::{Binding, ContextResolution, PassManager, TypeCheck};
+use crate::analysis::{Binding, NameResolution, PassManager, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::opts::Opts;
@@ -39,7 +39,7 @@ struct ExpressionBuilder<'a, 'b> {
     builder: &'a mut ir::Builder<'b>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
     format: &'a Format,
-    context: &'a ContextResolution<'a>,
+    bindings: &'a NameResolution<'a>,
     libm: &'a mut HashMap<ast::NodeId, Prototype>,
 }
 
@@ -76,7 +76,7 @@ impl ExpressionBuilder<'_, '_> {
         sym: &ast::Symbol,
         uid: ast::NodeId,
     ) -> Expression {
-        let port = match self.context.names[&uid] {
+        let port = match self.bindings.names[&uid] {
             Binding::Argument(_) => {
                 let signature = self.builder.component.signature.borrow();
 
@@ -380,14 +380,14 @@ impl ExpressionBuilder<'_, '_> {
 
 struct GlobalContext<'a> {
     format: &'a Format,
-    context: &'a ContextResolution<'a>,
+    bindings: &'a NameResolution<'a>,
     libm: &'a mut HashMap<ast::NodeId, Prototype>,
 }
 
 fn compile_definition(
     def: &ast::FPCore,
     lib: &ir::LibrarySignatures,
-    global: &mut GlobalContext,
+    context: &mut GlobalContext,
     name_gen: &mut NameGenerator,
 ) -> CalyxResult<ir::Component> {
     let name = def
@@ -397,7 +397,7 @@ fn compile_definition(
 
     let mut ports = vec![ir::PortDef::new(
         "out",
-        u64::from(global.format.width),
+        u64::from(context.format.width),
         ir::Direction::Output,
         Default::default(),
     )];
@@ -405,7 +405,7 @@ fn compile_definition(
     ports.extend(def.args.iter().map(|arg| {
         ir::PortDef::new(
             arg.var.id,
-            u64::from(global.format.width),
+            u64::from(context.format.width),
             ir::Direction::Input,
             Default::default(),
         )
@@ -417,9 +417,9 @@ fn compile_definition(
     let mut expr_builder = ExpressionBuilder {
         builder: &mut builder,
         stores: HashMap::new(),
-        format: global.format,
-        context: global.context,
-        libm: global.libm,
+        format: context.format,
+        bindings: context.bindings,
+        libm: context.libm,
     };
 
     let body = expr_builder.compile_expression(&def.body)?;
@@ -453,23 +453,22 @@ pub fn compile_fpcore(
 
     let pm = PassManager::new(opts, defs);
 
-    let context = pm.get_analysis::<ContextResolution>()?;
-    let _ = pm.get_analysis::<TypeCheck>()?;
+    pm.get_analysis::<TypeCheck>()?;
 
     let MathLib {
         mut components,
         mut prototypes,
     } = MathLib::new(&pm, &mut lib)?;
 
-    let mut global = GlobalContext {
+    let mut context = GlobalContext {
         format: &opts.format,
-        context,
+        bindings: pm.get_analysis()?,
         libm: &mut prototypes,
     };
 
     for def in defs {
         let component =
-            compile_definition(def, &lib, &mut global, &mut name_gen)?;
+            compile_definition(def, &lib, &mut context, &mut name_gen)?;
 
         components.push(component);
     }
