@@ -6,6 +6,7 @@ use calyx_utils::{CalyxResult, Error};
 use itertools::Itertools;
 
 use super::bindings::{Binding, NameResolution};
+use super::domain::Precondition;
 use super::passes::{Pass, PassManager};
 use super::type_check::TypeCheck;
 use crate::format::Format;
@@ -174,21 +175,25 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
     type Error = Error;
 
     fn visit_definition(&mut self, def: &'ast ast::FPCore) -> CalyxResult<()> {
+        let mut pre = Precondition::new();
+
+        for prop in &def.props {
+            if let ast::Property::Pre(expr) = prop {
+                pre.add_constraint(expr, self.bindings)?;
+            }
+        }
+
         for arg in &def.args {
-            let (left, right) = arg
-                .props
-                .iter()
-                .find_map(|prop| match prop {
-                    ast::Property::CalyxDomain(domain) => {
-                        Some((&domain.left.value, &domain.right.value))
-                    }
-                    _ => None,
-                })
+            let (left, right) = pre
+                .domains
+                .get(&arg.uid)
+                .and_then(|domain| domain.bounds())
                 .ok_or_else(|| {
-                    Error::misc("No domain specified").with_pos(&arg.var)
+                    Error::misc("Under-constrained argument").with_pos(&arg.var)
                 })?;
 
             self.script_interval(arg, left, right);
+            self.script_print(arg.into());
         }
 
         self.visit_expression(&def.body)
@@ -260,7 +265,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
             _ => unimplemented!(),
         };
 
-        self.script_print(SollyaVar::from(expr));
+        self.script_print(expr.into());
 
         Ok(())
     }

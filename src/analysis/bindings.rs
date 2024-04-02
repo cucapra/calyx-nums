@@ -101,6 +101,12 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
 
         self.update_parent(&def.props);
 
+        for prop in &def.props {
+            if let ast::Property::Pre(expr) = prop {
+                self.visit_expression(expr)?;
+            }
+        }
+
         visitor::visit_definition(self, def)
     }
 

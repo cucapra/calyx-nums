@@ -50,6 +50,12 @@ struct Builder<'a> {
 
 impl Builder<'_> {
     fn check_definition(&mut self, def: &ast::FPCore) -> CalyxResult<()> {
+        for prop in &def.props {
+            if let ast::Property::Pre(expr) = prop {
+                self.expect(expr, Type::Boolean)?;
+            }
+        }
+
         self.expect(&def.body, Type::Number)
     }
 
