@@ -6,6 +6,8 @@ use std::process::{Command, Stdio};
 use std::string::FromUtf8Error;
 use std::{fmt, thread};
 
+use calyx_utils::Error as CalyxError;
+
 use crate::fpcore::ast;
 use crate::utils::mangling::Mangle;
 
@@ -193,5 +195,34 @@ impl TryFrom<ast::MathOp> for SollyaFunction {
             ast::MathOp::ErfC => Ok(SollyaFunction::ErfC),
             _ => Err(()),
         }
+    }
+}
+
+/// An error arising from a Sollya script.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ScriptError {
+    Sollya(SollyaError),
+    BadResponse,
+}
+
+impl fmt::Display for ScriptError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ScriptError::Sollya(err) => write!(f, "{}", err),
+            ScriptError::BadResponse => write!(f, "bad response"),
+        }
+    }
+}
+
+impl From<SollyaError> for ScriptError {
+    fn from(err: SollyaError) -> Self {
+        ScriptError::Sollya(err)
+    }
+}
+
+impl From<ScriptError> for CalyxError {
+    fn from(err: ScriptError) -> Self {
+        CalyxError::misc(format!("Sollya error: {}", err))
     }
 }

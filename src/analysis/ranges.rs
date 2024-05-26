@@ -11,7 +11,7 @@ use super::passes::{Pass, PassManager};
 use super::type_check::TypeCheck;
 use crate::format::Format;
 use crate::fpcore::{ast, Visitor};
-use crate::utils::sollya::{self, SollyaFunction};
+use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 
 const PROLOGUE: &str = "\
 dieonerrormode = on!;
@@ -54,22 +54,15 @@ impl Pass<'_> for RangeAnalysis {
 fn run_script(
     script: &str,
     format: &Format,
-) -> CalyxResult<HashMap<ast::NodeId, [ast::Rational; 2]>> {
+) -> Result<HashMap<ast::NodeId, [ast::Rational; 2]>, ScriptError> {
     let cmd = script.as_bytes();
     let arg = [format.scale.to_string()];
 
-    let result = sollya::sollya(cmd, &arg)
-        .map_err(|err| Error::misc(format!("Sollya error: {err}")))?;
+    let result = sollya::sollya(cmd, &arg)?;
 
     result
         .lines()
-        .map(|line| {
-            parse_response_line(line).ok_or_else(|| {
-                Error::misc(format!(
-                    "Sollya error: failed to parse line `{line}`",
-                ))
-            })
-        })
+        .map(|line| parse_response_line(line).ok_or(ScriptError::BadResponse))
         .collect()
 }
 

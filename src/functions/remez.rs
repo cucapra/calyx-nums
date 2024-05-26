@@ -1,9 +1,7 @@
 //! Minimax approximations.
 
-use calyx_utils::{CalyxResult, Error};
-
 use crate::fpcore::ast::Rational;
-use crate::utils::sollya::{self, SollyaFunction};
+use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 
 /// Constructs a table of polynomials approximating `f` piecewise over the
 /// interval `[left, right]`.
@@ -18,7 +16,7 @@ pub fn build_table(
     right: &Rational,
     size: u32,
     scale: i32,
-) -> CalyxResult<Vec<Vec<Rational>>> {
+) -> Result<Vec<Vec<Rational>>, ScriptError> {
     let cmd = include_bytes!("scripts/remez.sollya");
 
     let args = [
@@ -30,19 +28,15 @@ pub fn build_table(
         format!("{scale}"),
     ];
 
-    let result = sollya::sollya(cmd, &args)
-        .map_err(|err| Error::misc(format!("Sollya error: {err}")))?;
+    let result = sollya::sollya(cmd, &args)?;
 
     result
         .lines()
         .map(|line| {
             line.split(' ')
                 .map(|c| {
-                    Rational::from_dyadic(c).map_err(|_| {
-                        Error::misc(format!(
-                            "Sollya error: failed to parse coefficient `{c}`"
-                        ))
-                    })
+                    Rational::from_dyadic(c)
+                        .map_err(|_| ScriptError::BadResponse)
                 })
                 .collect()
         })
