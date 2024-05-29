@@ -1,5 +1,7 @@
 //! Dyadic notation.
 
+use std::fmt;
+
 use itertools::PeekingNext;
 use num::bigint::{BigInt, BigUint, ParseBigIntError};
 use num::rational::Ratio;
@@ -36,5 +38,33 @@ impl Rational {
                 mag: Ratio::from_integer(rest.parse()?),
             })
         }
+    }
+
+    /// Returns an adapter for formatting `self` in Gappa dyadic notation.
+    ///
+    /// This method is infallible. However, attempting to format a non-dyadic
+    /// rational with the returned adapter will result in a panic.
+    pub fn dyadic(&self) -> impl fmt::Display + '_ {
+        struct Dyadic<'a>(&'a Rational);
+
+        impl fmt::Display for Dyadic<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                let exponent = self.0.frac_width().unwrap();
+
+                if self.0.is_negative() {
+                    write!(f, "-")?
+                }
+
+                write!(f, "{}", self.0.mag.numer())?;
+
+                if exponent != 0 {
+                    write!(f, "b-{}", exponent)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        Dyadic(self)
     }
 }

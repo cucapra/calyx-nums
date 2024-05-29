@@ -236,6 +236,22 @@ impl Rational {
         }
     }
 
+    /// Computes the reciprocal of `self`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is zero.
+    pub fn reciprocal(self) -> Rational {
+        assert!(!self.is_zero());
+
+        let (numer, denom) = self.mag.into();
+
+        Rational {
+            sign: self.sign,
+            mag: Ratio::new_raw(denom, numer),
+        }
+    }
+
     pub fn sgn(&self) -> Ordering {
         if self.is_zero() {
             return Ordering::Equal;

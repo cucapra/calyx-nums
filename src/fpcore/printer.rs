@@ -542,38 +542,34 @@ impl Property {
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::CalyxImpl(CalyxImpl::Lut { lut_size }) => allocator
+            Property::CalyxImpl(CalyxImpl::Lut { size }) => allocator
                 .text(":calyx-impl")
                 .append(allocator.line())
                 .append(
                     allocator
                         .text("lut")
                         .append(allocator.line())
-                        .append(allocator.as_string(lut_size))
+                        .append(allocator.as_string(size))
                         .nest(STANDARD_INDENT)
                         .group()
                         .parens(),
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::CalyxImpl(CalyxImpl::Poly { degree, lut_size }) => {
-                allocator
-                    .text(":calyx-impl")
-                    .append(allocator.line())
-                    .append(
-                        allocator
-                            .text("poly")
-                            .append(allocator.line())
-                            .append(allocator.as_string(degree))
-                            .append(allocator.line())
-                            .append(allocator.as_string(lut_size))
-                            .nest(STANDARD_INDENT)
-                            .group()
-                            .parens(),
-                    )
-                    .nest(STANDARD_INDENT)
-                    .group()
-            }
+            Property::CalyxImpl(CalyxImpl::Poly { degree }) => allocator
+                .text(":calyx-impl")
+                .append(allocator.line())
+                .append(
+                    allocator
+                        .text("poly")
+                        .append(allocator.line())
+                        .append(allocator.as_string(degree))
+                        .nest(STANDARD_INDENT)
+                        .group()
+                        .parens(),
+                )
+                .nest(STANDARD_INDENT)
+                .group(),
             Property::Unknown(name, data) => allocator
                 .text(":")
                 .append(name.pretty(allocator))

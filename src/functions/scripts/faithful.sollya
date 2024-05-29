@@ -1,0 +1,89 @@
+// Usage:
+//   sollya faithful.sollya --args <fn> <degree> <left> <right> <count> <scale>
+//
+
+dieonerrormode = on!;
+display = dyadic!;
+
+f = parse(__argv[0]);
+d = parse(__argv[1]);
+l = parse(__argv[2]);
+r = parse(__argv[3]);
+c = parse(__argv[4]);
+s = parse(__argv[5]);
+
+// Algorithm 1 (de Dinechin, 2015).
+procedure build_poly(g, I, error_target, scale) {
+    var formats, done, i, p, err;
+
+    formats = [|0,...,d|];
+    done = false;
+
+    while !done do {
+        for i from 0 to d do
+            formats[i] = -scale;
+
+        p = fpminimax(g, d, formats, I, fixed, absolute);
+        err = sup(supnorm(p, g, I, absolute, 1b-12));
+
+        if err < error_target then
+            done = true
+        else
+            scale = scale - 1;
+    };
+
+    return { .scale = scale, .p = p, .err = err };
+};
+
+procedure build_table(count, error_target) {
+    var stride, scale, p, err, done, i;
+
+    stride = (r - l) / count;
+
+    scale = ceil(log2(error_target * d));
+    p = [|1,...,count|];
+
+    done = false;
+
+    while !done do {
+        done = true;
+        err = 0;
+
+        for i from 0 to count - 1 do {
+            var g, result;
+
+            g = f(l + stride * (i + 0.5 + 0.5 * _x_));
+            result = build_poly(g, [-1;1], error_target, scale);
+
+            if result.scale < scale then {
+                scale = result.scale;
+
+                done = false;
+                i = count;
+            } else {
+                p[i] = result.p;
+                err = max(err, result.err);
+            };
+        };
+    };
+
+    return { .scale = scale, .p = p, .err = err };
+};
+
+result = build_table(c, 2^(s - 2));
+
+print(result.scale);
+print(result.err);
+
+for p in result.p do {
+    for i from 0 to d do {
+        if i != 0 then
+            write(" ");
+
+        write(coeff(p, i));
+    };
+
+    write("\n");
+};
+
+quit;

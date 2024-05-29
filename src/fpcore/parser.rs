@@ -437,18 +437,16 @@ impl FPCoreParser {
         )
     }
 
-    fn poly(input: Node) -> ParseResult<(u32, u32)> {
-        Ok(match_nodes!(input.into_children();
-            [degree, size] => (parse_node(&degree)?, parse_node(&size)?),
-        ))
+    fn poly(input: Node) -> ParseResult<u32> {
+        match_nodes!(input.into_children();
+            [degree] => parse_node(&degree),
+        )
     }
 
     fn strategy(input: Node) -> ParseResult<metadata::CalyxImpl> {
         Ok(match_nodes!(input.into_children();
-            [lut(lut_size)] => metadata::CalyxImpl::Lut { lut_size },
-            [poly((degree, lut_size))] => {
-                metadata::CalyxImpl::Poly { degree, lut_size }
-            },
+            [lut(size)] => metadata::CalyxImpl::Lut { size },
+            [poly(degree)] => metadata::CalyxImpl::Poly { degree },
         ))
     }
 

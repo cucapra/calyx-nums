@@ -1,0 +1,77 @@
+// Usage:
+//   sollya segment.sollya --args <fn> <degree> <left> <right> <center> <scale>
+//
+
+dieonerrormode = on!;
+rationalmode = on!;
+
+f = parse(__argv[0]);
+d = parse(__argv[1]);
+a = parse(__argv[2]);
+b = parse(__argv[3]);
+c = parse(__argv[4]);
+s = parse(__argv[5]);
+
+procedure clog2(x) {
+    var e, p;
+
+    e = exponent(x);
+    p = precision(x);
+
+    if p != 1 then
+        e = e + p;
+
+    return e;
+};
+
+procedure left_endpoint(diameter) {
+    var m, l;
+
+    m = diameter / (b - a);
+    l = m * (a - c) + c;
+
+    if c > 0 then
+        l = ceil(l / 2^s) * 2^s
+    else
+        l = floor(l / 2^s) * 2^s;
+
+    return l;
+};
+
+procedure segments(error_target) {
+    var stride, count, done;
+
+    stride = 2^clog2(b - a);
+    count = 1;
+
+    done = false;
+
+    while !done && stride > 2^s do {
+        var left, i;
+
+        count = ceil((b - a) / stride);
+        left = left_endpoint(stride * count);
+
+        done = true;
+
+        for i from 0 to count - 1 do {
+            var g, min_degree;
+
+            g = f(left + stride * (i + 0.5 + 0.5 * _x_));
+            min_degree = sup(guessdegree(g, [-1;1], error_target));
+
+            if min_degree > d then {
+                stride = stride / 2;
+
+                done = false;
+                i = count;
+            };
+        };
+    };
+
+    return count;
+};
+
+print(segments(2^(s - 2)));
+
+quit;

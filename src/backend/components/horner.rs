@@ -27,7 +27,7 @@ impl Horner<'_> {
     ) -> CalyxResult<(ir::Id, Vec<ir::PortDef<u64>>)> {
         let cast = Cast {
             from: &Format {
-                scale: self.format.scale,
+                scale: self.spec.sum_scale,
                 width: self.spec.sum_width,
                 is_signed: true,
             },
@@ -51,13 +51,13 @@ impl Horner<'_> {
             .map(|(pos, &width)| {
                 let to = if matches!(pos, Position::Last | Position::Only) {
                     Format {
-                        scale: self.format.scale,
+                        scale: self.spec.sum_scale,
                         width: self.spec.sum_width,
                         is_signed: true,
                     }
                 } else {
                     Format {
-                        scale: self.format.scale,
+                        scale: self.spec.lut_scale,
                         width: max_width,
                         is_signed: true,
                     }
@@ -65,7 +65,7 @@ impl Horner<'_> {
 
                 let cast = Cast {
                     from: &Format {
-                        scale: self.format.scale,
+                        scale: self.spec.lut_scale,
                         width,
                         is_signed: true,
                     },
@@ -125,6 +125,8 @@ impl ComponentBuilder for Horner<'_> {
         let mut component = ir::Component::new(name, ports, true, false, None);
         let mut builder = ir::Builder::new(&mut component, lib).not_generated();
 
+        assert!(self.spec.sum_scale <= self.spec.lut_scale);
+
         structure!(builder;
             let acc = prim std_reg(u64::from(self.spec.sum_width));
             let mul = prim num_smul(
@@ -135,7 +137,7 @@ impl ComponentBuilder for Horner<'_> {
             );
             let add = prim num_sadd(
                 u64::from(*self.spec.lut_widths.iter().max().unwrap()),
-                0u64,
+                u64::from(self.spec.lut_scale.abs_diff(self.spec.sum_scale)),
                 u64::from(self.spec.product_width),
                 0u64,
                 u64::from(self.spec.sum_width)

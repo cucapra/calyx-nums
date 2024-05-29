@@ -2,6 +2,8 @@
 
 use std::{cmp, iter};
 
+use super::PolynomialApprox;
+use crate::format::Format;
 use crate::fpcore::ast::Rational;
 use crate::utils::interval::Interval;
 use crate::utils::mangling::Mangle;
@@ -10,37 +12,74 @@ use crate::utils::mangling::Mangle;
 #[derive(Mangle)]
 pub struct Datapath {
     pub lut_widths: Vec<u32>,
+    pub lut_scale: i32,
     pub product_width: u32,
     pub sum_width: u32,
+    pub sum_scale: i32,
 }
 
 impl Datapath {
-    pub fn from_table(
-        table: &[Vec<Rational>],
-        degree: usize,
+    pub fn from_approx(
+        approx: &PolynomialApprox,
+        degree: u32,
         scale: i32,
     ) -> Datapath {
-        let lut_widths = table_ranges(table, degree, scale);
+        let lut_widths = table_ranges(&approx.table, degree, approx.scale);
+        let sum_scale = horner_precision(approx, degree, scale);
 
         let HornerRanges {
             product_width,
             sum_width,
-        } = HornerRanges::from_table(table, degree, scale);
+        } = HornerRanges::from_table(&approx.table, sum_scale);
 
         Datapath {
             lut_widths,
+            lut_scale: approx.scale,
             product_width,
             sum_width,
+            sum_scale,
         }
+    }
+
+    pub fn lut_formats(&self) -> Vec<Format> {
+        self.lut_widths
+            .iter()
+            .map(|&width| Format {
+                scale: self.lut_scale,
+                width,
+                is_signed: true,
+            })
+            .collect()
+    }
+}
+
+// Cf. Algorithm 2 (de Dinechin, 2015).
+pub fn horner_precision(
+    approx: &PolynomialApprox,
+    degree: u32,
+    scale: i32,
+) -> i32 {
+    assert!(approx.error.floor_log2() < i64::from(scale) - 2);
+
+    if degree == 0 {
+        approx.scale
+    } else {
+        let error_target =
+            Rational::power_of_two(i64::from(scale) - 1) - &approx.error;
+
+        let scale = (error_target / Rational::from(degree)).floor_log2();
+        let scale = i32::try_from(scale).unwrap();
+
+        cmp::min(approx.scale, scale)
     }
 }
 
 pub fn table_ranges(
     table: &[Vec<Rational>],
-    degree: usize,
+    degree: u32,
     scale: i32,
 ) -> Vec<u32> {
-    let mut widths = vec![1; degree + 1];
+    let mut widths = vec![1; degree as usize + 1];
 
     for row in table {
         for (value, max_width) in iter::zip(row, &mut widths) {
@@ -57,44 +96,35 @@ pub struct HornerRanges {
 }
 
 impl HornerRanges {
-    pub fn from_table(
-        table: &[Vec<Rational>],
-        degree: usize,
-        scale: i32,
-    ) -> HornerRanges {
+    pub fn from_table(table: &[Vec<Rational>], scale: i32) -> HornerRanges {
         let init = HornerRanges {
             product_width: 1,
             sum_width: 1,
         };
 
-        table.iter().fold(init, |max, approx| {
+        table.iter().fold(init, |max, poly| {
             let HornerRanges {
                 product_width,
                 sum_width,
-            } = HornerRanges::from_approx(approx, degree, scale);
-
-            let product_width = cmp::max(max.product_width, product_width);
-            let sum_width = cmp::max(max.sum_width, sum_width);
+            } = HornerRanges::from_poly(poly, scale);
 
             HornerRanges {
-                product_width,
-                sum_width,
+                product_width: cmp::max(max.product_width, product_width),
+                sum_width: cmp::max(max.sum_width, sum_width),
             }
         })
     }
 
     // See `computeHornerMSBs` (de Dinechin, 2015).
-    fn from_approx(
-        approx: &[Rational],
-        degree: usize,
-        scale: i32,
-    ) -> HornerRanges {
+    fn from_poly(poly: &[Rational], scale: i32) -> HornerRanges {
+        let (last, rest) = poly.split_last().unwrap();
+
         let mut product_width = 0;
-        let mut sum_width = signed_width(&approx[degree], scale);
+        let mut sum_width = signed_width(last, scale);
 
-        let mut sigma = Interval::from(&approx[degree]);
+        let mut sigma = Interval::from(last);
 
-        for i in (0..degree).rev() {
+        for value in rest.iter().rev() {
             let pi = Interval::new(-Rational::from(1u32), Rational::from(1u32))
                 * sigma;
 
@@ -102,7 +132,7 @@ impl HornerRanges {
                 .max(signed_width(&pi.inf, scale))
                 .max(signed_width(&pi.sup, scale));
 
-            sigma = Interval::from(&approx[i]) + pi;
+            sigma = Interval::from(value) + pi;
 
             sum_width = sum_width
                 .max(signed_width(&sigma.inf, scale))

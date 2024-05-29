@@ -134,7 +134,7 @@ pub enum SollyaFunction {
 }
 
 impl SollyaFunction {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             SollyaFunction::Sin => "sin",
             SollyaFunction::Cos => "cos",
@@ -158,6 +158,20 @@ impl SollyaFunction {
             SollyaFunction::Erf => "erf",
             SollyaFunction::ErfC => "erfc",
         }
+    }
+
+    /// Returns an adapter for formatting `self` as an expression in terms of
+    /// the free variable.
+    pub fn expr(self) -> impl fmt::Display {
+        struct Expression(SollyaFunction);
+
+        impl fmt::Display for Expression {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}(_x_)", self.0)
+            }
+        }
+
+        Expression(self)
     }
 }
 

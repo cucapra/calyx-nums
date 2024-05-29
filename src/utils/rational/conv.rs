@@ -80,7 +80,7 @@ impl Rational {
         }
     }
 
-    fn frac_width(&self) -> Option<u64> {
+    pub fn frac_width(&self) -> Option<u64> {
         let denom = self.mag.denom();
 
         if denom.count_ones() == 1 {

@@ -144,6 +144,14 @@ impl TableDomain {
 
         Ok((TableDomain { left, right }, stride))
     }
+
+    pub(super) fn center(a: Rational, b: Rational) -> Rational {
+        if a.sign != b.sign || a.is_zero() || b.is_zero() {
+            Rational::from(0u32)
+        } else {
+            Rational::from(2u32) / (a.reciprocal() + b.reciprocal())
+        }
+    }
 }
 
 #[derive(Debug)]

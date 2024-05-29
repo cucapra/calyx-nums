@@ -1,7 +1,7 @@
 //! Math library construction.
 
 use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, slice};
 
 use calyx_ir as ir;
 use calyx_utils::{self as utils, CalyxResult, Error};
@@ -15,8 +15,8 @@ use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
-use crate::functions::{datapath, remez};
-use crate::functions::{AddressSpec, Datapath, HornerRanges, TableDomain};
+use crate::functions::{faithful, remez};
+use crate::functions::{AddressSpec, Datapath, TableDomain};
 use crate::utils::mangling::Mangle;
 use crate::utils::sollya::SollyaFunction;
 
@@ -107,7 +107,16 @@ impl Visitor<'_> for Builder<'_> {
                         Error::misc("No implementation specified").with_pos(op)
                     })?;
 
-                    self.build_function(&f, &domain, strategy)?;
+                    let prototype = match *strategy {
+                        CalyxImpl::Lut { size } => {
+                            self.build_lut(&f, &domain, size)?
+                        }
+                        CalyxImpl::Poly { degree } => {
+                            self.build_poly(&f, &domain, degree)?
+                        }
+                    };
+
+                    self.prototypes.insert(f.uid, prototype);
                 }
 
                 visitor::visit_expression(self, expr)
@@ -140,105 +149,113 @@ impl<'a> Builder<'a> {
         Ok(DomainHint { left, right })
     }
 
-    fn build_function(
+    fn build_lut(
         &mut self,
         function: &Function,
         domain: &DomainHint,
-        strategy: &CalyxImpl,
-    ) -> CalyxResult<()> {
-        let scale = self.format.scale;
-
-        let (degree, size) = match *strategy {
-            CalyxImpl::Lut { lut_size } => (0, lut_size),
-            CalyxImpl::Poly { degree, lut_size } => (degree, lut_size),
-        };
-
+        size: u32,
+    ) -> CalyxResult<Prototype> {
         let (spec, domain) = &domain.widen(function, self.format, size)?;
 
-        let values = &remez::build_table(
-            function.kind,
-            degree,
-            &domain.left,
-            &domain.right,
-            size,
-            scale,
-        )?;
+        let degree = 0;
+        let scale = self.format.scale;
 
-        let formats = &match strategy {
-            CalyxImpl::Lut { .. } => {
-                vec![*self.format]
-            }
-            CalyxImpl::Poly { .. } => {
-                datapath::table_ranges(values, degree as usize, scale)
-                    .iter()
-                    .map(|&width| Format {
-                        scale,
-                        width,
-                        is_signed: true,
-                    })
-                    .collect()
-            }
+        let values =
+            &remez::build_table(function.kind, degree, domain, size, scale)?;
+
+        let data = TableData {
+            values,
+            formats: slice::from_ref(self.format),
+            spec: &TableSpec {
+                function: function.kind,
+                degree,
+                domain,
+                size,
+                scale,
+            },
         };
 
-        let table = LookupTable {
-            data: TableData {
-                values,
-                formats,
-                spec: &TableSpec {
-                    function: function.kind,
-                    degree,
-                    left: &domain.left,
-                    right: &domain.right,
-                    size,
-                    scale,
-                },
-            },
+        let builder = LookupTable {
+            data,
             format: self.format,
             spec,
             span: function.span,
         };
 
-        let prefix_hint = ir::Id::new(function);
+        let (name, signature) = self.cm.get(&builder, self.lib)?;
 
-        let prototype = match strategy {
-            CalyxImpl::Lut { .. } => {
-                let (name, signature) = self.cm.get(&table, self.lib)?;
+        Ok(Prototype {
+            name,
+            prefix_hint: ir::Id::new(function),
+            signature,
+            is_comb: true,
+        })
+    }
 
-                Prototype {
-                    name,
-                    prefix_hint,
-                    signature,
-                    is_comb: true,
-                }
-            }
-            CalyxImpl::Poly { .. } => {
-                let HornerRanges {
-                    product_width,
-                    sum_width,
-                } = HornerRanges::from_table(values, degree as usize, scale);
+    fn build_poly(
+        &mut self,
+        function: &Function,
+        domain: &DomainHint,
+        degree: u32,
+    ) -> CalyxResult<Prototype> {
+        let scale = self.format.scale;
 
-                let spec = Datapath {
-                    lut_widths: table.data.widths().collect(),
-                    product_width,
-                    sum_width,
-                };
+        let size = faithful::segment_domain(
+            function.kind,
+            degree,
+            domain.left,
+            domain.right,
+            scale,
+        )?;
 
-                let (name, signature) =
-                    self.cm.get(&PiecewisePoly { table, spec }, self.lib)?;
+        let (spec, domain) = &domain.widen(function, self.format, size)?;
 
-                Prototype {
-                    name,
-                    prefix_hint,
-                    signature,
-                    is_comb: false,
-                }
-            }
+        let approx =
+            faithful::build_table(function.kind, degree, domain, size, scale)?;
+
+        let datapath = Datapath::from_approx(&approx, degree, scale);
+        let formats = &datapath.lut_formats();
+
+        let data = TableData {
+            values: &approx.table,
+            formats,
+            spec: &TableSpec {
+                function: function.kind,
+                degree,
+                domain,
+                size,
+                scale: datapath.lut_scale,
+            },
         };
 
-        self.prototypes.insert(function.uid, prototype);
+        let builder = PiecewisePoly {
+            table: LookupTable {
+                data,
+                format: self.format,
+                spec,
+                span: function.span,
+            },
+            spec: datapath,
+        };
 
-        Ok(())
+        let (name, signature) = self.cm.get(&builder, self.lib)?;
+
+        Ok(Prototype {
+            name,
+            prefix_hint: ir::Id::new(function),
+            signature,
+            is_comb: false,
+        })
     }
+}
+
+#[derive(Mangle)]
+struct TableSpec<'a> {
+    function: SollyaFunction,
+    degree: u32,
+    domain: &'a TableDomain,
+    size: u32,
+    scale: i32,
 }
 
 struct DomainHint<'a> {
@@ -256,10 +273,8 @@ impl DomainHint<'_> {
         let (spec, domain) =
             AddressSpec::from_domain_hint(self.left, self.right, format, size)
                 .map_err(|err| {
-                    Error::misc(format!(
-                        "Invalid domain in implementation of {function}: {err}"
-                    ))
-                    .with_pos(function)
+                    Error::misc(format!("Invalid domain: {err}"))
+                        .with_pos(function)
                 })?;
 
         if &domain.left != self.left || &domain.right != self.right {
@@ -268,16 +283,6 @@ impl DomainHint<'_> {
 
         Ok((spec, domain))
     }
-}
-
-#[derive(Mangle)]
-struct TableSpec<'a> {
-    function: SollyaFunction,
-    degree: u32,
-    left: &'a ast::Rational,
-    right: &'a ast::Rational,
-    size: u32,
-    scale: i32,
 }
 
 struct Function {
