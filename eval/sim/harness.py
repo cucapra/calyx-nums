@@ -22,7 +22,7 @@ def single(
     run = harness.group('run')
 
     for i, arg in enumerate(args):
-        tmp = harness.reg(f'arg{i}', width)
+        tmp = harness.reg(width, f'arg{i}')
         read = harness.group(f'read{i}')
 
         with read:
@@ -36,7 +36,7 @@ def single(
 
         harness.control += read
 
-    result = harness.reg('result', width)
+    result = harness.reg(width, 'result')
     write = harness.group('write')
 
     with run:
@@ -86,7 +86,7 @@ def batch(
     )
 
     lt = harness.lt(idx_width, 'lt')
-    idx = harness.reg('idx', idx_width)
+    idx = harness.reg(idx_width, 'idx')
     init = harness.group('init')
     cond = harness.comb_group('cond')
 
@@ -115,7 +115,7 @@ def batch(
     reads = []
 
     for i, arg in enumerate(args):
-        tmp = harness.reg(f'arg{i}', width)
+        tmp = harness.reg(width, f'arg{i}')
         read = harness.group(f'read{i}')
 
         with read:
@@ -130,7 +130,7 @@ def batch(
 
         reads.append(read)
 
-    result = harness.reg('result', width)
+    result = harness.reg(width, 'result')
     write = harness.group('write')
 
     with run:
