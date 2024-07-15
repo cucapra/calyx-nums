@@ -1,16 +1,17 @@
 //! Faithfully-rounded polynomial approximations (de Dinechin, 2015).
 
 use itertools::Itertools;
+use malachite::Rational;
 
 use super::TableDomain;
-use crate::fpcore::ast::Rational;
+use crate::utils::rational::{Dyadic, RoundBinary};
 use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 
 /// Guesses the minimum number of subintervals needed to approximate `f` by
 /// polynomials of the given degree with an error less than 0.25 ulp.
 ///
 /// Uniform segmentation is assumed. For each candidate division, the actual
-/// domain is chosen as if by [TableDomain::from_hint].
+/// domain is chosen as if by [`TableDomain::from_hint`].
 pub fn segment_domain(
     f: SollyaFunction,
     degree: u32,
@@ -80,8 +81,7 @@ pub fn build_table(
         .map(|line| {
             line.split(' ')
                 .map(|c| {
-                    Rational::from_dyadic(c)
-                        .map_err(|_| ScriptError::BadResponse)
+                    Rational::from_dyadic(c).ok_or(ScriptError::BadResponse)
                 })
                 .collect()
         })
@@ -98,7 +98,7 @@ fn parse_response(response: &str) -> Option<(&str, i32, Rational)> {
     let (scale, error, table) = response.splitn(3, '\n').collect_tuple()?;
 
     let scale = scale.parse().ok()?;
-    let error = Rational::from_dyadic(error).ok()?;
+    let error = Rational::from_dyadic(error)?;
 
     Some((table, scale, error))
 }

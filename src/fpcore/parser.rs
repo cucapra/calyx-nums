@@ -6,7 +6,7 @@ use calyx_utils::{FileIdx, GPosIdx, GlobalPositionTable};
 use pest::error::{Error, ErrorVariant};
 use pest_consume::{match_nodes, Parser};
 
-use super::{ast, metadata};
+use super::{ast, literals, metadata};
 
 #[derive(Parser)]
 #[grammar = "fpcore/syntax.pest"]
@@ -247,7 +247,7 @@ impl FPCoreParser {
             [decnum(value)] => value,
             [hexnum(value)] => value,
             [digits_kwd(_), mantissa((sign, mantissa)), exponent(exponent), dec_digits(base)] => {
-                ast::Rational::from_digits(sign, mantissa, exponent, base)
+                literals::rational_from_digits(sign, mantissa, exponent, base)
                     .unwrap()
             },
         );
@@ -450,11 +450,8 @@ impl FPCoreParser {
         ))
     }
 
-    fn pm_opt(input: Node) -> ParseResult<ast::Sign> {
-        Ok(match input.as_str() {
-            "-" => ast::Sign::Neg,
-            _ => ast::Sign::Pos,
-        })
+    fn pm_opt(input: Node) -> ParseResult<bool> {
+        Ok(!matches!(input.as_str(), "-"))
     }
 
     fn dot(_input: Node) -> ParseResult<()> {
@@ -476,8 +473,10 @@ impl FPCoreParser {
     fn rational(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
             [pm_opt(sign), dec_digits(numerator), nonzero(denominator)] => {
-                ast::Rational::from_ratio_str(sign, numerator, denominator, 10)
-                    .unwrap()
+                literals::rational_from_ratio_str(
+                    sign, numerator, denominator, 10,
+                )
+                .unwrap()
             },
         ))
     }
@@ -502,7 +501,7 @@ impl FPCoreParser {
         ))
     }
 
-    fn mantissa(input: Node) -> ParseResult<(ast::Sign, &str)> {
+    fn mantissa(input: Node) -> ParseResult<(bool, &str)> {
         Ok(match_nodes!(input.into_children();
             [pm_opt(sign), dec_digits(digits)] => (sign, digits),
         ))
@@ -515,14 +514,16 @@ impl FPCoreParser {
     fn decnum(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
             [pm_opt(sign), dec_mantissa((integer, fraction)), exponent(exponent)] => {
-                ast::Rational::from_scientific_str(
+                literals::rational_from_scientific_str(
                     sign, integer, fraction, 10, 10, exponent,
                 )
                 .unwrap()
             },
             [pm_opt(sign), dec_mantissa((integer, fraction))] => {
-                ast::Rational::from_fixed_point_str(sign, integer, fraction, 10)
-                    .unwrap()
+                literals::rational_from_fixed_point_str(
+                    sign, integer, fraction, 10,
+                )
+                .unwrap()
             },
         ))
     }
@@ -530,14 +531,16 @@ impl FPCoreParser {
     fn hexnum(input: Node) -> ParseResult<ast::Rational> {
         Ok(match_nodes!(input.into_children();
             [pm_opt(sign), hex_mantissa((integer, fraction)), exponent(exponent)] => {
-                ast::Rational::from_scientific_str(
+                literals::rational_from_scientific_str(
                     sign, integer, fraction, 16, 2, exponent,
                 )
                 .unwrap()
             },
             [pm_opt(sign), hex_mantissa((integer, fraction))] => {
-                ast::Rational::from_fixed_point_str(sign, integer, fraction, 16)
-                    .unwrap()
+                literals::rational_from_fixed_point_str(
+                    sign, integer, fraction, 16,
+                )
+                .unwrap()
             },
         ))
     }

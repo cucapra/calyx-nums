@@ -11,6 +11,7 @@ use crate::format::Format;
 use crate::fpcore::ast::{Rational, Span};
 use crate::functions::AddressSpec;
 use crate::utils::mangling::{mangle, Mangle};
+use crate::utils::rational::FixedPoint;
 
 pub struct TableData<'a> {
     pub values: &'a [Vec<Rational>],
@@ -40,10 +41,12 @@ impl LookupTable<'_> {
         &self,
         lib: &mut ir::LibrarySignatures,
     ) -> CalyxResult<ir::Id> {
-        let format_error = |post| {
+        let format_error = |value| {
             Error::misc("Implementation error")
                 .with_pos(&self.span)
-                .with_post_msg(Some(post))
+                .with_post_msg(Some(format!(
+                    "Generated constant {value} is not representable"
+                )))
         };
 
         let values: Vec<_> = self
@@ -53,12 +56,9 @@ impl LookupTable<'_> {
             .map(|row| {
                 itertools::process_results(
                     iter::zip(row, self.data.formats).map(|(value, format)| {
-                        value.to_format(format).ok_or_else(|| {
-                            format_error(format!(
-                                "Generated constant {value} is not \
-                                 representable in the given format"
-                            ))
-                        })
+                        value
+                            .to_fixed_point(format)
+                            .ok_or_else(|| format_error(value))
                     }),
                     |bits| lut::pack(bits, self.data.widths()),
                 )
@@ -132,18 +132,26 @@ impl ComponentBuilder for LookupTable<'_> {
 
         let primitive = builder.add_primitive("lut", lut, &[]);
 
+        let width_error = |_| {
+            Error::misc("Implementation error")
+                .with_pos(&self.span)
+                .with_post_msg(Some(String::from(
+                    "Constant width exceeds 64 bits",
+                )))
+        };
+
         let global = u64::from(self.format.width);
-        let spec = self.spec;
+        let left = u64::try_from(&self.spec.subtrahend).map_err(width_error)?;
 
         structure!(builder;
             let sub = prim std_sub(global);
             let slice = prim std_bit_slice(
                 global,
-                spec.idx_lsb,
-                spec.idx_lsb + spec.idx_width - 1,
-                spec.idx_width
+                self.spec.idx_lsb,
+                self.spec.idx_lsb + self.spec.idx_width - 1,
+                self.spec.idx_width
             );
-            let left = constant(spec.subtrahend, global);
+            let left = constant(left, global);
         );
 
         let [in_, out] = ["in", "out"].map(ir::Id::new);
@@ -159,7 +167,7 @@ impl ComponentBuilder for LookupTable<'_> {
 
         builder.component.continuous_assignments.extend(assigns);
 
-        if spec.idx_lsb == 0 {
+        if self.spec.idx_lsb == 0 {
             let zero = builder.add_constant(0, 1);
             let signature = &builder.component.signature;
 
@@ -169,14 +177,14 @@ impl ComponentBuilder for LookupTable<'_> {
 
             builder.component.continuous_assignments.push(assign);
         } else {
-            let msb = spec.idx_lsb - 1;
+            let msb = self.spec.idx_lsb - 1;
 
             structure!(builder;
                 let high = prim std_bit_slice(global, msb, msb, 1);
                 let com = prim std_not(1);
             );
 
-            if spec.idx_lsb == 1 {
+            if self.spec.idx_lsb == 1 {
                 let signature = &builder.component.signature;
 
                 let assigns = build_assignments!(builder;
@@ -189,7 +197,7 @@ impl ComponentBuilder for LookupTable<'_> {
             } else {
                 structure!(builder;
                     let low = prim std_slice(global, msb);
-                    let cat = prim std_cat(1, msb, spec.idx_lsb);
+                    let cat = prim std_cat(1, msb, self.spec.idx_lsb);
                 );
 
                 let signature = &builder.component.signature;

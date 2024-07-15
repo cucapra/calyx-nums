@@ -14,6 +14,7 @@ use crate::analysis::{Binding, NameResolution, PassManager, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::opts::Opts;
+use crate::utils::rational::FixedPoint;
 
 /// A compiled expression.
 ///
@@ -45,13 +46,16 @@ struct ExpressionBuilder<'a, 'b> {
 
 impl ExpressionBuilder<'_, '_> {
     fn compile_number(&mut self, num: &ast::Number) -> CalyxResult<Expression> {
-        let val = num.value.to_format(self.format).ok_or_else(|| {
-            Error::misc(format!(
-                "Constant value {} is not representable in the given format",
-                num.value
-            ))
-            .with_pos(num)
-        })?;
+        let val = num
+            .value
+            .to_fixed_point(self.format)
+            .ok_or_else(|| {
+                Error::misc("Constant is not representable").with_pos(num)
+            })
+            .and_then(|val| {
+                u64::try_from(&val)
+                    .map_err(|_| Error::misc("Constant width exceeds 64 bits"))
+            })?;
 
         let cell = self.builder.add_constant(val, u64::from(self.format.width));
         let port = cell.borrow().get("out");

@@ -1,7 +1,9 @@
 //! Minimax approximations.
 
+use malachite::Rational;
+
 use super::TableDomain;
-use crate::fpcore::ast::Rational;
+use crate::utils::rational::Dyadic;
 use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 
 /// Constructs a table of polynomials approximating `f` piecewise over the given
@@ -35,8 +37,7 @@ pub fn build_table(
         .map(|line| {
             line.split(' ')
                 .map(|c| {
-                    Rational::from_dyadic(c)
-                        .map_err(|_| ScriptError::BadResponse)
+                    Rational::from_dyadic(c).ok_or(ScriptError::BadResponse)
                 })
                 .collect()
         })

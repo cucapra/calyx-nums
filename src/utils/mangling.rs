@@ -1,8 +1,10 @@
 //! Name mangling.
 
+use std::cmp::Ordering;
 use std::fmt;
 
-use crate::fpcore::ast::Rational;
+use malachite::num::arithmetic::traits::Sign;
+use malachite::{Natural, Rational};
 
 pub use calyx_nums_macros::Mangle;
 
@@ -71,7 +73,7 @@ macro_rules! impl_mangle_unsigned {
     )*};
 }
 
-impl_mangle_unsigned!(usize, u8, u16, u32, u64, num::BigUint);
+impl_mangle_unsigned!(usize, u8, u16, u32, u64, Natural);
 
 macro_rules! impl_mangle_signed {
     ($($type:ty),*) => {$(
@@ -103,6 +105,12 @@ impl<T: Mangle> Mangle for [T] {
 
 impl Mangle for Rational {
     fn mangle(&self, w: &mut dyn fmt::Write) -> fmt::Result {
-        init_list!(w, "Rational", self.sign, self.mag.numer(), self.mag.denom())
+        init_list!(
+            w,
+            "Rational",
+            self.sign() == Ordering::Less,
+            self.numerator_ref(),
+            self.denominator_ref(),
+        )
     }
 }

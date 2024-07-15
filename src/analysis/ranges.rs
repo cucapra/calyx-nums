@@ -11,6 +11,7 @@ use super::passes::{Pass, PassManager};
 use super::type_check::TypeCheck;
 use crate::format::Format;
 use crate::fpcore::{ast, Visitor};
+use crate::utils::rational::Dyadic;
 use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 
 const PROLOGUE: &str = "\
@@ -72,8 +73,8 @@ fn parse_response_line(
     let (uid, left, right) = line.split(' ').collect_tuple()?;
 
     let uid = ast::NodeId(uid.parse().ok()?);
-    let left = ast::Rational::from_dyadic(left).ok()?;
-    let right = ast::Rational::from_dyadic(right).ok()?;
+    let left = ast::Rational::from_dyadic(left)?;
+    let right = ast::Rational::from_dyadic(right)?;
 
     Some((uid, [left, right]))
 }

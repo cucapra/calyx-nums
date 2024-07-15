@@ -3,9 +3,9 @@
 use std::cmp::{self, Ordering};
 use std::ops::{Add, Mul, Neg, Sub};
 
-use num::Zero;
-
-use crate::fpcore::ast::{Rational, Sign};
+use malachite::num::arithmetic::traits::Sign;
+use malachite::num::basic::traits::Zero;
+use malachite::Rational;
 
 /// Class of a nonempty interval (Hickey et al., 2001).
 enum Class {
@@ -28,7 +28,7 @@ impl Interval {
 
     fn classify(&self) -> Class {
         // See Hickey et al. (2001), Sec. 4.3.
-        match (self.inf.sgn(), self.sup.sgn()) {
+        match (self.inf.sign(), self.sup.sign()) {
             (Ordering::Less, Ordering::Greater) => Class::M,
             (Ordering::Equal, Ordering::Equal) => Class::Z,
             (_, Ordering::Greater) => Class::P,
@@ -102,12 +102,7 @@ impl Mul for Interval {
             (Class::N, Class::M) => Interval::new(&a * d, a * c),
             (Class::N, Class::N) => Interval::new(b * d, a * c),
             (Class::Z, _) | (_, Class::Z) => {
-                let zero = |sign| Rational {
-                    sign,
-                    mag: Zero::zero(),
-                };
-
-                Interval::new(zero(Sign::Pos), zero(Sign::Neg))
+                Interval::new(Rational::ZERO, Rational::ZERO)
             }
         }
     }

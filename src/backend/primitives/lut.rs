@@ -4,17 +4,18 @@ use std::fmt::{LowerHex, Write};
 use std::iter;
 
 use calyx_ir as ir;
-use num::{BigUint, Zero};
+use malachite::num::basic::traits::Zero;
+use malachite::Natural;
 
 /// Packs a sequence of values into a single bit vector. The first element of
 /// the sequence occupies the most-significant position.
-pub fn pack<V, W>(values: V, widths: W) -> BigUint
+pub fn pack<V, W>(values: V, widths: W) -> Natural
 where
-    V: IntoIterator<Item = BigUint>,
+    V: IntoIterator<Item = Natural>,
     W: IntoIterator<Item = u32>,
 {
     iter::zip(values, widths)
-        .fold(Zero::zero(), |acc, (value, width)| (acc << width) | value)
+        .fold(Natural::ZERO, |acc, (value, width)| (acc << width) | value)
 }
 
 pub fn compile_lut<T: LowerHex>(

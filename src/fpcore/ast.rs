@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use calyx_utils::{GPosIdx, Id, WithPos};
 
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
-pub use super::literals::{Rational, Sign};
+pub use super::literals::Rational;
 pub use super::metadata::Property;
 
 #[derive(Debug)]

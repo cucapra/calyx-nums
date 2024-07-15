@@ -1,10 +1,15 @@
 //! Polynomial evaluator sizing.
 
-use std::{cmp, iter};
+use std::cmp::{self, Ordering};
+use std::iter;
+
+use malachite::num::arithmetic::traits::{FloorLogBase2, PowerOf2, Sign};
+use malachite::num::basic::traits::{NegativeOne, One};
+use malachite::num::conversion::traits::ExactFrom;
+use malachite::Rational;
 
 use super::PolynomialApprox;
 use crate::format::Format;
-use crate::fpcore::ast::Rational;
 use crate::utils::interval::Interval;
 use crate::utils::mangling::Mangle;
 
@@ -59,16 +64,16 @@ pub fn horner_precision(
     degree: u32,
     scale: i32,
 ) -> i32 {
-    assert!(approx.error.floor_log2() < i64::from(scale) - 2);
+    assert!(approx.error.floor_log_base_2() < i64::from(scale) - 2);
 
     if degree == 0 {
         approx.scale
     } else {
         let error_target =
-            Rational::power_of_two(i64::from(scale) - 1) - &approx.error;
+            Rational::power_of_2(i64::from(scale) - 1) - &approx.error;
 
-        let scale = (error_target / Rational::from(degree)).floor_log2();
-        let scale = i32::try_from(scale).unwrap();
+        let scale = (error_target / Rational::from(degree)).floor_log_base_2();
+        let scale = i32::exact_from(scale);
 
         cmp::min(approx.scale, scale)
     }
@@ -79,7 +84,7 @@ pub fn table_ranges(
     degree: u32,
     scale: i32,
 ) -> Vec<u32> {
-    let mut widths = vec![1; degree as usize + 1];
+    let mut widths = vec![1; usize::exact_from(degree) + 1];
 
     for row in table {
         for (value, max_width) in iter::zip(row, &mut widths) {
@@ -125,8 +130,8 @@ impl HornerRanges {
         let mut sigma = Interval::from(last);
 
         for value in rest.iter().rev() {
-            let pi = Interval::new(-Rational::from(1u32), Rational::from(1u32))
-                * sigma;
+            let pi =
+                Interval::new(Rational::NEGATIVE_ONE, Rational::ONE) * sigma;
 
             product_width = product_width
                 .max(signed_width(&pi.inf, scale))
@@ -147,17 +152,17 @@ impl HornerRanges {
 }
 
 fn signed_width(x: &Rational, scale: i32) -> u32 {
-    if x.is_zero() {
+    if x.sign() == Ordering::Equal {
         return 0;
     }
 
-    let msb = if x.is_negative() {
-        x.ceil_log2_abs()
+    let msb = if x.sign() == Ordering::Less {
+        x.ceiling_log_base_2_abs()
     } else {
-        x.floor_log2_abs() + 1
+        x.floor_log_base_2_abs() + 1
     };
 
-    let msb = i32::try_from(msb).unwrap();
+    let msb = i32::exact_from(msb);
 
     if msb >= scale {
         msb.abs_diff(scale) + 1

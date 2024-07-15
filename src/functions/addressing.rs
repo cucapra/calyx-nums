@@ -1,17 +1,21 @@
 //! Lookup table addressing.
 
+use std::cmp::{self, Ordering};
 use std::fmt;
 
-use calyx_utils as utils;
+use malachite::num::arithmetic::traits::{CeilingLogBase2, Reciprocal, Sign};
+use malachite::num::arithmetic::traits::{IsPowerOf2, PowerOf2};
+use malachite::num::basic::traits::{Two, Zero};
+use malachite::{Natural, Rational};
 
 use crate::format::Format;
-use crate::fpcore::ast::Rational;
 use crate::utils::mangling::Mangle;
+use crate::utils::rational::{FixedPoint, RoundBinary};
 
 /// A specification for obtaining table indices from raw input values.
 #[derive(Mangle)]
 pub struct AddressSpec {
-    pub subtrahend: u64,
+    pub subtrahend: Natural,
     pub idx_lsb: u64,
     pub idx_width: u64,
 }
@@ -28,15 +32,16 @@ impl AddressSpec {
 
         AddressSpec::validate_bounds(&domain, format)?;
 
-        let subtrahend = domain.left.to_format(format).ok_or_else(|| {
-            DomainError::new(
-                DomainErrorKind::EndpointNotRepresentable,
-                domain.left.clone(),
-            )
-        })?;
+        let subtrahend =
+            domain.left.to_fixed_point(format).ok_or_else(|| {
+                DomainError::new(
+                    DomainErrorKind::EndpointNotRepresentable,
+                    domain.left.clone(),
+                )
+            })?;
 
-        let idx_lsb = u64::from(AddressSpec::validate_stride(stride, format)?);
-        let idx_width = utils::bits_needed_for(u64::from(rows));
+        let idx_lsb = AddressSpec::validate_stride(stride, format)?;
+        let idx_width = cmp::max(rows.ceiling_log_base_2(), 1);
 
         Ok((
             AddressSpec {
@@ -52,7 +57,7 @@ impl AddressSpec {
         domain: &TableDomain,
         format: &Format,
     ) -> Result<(), DomainError> {
-        let bound = Rational::power_of_two(
+        let bound = Rational::power_of_2(
             format.msb() + 1 - i64::from(format.is_signed),
         );
 
@@ -66,7 +71,7 @@ impl AddressSpec {
         let out_of_bounds = if format.is_signed {
             domain.left < -bound
         } else {
-            domain.left.is_negative()
+            domain.left.sign() == Ordering::Less
         };
 
         if out_of_bounds {
@@ -83,16 +88,16 @@ impl AddressSpec {
     fn validate_stride(
         stride: Rational,
         format: &Format,
-    ) -> Result<u32, DomainError> {
-        let Some(stride_bits) = stride.to_format::<u64>(format) else {
+    ) -> Result<u64, DomainError> {
+        let Some(stride_bits) = stride.to_fixed_point(format) else {
             return Err(DomainError::new(
                 DomainErrorKind::StrideNotRepresentable,
                 stride,
             ));
         };
 
-        if stride_bits.is_power_of_two() {
-            Ok(stride_bits.trailing_zeros())
+        if stride_bits.is_power_of_2() {
+            Ok(stride_bits.trailing_zeros().unwrap())
         } else {
             Err(DomainError::new(
                 DomainErrorKind::StrideNotPowerOfTwo,
@@ -121,8 +126,8 @@ impl TableDomain {
         let a = left.floor(format.lsb());
         let b = right.ceil(format.lsb());
 
-        let n = ((&b - &a) / Rational::from(rows)).ceil_log2();
-        let stride = Rational::power_of_two(n);
+        let n = ((&b - &a) / Rational::from(rows)).ceiling_log_base_2();
+        let stride = Rational::power_of_2(n);
 
         if n < format.lsb() {
             return Err(DomainError::new(
@@ -133,23 +138,23 @@ impl TableDomain {
 
         let diameter = &stride * Rational::from(rows);
 
-        let q = if a.sign != b.sign || a.is_zero() || b.is_zero() {
+        let q = if a.sign() != b.sign() || a.sign() == Ordering::Equal {
             &a * &diameter / (b - a)
         } else {
-            &a * (&b + &b - &diameter) / (a + b)
+            &a * ((&b << 1u32) - &diameter) / (a + b)
         };
 
-        let left = q.round_away(format.lsb());
+        let left = q.round_towards_infinity(format.lsb());
         let right = &left + diameter;
 
         Ok((TableDomain { left, right }, stride))
     }
 
     pub(super) fn center(a: Rational, b: Rational) -> Rational {
-        if a.sign != b.sign || a.is_zero() || b.is_zero() {
-            Rational::from(0u32)
+        if a.sign() != b.sign() || a.sign() == Ordering::Equal {
+            Rational::ZERO
         } else {
-            Rational::from(2u32) / (a.reciprocal() + b.reciprocal())
+            Rational::TWO / (a.reciprocal() + b.reciprocal())
         }
     }
 }
