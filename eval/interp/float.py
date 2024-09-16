@@ -1,18 +1,38 @@
 import math
 import operator
-from typing import Optional
+import sys
+from collections.abc import Callable
+from itertools import combinations
+from typing import Any
+
+from more_itertools import pairwise
 
 
-def minus(a: float, b: Optional[float] = None) -> float:
-    if b is None:
-        return -a
-    else:
-        return a - b
+def all_windows(f: Callable[[float, float], bool]):
+    def variadic(*args: float):
+        return all(f(*pair) for pair in pairwise(args))
+
+    return variadic
 
 
-BINARY64 = {
+def all_combinations(f: Callable[[float, float], bool]):
+    def variadic(*args: float):
+        return all(f(*pair) for pair in combinations(args, 2))
+
+    return variadic
+
+
+lt = all_windows(operator.lt)
+gt = all_windows(operator.gt)
+le = all_windows(operator.le)
+ge = all_windows(operator.ge)
+eq = all_windows(operator.eq)
+ne = all_combinations(operator.ne)
+
+
+BINARY64: dict[str, Any] = {
     '+': operator.add,
-    '-': minus,
+    '-': lambda a, b=None: -a if b is None else a - b,
     '*': operator.mul,
     '/': operator.truediv,
     'fabs': math.fabs,
@@ -46,6 +66,38 @@ BINARY64 = {
     'floor': math.floor,
     'fmod': math.fmod,
     'remainder': math.remainder,
+    'fmax': max,  # handles NaNs incorrectly
+    'fmin': min,  # handles NaNs incorrectly
     'copysign': math.copysign,
+    'trunc': math.trunc,
+    '<': lt,
+    '>': gt,
+    '<=': le,
+    '>=': ge,
+    '==': eq,
+    '!=': ne,
+    'and': lambda *args: all(args),
+    'or': lambda *args: any(args),
+    'not': operator.not_,
+    'isfinite': math.isfinite,
+    'isinf': math.isinf,
+    'isnan': math.isnan,
     'cast': float,
+}
+
+
+if sys.version_info >= (3, 11):
+    BINARY64['exp2'] = math.exp2
+    BINARY64['cbrt'] = math.cbrt
+
+
+CONSTANTS: dict[str, float] = {
+    'E': math.e,
+    'PI': math.pi,
+    'PI_2': math.pi / 2,
+    'PI_4': math.pi / 4,
+    'INFINITY': math.inf,
+    'NAN': math.nan,
+    'TRUE': True,
+    'FALSE': False,
 }

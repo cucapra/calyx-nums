@@ -11,15 +11,16 @@ argument: SYMBOL
 ?expr: number
      | symbol
      | "(" SYMBOL expr+ ")"                     -> operation
-     | "(" /let\*?/ "(" binder* ")" expr ")"    -> let
-     | "(" "!" property_list expr ")"           -> annotation
+     | "(" _IF expr expr expr ")"               -> conditional
+     | "(" LET "(" binder* ")" expr ")"         -> let
+     | "(" _BANG property_list expr ")"         -> annotation
 
 binder: "[" SYMBOL expr "]"
 
 number: RATIONAL | DECNUM | HEXNUM
 symbol: SYMBOL
 
-property: /:(pre|spec|alt)(?=\s)/ expr
+property: EXPR_PROP expr
         | PROPERTY data
 
 ?data: symbol
@@ -33,6 +34,13 @@ HEXNUM: /[+-]?0x([0-9a-f]+(\.[0-9a-f]+)?|\.[0-9a-f]+)(p[+-]?[0-9]+)?/i
 
 SYMBOL.-1: /[a-zA-Z~!@$%^&*_\-+=<>.?\/:][a-zA-Z0-9~!@$%^&*_\-+=<>.?\/:]*/
 PROPERTY.-1: ":" SYMBOL
+
+EXPR_PROP: /:(pre|spec|alt)/ END
+_IF: "if" END
+LET: /let\*?/ END
+_BANG: "!" END
+
+END: /(?![a-zA-Z0-9~!@$%^&*_\-+=<>.?\/:])/
 
 COMMENT: /;.*/
 

@@ -93,6 +93,10 @@ struct Builder<'ast> {
 }
 
 impl Builder<'_> {
+    fn script_bool(&mut self, dst: SollyaVar) {
+        writeln!(self.script, "{dst} = [0;1];").unwrap();
+    }
+
     fn script_point<D, N>(&mut self, dst: D, num: &N)
     where
         SollyaVar: From<D>,
@@ -125,7 +129,7 @@ impl Builder<'_> {
             SollyaVar::from(dst),
             SollyaVar::from(src)
         )
-        .unwrap()
+        .unwrap();
     }
 
     fn script_binary<D, L, R>(&mut self, dst: D, left: L, op: &str, right: R)
@@ -135,6 +139,20 @@ impl Builder<'_> {
         writeln!(
             self.script,
             "{} = rnd({} {op} {});",
+            SollyaVar::from(dst),
+            SollyaVar::from(left),
+            SollyaVar::from(right)
+        )
+        .unwrap();
+    }
+
+    fn script_union<D, L, R>(&mut self, dst: D, left: L, right: R)
+    where
+        SollyaVar: From<D> + From<L> + From<R>,
+    {
+        writeln!(
+            self.script,
+            "{0} = [min(inf({1}), inf({2})); max(sup({1}), sup({2}))];",
             SollyaVar::from(dst),
             SollyaVar::from(left),
             SollyaVar::from(right)
@@ -201,6 +219,9 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
             ast::ExprKind::Num(num) => {
                 self.script_point(expr, &num.value);
             }
+            ast::ExprKind::Const(ast::Constant::Bool(_)) => {
+                self.script_bool(SollyaVar::from(expr));
+            }
             ast::ExprKind::Id(_) => {
                 let binding = match self.bindings.names[&expr.uid] {
                     Binding::Argument(arg) => SollyaVar::from(arg),
@@ -243,6 +264,34 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 } else {
                     self.script_unary(expr, function, &args[0]);
                 }
+            }
+            ast::ExprKind::Op(
+                ast::Operation {
+                    kind: ast::OpKind::Test(_),
+                    ..
+                },
+                args,
+            ) => {
+                for arg in args {
+                    self.visit_expression(arg)?;
+                }
+
+                self.script_bool(SollyaVar::from(expr));
+            }
+            ast::ExprKind::If {
+                cond,
+                true_branch,
+                false_branch,
+            } => {
+                self.visit_expression(cond)?;
+                self.visit_expression(true_branch)?;
+                self.visit_expression(false_branch)?;
+
+                self.script_union(
+                    expr,
+                    true_branch.as_ref(),
+                    false_branch.as_ref(),
+                );
             }
             ast::ExprKind::Let { bindings, body, .. } => {
                 for binding in bindings {

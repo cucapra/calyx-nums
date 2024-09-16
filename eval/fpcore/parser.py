@@ -1,12 +1,12 @@
 from collections.abc import Callable
 from typing import Generic
 
-from lark import Lark, Transformer, v_args
+from lark import Lark, Token, Transformer, v_args
 
 from . import ast
 
 
-class FPCoreTransformer(Transformer[ast.FPCore[ast.Num]]):
+class FPCoreTransformer(Transformer[Token, ast.FPCore[ast.Num]]):
     def __init__(self, n_type: Callable[[str], ast.Num]):
         super().__init__(False)
 
@@ -25,6 +25,8 @@ class FPCoreTransformer(Transformer[ast.FPCore[ast.Num]]):
         op, *args = children
 
         return ast.Operation(op, args)
+
+    conditional = v_args(True)(ast.If)
 
     @staticmethod
     def let(children):

@@ -20,7 +20,7 @@ class Expr(ABC, Generic[Num]):
         ...
 
 
-@dataclass
+@dataclass(eq=False)
 class Symbol(Expr[Num]):
     id: str
 
@@ -31,7 +31,7 @@ class Symbol(Expr[Num]):
         return self.id
 
 
-@dataclass
+@dataclass(eq=False)
 class Number(Expr[Num]):
     val: Num
 
@@ -44,7 +44,7 @@ class Number(Expr[Num]):
         return f'{val:.0f}' if val.is_integer() else val.hex()
 
 
-@dataclass
+@dataclass(eq=False)
 class Operation(Expr[Num]):
     op: str
     args: list[Expr[Num]]
@@ -60,7 +60,23 @@ class Operation(Expr[Num]):
         return f'({self.op} {args})'
 
 
-@dataclass
+@dataclass(eq=False)
+class If(Expr[Num]):
+    cond: Expr[Num]
+    true: Expr[Num]
+    false: Expr[Num]
+
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
+        if self.cond.interp(context, libm):
+            return self.true.interp(context, libm)
+        else:
+            return self.false.interp(context, libm)
+
+    def __str__(self) -> str:
+        return f'(if {self.cond} {self.true} {self.false})'
+
+
+@dataclass(eq=False)
 class Binder(Generic[Num]):
     var: str
     expr: Expr[Num]
@@ -69,7 +85,7 @@ class Binder(Generic[Num]):
         return f'[{self.var} {self.expr}]'
 
 
-@dataclass
+@dataclass(eq=False)
 class Let(Expr[Num]):
     binders: list[Binder[Num]]
     body: Expr[Num]
@@ -95,7 +111,7 @@ class Let(Expr[Num]):
 Data = Union[str, Expr[Num], list['Data[Num]']]
 
 
-@dataclass
+@dataclass(eq=False)
 class Property(Generic[Num]):
     name: str
     data: Data[Num]
@@ -110,7 +126,7 @@ class Property(Generic[Num]):
         return f'{self.name} {s_expr(self.data)}'
 
 
-@dataclass
+@dataclass(eq=False)
 class Annotation(Expr[Num]):
     props: list[Property[Num]]
     body: Expr[Num]
@@ -124,7 +140,7 @@ class Annotation(Expr[Num]):
         return f'(! {props} {self.body})'
 
 
-@dataclass
+@dataclass(eq=False)
 class Argument(Generic[Num]):
     var: str
     props: list[Property[Num]]
@@ -138,17 +154,19 @@ class Argument(Generic[Num]):
             return self.var
 
 
-@dataclass
+@dataclass(eq=False)
 class FPCore(Generic[Num]):
     name: Optional[str]
     args: list[Argument[Num]]
     props: list[Property[Num]]
     body: Expr[Num]
 
-    def interp(self, args: Iterable[Num], libm: Lib[Num]) -> Num:
+    def interp(
+        self, args: Iterable[Num], libm: Lib[Num], consts: Ctx[Num] = {}
+    ) -> Num:
         context = {arg.var: val for arg, val in zip(self.args, args)}
 
-        return self.body.interp(context, libm)
+        return self.body.interp(consts | context, libm)
 
     def __str__(self) -> str:
         name = self.name or ''

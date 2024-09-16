@@ -69,7 +69,7 @@ impl ExpressionBuilder<'_, '_> {
             ast::Constant::Bool(val) => [1, u64::from(val)],
         };
 
-        let cell = self.builder.add_primitive("const", "std_const", &params);
+        let cell = self.builder.add_primitive("c", "std_const", &params);
         let port = cell.borrow().get("out");
 
         Expression::from_constant(port)
@@ -307,6 +307,96 @@ impl ExpressionBuilder<'_, '_> {
         }
     }
 
+    fn compile_if(
+        &mut self,
+        cond: &ast::Expression,
+        true_branch: &ast::Expression,
+        false_branch: &ast::Expression,
+    ) -> CalyxResult<Expression> {
+        let cond = self.compile_expression(cond)?;
+        let true_branch = self.compile_expression(true_branch)?;
+        let false_branch = self.compile_expression(false_branch)?;
+
+        let params = [u64::from(self.format.width)];
+
+        match (&true_branch.control, &false_branch.control) {
+            (ir::Control::Empty(_), ir::Control::Empty(_)) => {
+                let mux = self.builder.add_primitive("mux", "std_mux", &params);
+                let out = mux.borrow().get("out");
+
+                let inputs = [
+                    ("cond", cond.out),
+                    ("tru", true_branch.out),
+                    ("fal", false_branch.out),
+                ];
+
+                let mut assignments: Vec<_> = inputs
+                    .into_iter()
+                    .map(|(dst, src)| {
+                        self.builder.build_assignment(
+                            mux.borrow().get(dst),
+                            src,
+                            ir::Guard::True,
+                        )
+                    })
+                    .collect();
+
+                assignments.extend(cond.assignments);
+                assignments.extend(true_branch.assignments);
+                assignments.extend(false_branch.assignments);
+
+                Ok(Expression {
+                    control: cond.control,
+                    assignments,
+                    out,
+                })
+            }
+            _ => {
+                let reg = self.builder.add_primitive("r", "std_reg", &params);
+                let out = reg.borrow().get("out");
+
+                let store_true = invoke_with(
+                    reg.clone(),
+                    vec![(Id::new("in"), true_branch.out)],
+                    true_branch.assignments,
+                    self.builder,
+                );
+
+                let store_false = invoke_with(
+                    reg,
+                    vec![(Id::new("in"), false_branch.out)],
+                    false_branch.assignments,
+                    self.builder,
+                );
+
+                let group = self.builder.add_comb_group("cond");
+                group.borrow_mut().assignments = cond.assignments;
+
+                let conditional = ir::Control::if_(
+                    cond.out,
+                    Some(group),
+                    Box::new(collapse(
+                        [true_branch.control, store_true],
+                        ir::Control::seq,
+                    )),
+                    Box::new(collapse(
+                        [false_branch.control, store_false],
+                        ir::Control::seq,
+                    )),
+                );
+
+                let control =
+                    collapse([cond.control, conditional], ir::Control::seq);
+
+                Ok(Expression {
+                    control,
+                    assignments: Vec::new(),
+                    out,
+                })
+            }
+        }
+    }
+
     fn compile_let(
         &mut self,
         bindings: &[ast::Binding],
@@ -369,6 +459,11 @@ impl ExpressionBuilder<'_, '_> {
             ast::ExprKind::Op(op, args) => {
                 self.compile_operation(op.kind, expr.uid, args)
             }
+            ast::ExprKind::If {
+                cond,
+                true_branch,
+                false_branch,
+            } => self.compile_if(cond, true_branch, false_branch),
             ast::ExprKind::Let {
                 bindings,
                 body,
