@@ -3,10 +3,10 @@
 #include <iostream>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "kernel.hpp"
-#include "polyfills.hpp"
 
 namespace
 {
@@ -48,8 +48,7 @@ void write_result(const std::vector<float> &dat, const char *filename)
 {
     std::ofstream stream(filename);
 
-    stream.setf(std::ios_base::fixed | std::ios_base::scientific,
-                std::ios_base::floatfield);
+    stream << std::hexfloat;
 
     for (float r : dat)
     {
@@ -58,7 +57,7 @@ void write_result(const std::vector<float> &dat, const char *filename)
 }
 
 template<std::size_t... I>
-float invoke(const argv &args, cxx14::index_sequence<I...>)
+float invoke(const argv &args, std::index_sequence<I...>)
 {
     return ex0(std::get<I>(args)...);
 }
@@ -66,7 +65,7 @@ float invoke(const argv &args, cxx14::index_sequence<I...>)
 float invoke(const argv &args)
 {
     using size = std::tuple_size<argv>;
-    using indices = cxx14::make_index_sequence<size::value>;
+    using indices = std::make_index_sequence<size::value>;
 
     return invoke(args, indices{});
 }

@@ -1,7 +1,7 @@
 open_project -reset project
 
-add_files -cflags "-std=c++11" kernel.cpp
-add_files -tb -cflags "-std=c++11" "bench.cpp sample.dat"
+add_files -csimflags "-D __gmp_const=const" kernel.cpp
+add_files -tb -csimflags "-D __gmp_const=const" "bench.cpp sample.dat"
 set_top ex0
 
 open_solution -reset solution1

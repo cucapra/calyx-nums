@@ -74,7 +74,6 @@ class VivadoCoSimulationStage(VivadoBaseStage):
         return [
             cosim / 'cosim.tcl',
             cosim / 'bench.cpp',
-            cosim / 'polyfills.hpp',
             Path(header),
             Path(data),
         ]
@@ -88,7 +87,7 @@ class VivadoCoSimulationExtractStage(Stage):
             src_state='cosim-files',
             target_state='cosim-dat',
             input_type=SourceType.Directory,
-            output_type=SourceType.Path,
+            output_type=SourceType.String,
             description='Extract co-simulation results',
         )
 
@@ -102,7 +101,7 @@ class VivadoCoSimulationExtractStage(Stage):
 
     def _define_steps(self, input, builder, config):
         @builder.step()
-        def extract(directory: SourceType.Directory) -> SourceType.Path:
+        def extract(directory: SourceType.Directory) -> SourceType.String:
             """
             Extract the data file produced during co-simulation.
             """
@@ -115,7 +114,9 @@ class VivadoCoSimulationExtractStage(Stage):
             else:
                 raise MissingFile('project')
 
-            return project / 'solution1' / 'sim' / 'wrapc' / 'result.dat'
+            dat = project / 'solution1' / 'sim' / 'wrapc' / 'result.dat'
+
+            return dat.read_text()
 
         return extract(input)
 
