@@ -1,8 +1,7 @@
-#include <array>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <type_traits>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -12,76 +11,75 @@ namespace
 {
 
 template<class>
-struct arity {};
+struct function_traits;
 
 template<class R, class... Args>
-struct arity<R (Args...)> :
-    std::integral_constant<std::size_t, sizeof...(Args)>
+struct function_traits<R (Args...)>
 {
+    static constexpr std::size_t arity = sizeof...(Args);
+
+    using result_type = R;
+    using arguments_type = std::tuple<Args...>;
+    using argument_indices = std::make_index_sequence<arity>;
 };
 
-using argv = std::array<float, arity<decltype(ex0)>::value>;
+using traits = function_traits<decltype(ex0)>;
+
+using result = traits::result_type;
+using argv = traits::arguments_type;
+
+template<std::size_t... I>
+argv parse_args(const std::string args[], std::index_sequence<I...>)
+{
+    return {std::tuple_element_t<I, argv>{args[I].c_str()}...};
+}
 
 std::vector<argv> read_stimuli(const char *filename)
 {
-    std::vector<argv> table;
-    argv row;
-
     std::ifstream stream(filename);
-    std::string buffer;
+    std::string buffers[traits::arity];
 
-    for (std::size_t i = 0; stream >> buffer; )
-    {
-        row[i] = std::stof(buffer);
+    auto read_args = [&]() -> std::istream & {
+        for (std::string &buffer : buffers)
+            stream >> buffer;
 
-        if (++i == row.size())
-        {
-            table.push_back(row);
-            i = 0;
-        }
-    }
+        return stream;
+    };
 
-    return table;
+    std::vector<argv> stimuli;
+
+    while (read_args())
+        stimuli.push_back(parse_args(buffers, traits::argument_indices{}));
+
+    return stimuli;
 }
 
-void write_result(const std::vector<float> &dat, const char *filename)
+void write_result(const std::vector<result> &dat, const char *filename)
 {
     std::ofstream stream(filename);
 
-    stream << std::hexfloat;
-
-    for (float r : dat)
-    {
-        stream << r << '\n';
-    }
+    for (const result &r : dat)
+        stream << r.to_string(16) << '\n';
 }
 
 template<std::size_t... I>
-float invoke(const argv &args, std::index_sequence<I...>)
+result invoke(const argv &args, std::index_sequence<I...>)
 {
     return ex0(std::get<I>(args)...);
-}
-
-float invoke(const argv &args)
-{
-    using size = std::tuple_size<argv>;
-    using indices = std::make_index_sequence<size::value>;
-
-    return invoke(args, indices{});
 }
 
 }   // namespace
 
 int main()
 {
-    std::vector<float> result;
+    std::vector<result> results;
 
     for (const argv &args : read_stimuli("sample.dat"))
     {
-        result.push_back(invoke(args));
+        results.push_back(invoke(args, traits::argument_indices{}));
     }
 
-    write_result(result, "result.dat");
+    write_result(results, "result.dat");
 
     return 0;
 }
