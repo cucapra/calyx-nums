@@ -1,0 +1,10 @@
+(FPCore (x)
+ :name "sinxx10"
+ :cite (izy-dar-sei:approx)
+ :pre (<= 0.01 x 1.5)
+ (let ([t1 (sin x)])
+   (- (- (- (+ (* (* (+ (- (* (* (* 3 x) x) x) (* 5 x)) 2) t1) t1)
+               (* (+ (* (* x x) x) (* 5 x)) t1))
+            (* (* 2 x) x))
+         x)
+      2)))

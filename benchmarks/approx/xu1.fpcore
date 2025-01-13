@@ -1,0 +1,5 @@
+(FPCore (x1 x2)
+ :name "xu1"
+ :cite (izy-dar-sei:approx)
+ :pre (and (<= 0.01 x1 0.75) (<= 0.01 x2 1.5))
+ (- (+ (+ (* 2 (sin x1)) (* 0.8 (cos (* 2 x1)))) (* 7 (sin x2))) x1))

@@ -1,0 +1,8 @@
+(FPCore (v1 v2 v3 k1 k2 k3 theta)
+ :name "rodriguesRotation"
+ :cite (izy-dar-sei:approx)
+ :pre (and (<= -2 v1 2) (<= -2 v2 2) (<= -2 v3 2)
+           (<= -5 k1 5) (<= -5 k2 5) (<= -5 k3 5) (<= 0 theta 1.5))
+ (let ([t1 (cos theta)])
+   (+ (+ (* v1 t1) (* (- (* k2 v3) (* k3 v2)) (sin theta)))
+      (* (* k1 (+ (+ (* k1 v1) (* k2 v2)) (* k3 v3))) (- 1 t1)))))

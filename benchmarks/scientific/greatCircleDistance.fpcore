@@ -1,0 +1,11 @@
+(FPCore (lat1 lon1 lat2 lon2)
+ :name "greatCircleDistance"
+ :cite (wwj)
+ :pre (and (<= -1.5707963268 lat1 1.5707963268)
+           (<= -3.1415926536 lon1 3.1415926536)
+           (<= -1.5707963268 lat2 1.5707963268)
+           (<= -3.1415926536 lon2 3.1415926536))
+ (let* ([a (sin (/ (- lat2 lat1) 2.0))]
+        [b (sin (/ (- lon2 lon1) 2.0))]
+        [c (+ (* a a) (* (* (* (cos lat1) (cos lat2)) b) b))])
+   (* 2.0 (asin (sqrt c)))))

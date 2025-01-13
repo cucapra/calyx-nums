@@ -1,0 +1,6 @@
+(FPCore (theta1 theta2)
+ :name "forwardk2jX"
+ :cite (izy-dar-sei:approx)
+ :pre (and (<= 0.01 theta1 1.5) (<= 0.01 theta2 1.5))
+ (let ([l1 0.5] [l2 0.5])
+   (+ (* l1 (cos theta1)) (* l2 (cos (+ theta1 theta2))))))

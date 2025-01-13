@@ -1,0 +1,21 @@
+(FPCore (f0 f1 f2 f3
+         weights_0_0 weights_0_1 weights_0_2 weights_0_3
+         weights_1_0 weights_1_1 weights_1_2
+         bias_0 bias_1)
+ :name "predictMLPLogistic"
+ :cite (izy-dar-sei:approx)
+ :pre (and (<= 4.0 f0 8.0) (<= 2.0 f1 4.5) (<= 1.0 f2 7.0) (<= 0.0 f3 2.5)
+           (<= -0.3 weights_0_0 0.3) (<= -0.5 weights_0_1 0.0)
+           (<= -0.2 weights_0_2 0.1) (<= 0.1 weights_0_3 0.3)
+           (<= -0.4 weights_1_0 0.8) (<= -0.3 weights_1_1 0.3)
+           (<= 0.0 weights_1_2 0.4)
+           (<= 0.0 bias_0 0.5) (<= -0.4 bias_1 0.5))
+ (let* ([n1 (+ (+ (+ (+ (* f0 weights_0_0) (* f1 weights_0_1))
+                     (* f2 weights_0_2))
+                  (* f3 weights_0_3))
+               bias_0)]
+        [hidden (/ 1.0 (+ 1.0 (exp (- n1))))]
+        [n2 (+ (+ (+ (* hidden weights_1_0) (* hidden weights_1_1))
+                  (* hidden weights_1_2))
+               bias_1)])
+   (/ 1.0 (+ 1.0 (exp (- n2))))))

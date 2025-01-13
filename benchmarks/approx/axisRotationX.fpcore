@@ -1,0 +1,5 @@
+(FPCore (x y theta)
+ :name "axisRotationX"
+ :cite (izy-dar-sei:approx)
+ :pre (and (<= -2 x 2) (<= -2 y 2) (<= 0.01 theta 1.5))
+ (+ (* x (cos theta)) (* y (sin theta))))

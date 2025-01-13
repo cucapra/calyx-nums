@@ -1,0 +1,10 @@
+(FPCore (equatorialRadius es latitude longitude)
+ :name "ellipsoidRadius"
+ :cite (wwj)
+ :pre (and (<= 0.0 equatorialRadius 1200000000000)
+           (<= 0.0 es) (< es 1.0)
+           (<= -1.5707963268 latitude 1.5707963268)
+           (<= -3.1415926536 longitude 3.1415926536))
+ (let* ([sinLat (sin latitude)]
+        [rpm (/ equatorialRadius (sqrt (- 1.0 (* (* es sinLat) sinLat))))])
+   (* rpm (sqrt (+ 1.0 (* (* (- (* es es) (* 2.0 es)) sinLat) sinLat))))))

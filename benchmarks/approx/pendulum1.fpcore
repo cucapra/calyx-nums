@@ -1,0 +1,12 @@
+(FPCore (t w)
+ :name "pendulum1"
+ :cite (izy-dar-sei:approx)
+ :pre (and (<= 0.01 t 1.6) (<= -5 w 5))
+ (let* ([h 0.01]
+        [L 2.0]
+        [m 1.5]
+        [g 9.80665]
+        [k1w (* (/ (- g) L) (sin t))]
+        [k2t (+ w (* (/ h 2) k1w))]
+        [tNew (+ t (* h k2t))])
+   tNew))

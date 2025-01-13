@@ -1,0 +1,7 @@
+(FPCore (eta)
+ :name "FresnelDiffuseReflectance"
+ :cite (povray)
+ :pre (<= 0.25 eta 4.0)
+ (if (< eta 1.0)
+     (- (* eta eta) (pow eta 2.25))
+     (/ (+ (- 1.0 (/ 1.0 eta)) (* 3.0 (pow (- 1.0 (/ 1.0 eta)) 4.5))) 4.0)))
