@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use std::iter;
 use std::path::PathBuf;
 
-use calyx_frontend::{parser::CalyxParser, Workspace};
+use calyx_frontend::{Workspace, parser::CalyxParser};
 use calyx_ir as ir;
 use calyx_utils::{CalyxResult, Error};
 

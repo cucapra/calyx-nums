@@ -23,7 +23,7 @@ pub trait Dyadic: Sized {
 
 impl Dyadic for Rational {
     fn from_dyadic(s: &str) -> Option<Self> {
-        if let Some((m, e)) = s.split_once(|c| c == 'b' || c == 'B') {
+        if let Some((m, e)) = s.split_once(['b', 'B']) {
             let mantissa: Integer = m.parse().ok()?;
             let exponent: i64 = e.parse().ok()?;
 

@@ -3,10 +3,10 @@
 use std::cmp::{self, Ordering};
 use std::iter;
 
+use malachite::Rational;
 use malachite::num::arithmetic::traits::{FloorLogBase2, PowerOf2, Sign};
 use malachite::num::basic::traits::{NegativeOne, One};
 use malachite::num::conversion::traits::ExactFrom;
-use malachite::Rational;
 
 use super::PolynomialApprox;
 use crate::format::Format;

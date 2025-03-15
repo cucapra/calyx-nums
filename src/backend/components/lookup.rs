@@ -10,7 +10,7 @@ use crate::backend::primitives::lut;
 use crate::format::Format;
 use crate::fpcore::ast::{Rational, Span};
 use crate::functions::AddressSpec;
-use crate::utils::mangling::{mangle, Mangle};
+use crate::utils::mangling::{Mangle, mangle};
 use crate::utils::rational::FixedPoint;
 
 pub struct TableData<'a> {

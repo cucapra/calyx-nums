@@ -4,8 +4,8 @@ use std::fmt::{LowerHex, Write};
 use std::iter;
 
 use calyx_ir as ir;
-use malachite::num::basic::traits::Zero;
 use malachite::Natural;
+use malachite::num::basic::traits::Zero;
 
 /// Packs a sequence of values into a single bit vector. The first element of
 /// the sequence occupies the most-significant position.

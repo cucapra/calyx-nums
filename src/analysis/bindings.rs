@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use calyx_utils::{CalyxResult, Error, Id};
 
 use super::passes::{Pass, PassManager};
-use crate::fpcore::{ast, metadata, visitor, Visitor};
+use crate::fpcore::{Visitor, ast, metadata, visitor};
 
 #[derive(Clone, Copy)]
 pub enum Binding<'ast> {

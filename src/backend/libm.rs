@@ -15,8 +15,8 @@ use crate::format::Format;
 use crate::fpcore::ast;
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::visitor::{self, Visitor};
-use crate::functions::{faithful, remez};
 use crate::functions::{AddressSpec, Datapath, TableDomain};
+use crate::functions::{faithful, remez};
 use crate::utils::mangling::Mangle;
 use crate::utils::sollya::SollyaFunction;
 

@@ -3,9 +3,9 @@
 use std::cmp::{self, Ordering};
 use std::ops::{Add, Mul, Neg, Sub};
 
+use malachite::Rational;
 use malachite::num::arithmetic::traits::Sign;
 use malachite::num::basic::traits::Zero;
-use malachite::Rational;
 
 /// Class of a nonempty interval (Hickey et al., 2001).
 enum Class {

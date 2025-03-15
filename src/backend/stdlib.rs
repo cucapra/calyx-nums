@@ -1,6 +1,6 @@
 //! Standard library primitive declarations.
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 use crate::format::Format;
 

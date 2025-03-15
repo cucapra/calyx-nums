@@ -10,7 +10,7 @@ use super::domain::Precondition;
 use super::passes::{Pass, PassManager};
 use super::type_check::TypeCheck;
 use crate::format::Format;
-use crate::fpcore::{ast, Visitor};
+use crate::fpcore::{Visitor, ast};
 use crate::utils::rational::Dyadic;
 use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 
@@ -177,7 +177,7 @@ impl Builder<'_> {
         writeln!(
             self.script,
             "print(\"{0}\", inf({1}), sup({1}));",
-            var.0 .0, var
+            var.0.0, var
         )
         .unwrap();
     }
@@ -331,6 +331,6 @@ impl From<&ast::Expression> for SollyaVar {
 
 impl fmt::Display for SollyaVar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "n{:x}", self.0 .0)
+        write!(f, "n{:x}", self.0.0)
     }
 }

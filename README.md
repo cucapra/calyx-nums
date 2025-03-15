@@ -2,7 +2,7 @@
 
 ## Installation
 
-You'll need a recent version of [Rust][rust] (1.70+) and the [Sollya][sollya]
+You'll need a recent version of [Rust][rust] (1.85+) and the [Sollya][sollya]
 tool. On macOS, you can install the latter via [Homebrew][brew] with
 `brew install sollya`. On Ubuntu or Debian, use `apt install sollya`.
 

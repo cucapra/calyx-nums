@@ -1,9 +1,9 @@
 //! Numeric literals.
 
+use malachite::Natural;
 use malachite::num::arithmetic::traits::Pow;
 use malachite::num::basic::traits::Zero;
 use malachite::num::conversion::traits::{ExactFrom, FromStringBase};
-use malachite::Natural;
 
 pub use malachite::Rational;
 

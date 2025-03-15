@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use calyx_utils::{FileIdx, GPosIdx, GlobalPositionTable};
 use pest::error::{Error, ErrorVariant};
-use pest_consume::{match_nodes, Parser};
+use pest_consume::{Parser, match_nodes};
 
 use super::{ast, literals, metadata};
 
