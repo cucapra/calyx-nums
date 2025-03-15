@@ -10,8 +10,7 @@ from .ast import Data, FPCore, Number, Operation, Symbol
 
 
 class Comparable(SupportsFloat, Protocol):
-    def __lt__(self, other, /) -> bool:
-        ...
+    def __lt__(self, other, /) -> bool: ...
 
 
 class Rel(Enum):

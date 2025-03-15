@@ -47,6 +47,6 @@ class QFormat:
         return self.cast(hex(bits), mode)
 
     def __str__(self) -> str:
-        prefix = 'UQ'[self.is_signed:]
+        prefix = 'UQ'[self.is_signed :]
 
         return f'{prefix}{self.int_width}.{self.frac_width}'

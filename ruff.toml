@@ -1,0 +1,7 @@
+line-length = 80
+
+src = ["eval", "fud"]
+
+[format]
+line-ending = "lf"
+quote-style = "single"

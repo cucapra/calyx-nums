@@ -12,12 +12,10 @@ Lib = dict[str, Callable[..., Num]]
 
 class Expr(ABC, Generic[Num]):
     @abstractmethod
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        ...
+    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num: ...
 
     @abstractmethod
-    def __str__(self) -> str:
-        ...
+    def __str__(self) -> str: ...
 
 
 @dataclass(eq=False)

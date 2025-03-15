@@ -23,16 +23,19 @@ class FixedPointEncoder(json.JSONEncoder):
 
 
 def format_data(memory: str, data: Data, fmt: QFormat) -> str:
-    return json.dumps({
-        memory: {
-            'data': data,
-            'format': {
-                'numeric_type': 'bitnum',
-                'is_signed': False,
-                'width': fmt.width,
-            },
-        }
-    }, cls=FixedPointEncoder)
+    return json.dumps(
+        {
+            memory: {
+                'data': data,
+                'format': {
+                    'numeric_type': 'bitnum',
+                    'is_signed': False,
+                    'width': fmt.width,
+                },
+            }
+        },
+        cls=FixedPointEncoder,
+    )
 
 
 def compile(
@@ -79,6 +82,6 @@ def simulate(
             '--through', sim.value,
             '-s', 'verilog.data', file,
             *args,
-        ], check=True, text=True, input=futil, stdout=subprocess.PIPE)
+        ], check=True, text=True, input=futil, stdout=subprocess.PIPE)  # fmt: skip
 
     return json.loads(proc.stdout)
