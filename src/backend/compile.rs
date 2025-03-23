@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::iter;
 
 use calyx_ir as ir;
-use calyx_utils::{CalyxResult, Error, Id, NameGenerator};
+use calyx_utils::{Id, NameGenerator};
 use itertools::Itertools;
 
 use super::builtins;
@@ -14,6 +14,7 @@ use crate::analysis::{Binding, NameResolution, PassManager, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::ast;
 use crate::opts::Opts;
+use crate::utils::diagnostics::{Diagnostic, Reporter};
 use crate::utils::rational::FixedPoint;
 
 /// A compiled expression.
@@ -36,43 +37,71 @@ impl Expression {
     }
 }
 
-struct ExpressionBuilder<'a, 'b> {
-    builder: &'a mut ir::Builder<'b>,
+struct ExpressionBuilder<'b, 'ast, 'comp> {
+    format: &'b Format,
+    bindings: &'b NameResolution<'ast>,
+    reporter: &'b mut Reporter<'ast>,
+    libm: &'b mut HashMap<ast::NodeId, Prototype>,
+    builder: &'b mut ir::Builder<'comp>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
-    format: &'a Format,
-    bindings: &'a NameResolution<'a>,
-    libm: &'a mut HashMap<ast::NodeId, Prototype>,
 }
 
-impl ExpressionBuilder<'_, '_> {
-    fn compile_number(&mut self, num: &ast::Number) -> CalyxResult<Expression> {
-        let val = num
-            .value
-            .to_fixed_point(self.format)
-            .ok_or_else(|| {
-                Error::misc("Constant is not representable").with_pos(num)
-            })
-            .and_then(|val| {
-                u64::try_from(&val)
-                    .map_err(|_| Error::misc("Constant width exceeds 64 bits"))
-            })?;
+impl ExpressionBuilder<'_, '_, '_> {
+    fn compile_number(&mut self, num: &ast::Number) -> Option<Expression> {
+        let Some(val) = num.value.to_fixed_point(self.format) else {
+            self.reporter.emit(
+                &Diagnostic::error()
+                    .with_message("unrepresentable constant")
+                    .with_primary(
+                        num.span,
+                        "constant is not representable in the global format",
+                    ),
+            );
+
+            return None;
+        };
+
+        let Ok(val) = u64::try_from(&val) else {
+            self.reporter.emit(
+                &Diagnostic::error()
+                    .with_message("code generation failed")
+                    .with_primary(num.span, "generated constant is too large")
+                    .with_note(
+                        "calyx doesn't support constants wider than 64 bits",
+                    ),
+            );
+
+            return None;
+        };
 
         let cell = self.builder.add_constant(val, u64::from(self.format.width));
         let port = cell.borrow().get("out");
 
-        Ok(Expression::from_constant(port))
+        Some(Expression::from_constant(port))
     }
 
-    fn compile_constant(&mut self, constant: ast::Constant) -> Expression {
+    fn compile_constant(
+        &mut self,
+        constant: ast::Constant,
+        span: ast::Span,
+    ) -> Option<Expression> {
         let params = match constant {
-            ast::Constant::Math(_) => unimplemented!(),
+            ast::Constant::Math(_) => {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("unsupported numeric constant")
+                        .with_primary(span, "unsupported constant"),
+                );
+
+                return None;
+            }
             ast::Constant::Bool(val) => [1, u64::from(val)],
         };
 
         let cell = self.builder.add_primitive("c", "std_const", &params);
         let port = cell.borrow().get("out");
 
-        Expression::from_constant(port)
+        Some(Expression::from_constant(port))
     }
 
     fn compile_symbol(
@@ -92,7 +121,7 @@ impl ExpressionBuilder<'_, '_> {
 
                 port
             }
-            _ => unimplemented!(),
+            _ => unreachable!("pass rejects loops"),
         };
 
         Expression::from_constant(port)
@@ -102,8 +131,8 @@ impl ExpressionBuilder<'_, '_> {
         &mut self,
         op: ast::TestOp,
         args: &[ast::Expression],
-    ) -> CalyxResult<Expression> {
-        let mut control = Vec::new();
+    ) -> Option<Expression> {
+        let mut control = Vec::with_capacity(args.len());
         let mut assignments = Vec::new();
 
         let args: Vec<_> = args
@@ -114,9 +143,9 @@ impl ExpressionBuilder<'_, '_> {
                 control.push(expr.control);
                 assignments.extend(expr.assignments);
 
-                Ok(expr.out)
+                Some(expr.out)
             })
-            .collect::<CalyxResult<_>>()?;
+            .collect::<Option<_>>()?;
 
         let control = collapse(control, ir::Control::par);
 
@@ -186,7 +215,7 @@ impl ExpressionBuilder<'_, '_> {
             .tree_fold1(|left, right| reduce(left, right, decl))
             .unwrap();
 
-        Ok(Expression {
+        Some(Expression {
             control,
             assignments,
             out,
@@ -195,21 +224,20 @@ impl ExpressionBuilder<'_, '_> {
 
     fn compile_library_operation(
         &mut self,
-        op: ast::OpKind,
+        op: &ast::Operation,
         uid: ast::NodeId,
         args: &[ast::Expression],
-    ) -> CalyxResult<Expression> {
-        let (arg_ctrl, arg_assigns, arg_ports): (Vec<_>, Vec<_>, Vec<_>) =
-            itertools::process_results(
-                args.iter().map(|arg| {
-                    let expr = self.compile_expression(arg)?;
+    ) -> Option<Expression> {
+        let (arg_ctrl, arg_assigns, arg_ports): (Vec<_>, Vec<_>, Vec<_>) = args
+            .iter()
+            .map(|arg| {
+                let expr = self.compile_expression(arg)?;
 
-                    CalyxResult::Ok((expr.control, expr.assignments, expr.out))
-                }),
-                |iter| iter.multiunzip(),
-            )?;
+                Some((expr.control, expr.assignments, expr.out))
+            })
+            .collect::<Option<_>>()?;
 
-        let decl = match op {
+        let decl = match op.kind {
             ast::OpKind::Math(op) => match op {
                 ast::MathOp::Add => Some(builtins::add(self.format)),
                 ast::MathOp::Sub => Some(builtins::sub(self.format)),
@@ -243,7 +271,13 @@ impl ExpressionBuilder<'_, '_> {
 
             (comp, &Signature::UNARY_DEFAULT, proto.is_comb)
         } else {
-            unimplemented!()
+            self.reporter.emit(
+                &Diagnostic::error()
+                    .with_message("unsupported operation")
+                    .with_primary(op.span, "unsupported operator"),
+            );
+
+            return None;
         };
 
         let inputs = match signature.args {
@@ -286,7 +320,7 @@ impl ExpressionBuilder<'_, '_> {
             (control, vec![])
         };
 
-        Ok(Expression {
+        Some(Expression {
             control,
             assignments,
             out,
@@ -295,11 +329,11 @@ impl ExpressionBuilder<'_, '_> {
 
     fn compile_operation(
         &mut self,
-        op: ast::OpKind,
+        op: &ast::Operation,
         uid: ast::NodeId,
         args: &[ast::Expression],
-    ) -> CalyxResult<Expression> {
-        match op {
+    ) -> Option<Expression> {
+        match op.kind {
             ast::OpKind::Test(op) if op.is_variadic() => {
                 self.compile_variadic_operation(op, args)
             }
@@ -312,7 +346,7 @@ impl ExpressionBuilder<'_, '_> {
         cond: &ast::Expression,
         true_branch: &ast::Expression,
         false_branch: &ast::Expression,
-    ) -> CalyxResult<Expression> {
+    ) -> Option<Expression> {
         let cond = self.compile_expression(cond)?;
         let true_branch = self.compile_expression(true_branch)?;
         let false_branch = self.compile_expression(false_branch)?;
@@ -345,7 +379,7 @@ impl ExpressionBuilder<'_, '_> {
                 assignments.extend(true_branch.assignments);
                 assignments.extend(false_branch.assignments);
 
-                Ok(Expression {
+                Some(Expression {
                     control: cond.control,
                     assignments,
                     out,
@@ -388,7 +422,7 @@ impl ExpressionBuilder<'_, '_> {
                 let control =
                     collapse([cond.control, conditional], ir::Control::seq);
 
-                Ok(Expression {
+                Some(Expression {
                     control,
                     assignments: Vec::new(),
                     out,
@@ -402,9 +436,10 @@ impl ExpressionBuilder<'_, '_> {
         bindings: &[ast::Binding],
         body: &ast::Expression,
         sequential: bool,
-    ) -> CalyxResult<Expression> {
-        let (args, stores): (Vec<_>, Vec<_>) = itertools::process_results(
-            bindings.iter().map(|binding| {
+    ) -> Option<Expression> {
+        let (args, stores): (Vec<_>, Vec<_>) = bindings
+            .iter()
+            .map(|binding| {
                 let expr = self.compile_expression(&binding.expr)?;
 
                 let params = [expr.out.borrow().width];
@@ -419,10 +454,9 @@ impl ExpressionBuilder<'_, '_> {
 
                 self.stores.insert(binding.expr.uid, reg);
 
-                CalyxResult::Ok((expr.control, invoke))
-            }),
-            |iter| iter.unzip(),
-        )?;
+                Some((expr.control, invoke))
+            })
+            .collect::<Option<_>>()?;
 
         let body = self.compile_expression(body)?;
 
@@ -443,21 +477,21 @@ impl ExpressionBuilder<'_, '_> {
             )
         };
 
-        Ok(Expression { control, ..body })
+        Some(Expression { control, ..body })
     }
 
     fn compile_expression(
         &mut self,
         expr: &ast::Expression,
-    ) -> CalyxResult<Expression> {
+    ) -> Option<Expression> {
         match &expr.kind {
             ast::ExprKind::Num(num) => self.compile_number(num),
             ast::ExprKind::Const(constant) => {
-                Ok(self.compile_constant(*constant))
+                self.compile_constant(*constant, expr.span)
             }
-            ast::ExprKind::Id(sym) => Ok(self.compile_symbol(sym, expr.uid)),
+            ast::ExprKind::Id(sym) => Some(self.compile_symbol(sym, expr.uid)),
             ast::ExprKind::Op(op, args) => {
-                self.compile_operation(op.kind, expr.uid, args)
+                self.compile_operation(op, expr.uid, args)
             }
             ast::ExprKind::If {
                 cond,
@@ -472,31 +506,40 @@ impl ExpressionBuilder<'_, '_> {
             ast::ExprKind::Annotation { props: _, body } => {
                 self.compile_expression(body)
             }
-            _ => unimplemented!(),
+            _ => {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("unsupported expression")
+                        .with_primary(expr.span, ""),
+                );
+
+                None
+            }
         }
     }
 }
 
-struct GlobalContext<'a> {
-    format: &'a Format,
-    bindings: &'a NameResolution<'a>,
-    libm: &'a mut HashMap<ast::NodeId, Prototype>,
+struct GlobalContext<'c, 'ast> {
+    format: &'c Format,
+    bindings: &'c NameResolution<'ast>,
+    reporter: &'c mut Reporter<'ast>,
+    lib: &'c ir::LibrarySignatures,
+    names: &'c mut NameGenerator,
+    libm: &'c mut HashMap<ast::NodeId, Prototype>,
 }
 
 fn compile_definition(
     def: &ast::FPCore,
-    lib: &ir::LibrarySignatures,
-    context: &mut GlobalContext,
-    name_gen: &mut NameGenerator,
-) -> CalyxResult<ir::Component> {
+    ctx: &mut GlobalContext,
+) -> Option<ir::Component> {
     let name = def
         .name
         .as_ref()
-        .map_or_else(|| name_gen.gen_name("main"), |sym| sym.id);
+        .map_or_else(|| ctx.names.gen_name("main"), |sym| sym.id);
 
     let mut ports = vec![ir::PortDef::new(
         "out",
-        u64::from(context.format.width),
+        u64::from(ctx.format.width),
         ir::Direction::Output,
         Default::default(),
     )];
@@ -504,21 +547,22 @@ fn compile_definition(
     ports.extend(def.args.iter().map(|arg| {
         ir::PortDef::new(
             arg.var.id,
-            u64::from(context.format.width),
+            u64::from(ctx.format.width),
             ir::Direction::Input,
             Default::default(),
         )
     }));
 
     let mut component = ir::Component::new(name, ports, false, false, None);
-    let mut builder = ir::Builder::new(&mut component, lib).not_generated();
+    let mut builder = ir::Builder::new(&mut component, ctx.lib).not_generated();
 
     let mut expr_builder = ExpressionBuilder {
+        format: ctx.format,
+        bindings: ctx.bindings,
+        reporter: ctx.reporter,
+        libm: ctx.libm,
         builder: &mut builder,
         stores: HashMap::new(),
-        format: context.format,
-        bindings: context.bindings,
-        libm: context.libm,
     };
 
     let body = expr_builder.compile_expression(&def.body)?;
@@ -536,21 +580,22 @@ fn compile_definition(
 
     *component.control.borrow_mut() = body.control;
 
-    Ok(component)
+    Some(component)
 }
 
-pub fn compile_fpcore(
-    defs: &[ast::FPCore],
+pub fn compile_fpcore<'ast>(
+    defs: &'ast [ast::FPCore],
     opts: &Opts,
+    rpt: &mut Reporter<'ast>,
     mut lib: ir::LibrarySignatures,
-) -> CalyxResult<ir::Context> {
-    let mut name_gen = NameGenerator::with_prev_defined_names(
+) -> Option<ir::Context> {
+    let mut names = NameGenerator::with_prev_defined_names(
         defs.iter()
             .filter_map(|def| def.name.as_ref().map(|sym| sym.id))
             .collect(),
     );
 
-    let pm = PassManager::new(opts, defs);
+    let pm = PassManager::new(opts, defs, rpt);
 
     pm.get_analysis::<TypeCheck>()?;
 
@@ -559,20 +604,20 @@ pub fn compile_fpcore(
         mut prototypes,
     } = MathLib::new(&pm, &mut lib)?;
 
-    let mut context = GlobalContext {
+    let mut ctx = GlobalContext {
         format: &opts.format,
         bindings: pm.get_analysis()?,
+        reporter: &mut pm.rpt(),
+        lib: &lib,
+        names: &mut names,
         libm: &mut prototypes,
     };
 
     for def in defs {
-        let component =
-            compile_definition(def, &lib, &mut context, &mut name_gen)?;
-
-        components.push(component);
+        components.push(compile_definition(def, &mut ctx)?);
     }
 
-    Ok(ir::Context {
+    Some(ir::Context {
         components,
         lib,
         bc: Default::default(),

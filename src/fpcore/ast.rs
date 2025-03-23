@@ -1,12 +1,13 @@
 //! Abstract syntax for FPCore.
 
+use std::ops::Range;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use calyx_utils::{GPosIdx, Id, WithPos};
+pub use calyx_utils::Id;
 
 pub use super::constants::{MathConst, MathOp, TensorOp, TestOp};
 pub use super::literals::Rational;
-pub use super::metadata::Property;
+pub use super::metadata::PropKind;
 
 #[derive(Debug)]
 pub struct FPCore {
@@ -145,6 +146,12 @@ pub enum Constant {
     Bool(bool),
 }
 
+#[derive(Debug)]
+pub struct Property {
+    pub kind: PropKind,
+    pub span: Span,
+}
+
 /// Uniquely identifies an AST node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId(pub(crate) u32);
@@ -162,34 +169,19 @@ impl NodeId {
 
 /// A region of source code.
 #[derive(Clone, Copy, Debug)]
-pub struct Span(pub(super) GPosIdx);
+pub struct Span(usize, usize);
 
-impl WithPos for Span {
-    fn copy_span(&self) -> GPosIdx {
-        self.0
+impl Span {
+    pub fn new(start: usize, end: usize) -> Span {
+        Span(start, end)
     }
 }
 
-impl WithPos for Expression {
-    fn copy_span(&self) -> GPosIdx {
-        self.span.0
-    }
-}
-
-impl WithPos for Number {
-    fn copy_span(&self) -> GPosIdx {
-        self.span.0
-    }
-}
-
-impl WithPos for Symbol {
-    fn copy_span(&self) -> GPosIdx {
-        self.span.0
-    }
-}
-
-impl WithPos for Operation {
-    fn copy_span(&self) -> GPosIdx {
-        self.span.0
+impl From<Span> for Range<usize> {
+    fn from(value: Span) -> Self {
+        Range {
+            start: value.0,
+            end: value.1,
+        }
     }
 }

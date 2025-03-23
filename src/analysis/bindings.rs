@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use calyx_utils::{CalyxResult, Error, Id};
-
 use super::passes::{Pass, PassManager};
 use crate::fpcore::{Visitor, ast, metadata, visitor};
+use crate::utils::{Diagnostic, Reporter};
 
 #[derive(Clone, Copy)]
 pub enum Binding<'ast> {
@@ -25,8 +24,9 @@ pub struct NameResolution<'ast> {
 }
 
 impl<'ast> Pass<'ast> for NameResolution<'ast> {
-    fn run(pm: &PassManager<'_, 'ast>) -> CalyxResult<Self> {
+    fn run(pm: &PassManager<'_, 'ast>) -> Option<Self> {
         let mut builder = Builder {
+            reporter: &mut pm.rpt(),
             result: NameResolution {
                 names: HashMap::new(),
                 props: HashMap::new(),
@@ -35,38 +35,40 @@ impl<'ast> Pass<'ast> for NameResolution<'ast> {
             parent: Default::default(),
         };
 
-        builder.visit_definitions(pm.ast())?;
+        builder.visit_definitions(pm.ast()).ok()?;
 
-        Ok(builder.result)
+        Some(builder.result)
     }
 }
 
-struct Builder<'ast> {
+#[derive(Debug)]
+pub struct ResolutionError;
+
+struct Builder<'p, 'ast> {
+    reporter: &'p mut Reporter<'ast>,
     result: NameResolution<'ast>,
-    scopes: Vec<HashMap<Id, Binding<'ast>>>,
+    scopes: Vec<HashMap<ast::Id, Binding<'ast>>>,
     parent: Context<'ast>,
 }
 
-impl<'ast> Builder<'ast> {
+impl<'ast> Builder<'_, 'ast> {
     fn update_parent(&mut self, props: &'ast [ast::Property]) {
         for prop in props {
-            match prop {
-                ast::Property::CalyxDomain(domain) => {
+            match &prop.kind {
+                ast::PropKind::CalyxDomain(domain) => {
                     self.parent.domain = Some(domain);
                 }
-                ast::Property::CalyxImpl(strategy) => {
+                ast::PropKind::CalyxImpl(strategy) => {
                     self.parent.strategy = Some(strategy);
                 }
                 _ => {
-                    if !is_silent(prop) {
-                        log::warn!("Ignoring property `{}`", prop.name());
-                    }
+                    self.warn_ignored(prop);
                 }
             }
         }
     }
 
-    fn find_name(&self, symbol: Id) -> Option<&Binding<'ast>> {
+    fn find_name(&self, symbol: ast::Id) -> Option<&Binding<'ast>> {
         for map in self.scopes.iter().rev() {
             if let Some(name) = map.get(&symbol) {
                 return Some(name);
@@ -75,21 +77,35 @@ impl<'ast> Builder<'ast> {
 
         None
     }
+
+    fn warn_ignored(&mut self, prop: &ast::Property) {
+        if !is_silent(&prop.kind) {
+            self.reporter.emit(
+                &Diagnostic::warning()
+                    .with_message(format!(
+                        "ignoring unsupported property `:{}`",
+                        prop.kind.name(),
+                    ))
+                    .with_primary(prop.span, "unsupported property"),
+            );
+        }
+    }
 }
 
-impl<'ast> Visitor<'ast> for Builder<'ast> {
-    type Error = Error;
+impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
+    type Error = ResolutionError;
 
-    fn visit_definition(&mut self, def: &'ast ast::FPCore) -> CalyxResult<()> {
-        let mut scope = HashMap::new();
+    fn visit_definition(
+        &mut self,
+        def: &'ast ast::FPCore,
+    ) -> Result<(), ResolutionError> {
+        let mut scope = HashMap::with_capacity(def.args.len());
 
         for arg in &def.args {
             scope.insert(arg.var.id, Binding::Argument(arg));
 
             for prop in &arg.props {
-                if !is_silent(prop) {
-                    log::warn!("Ignoring property `{}`", prop.name());
-                }
+                self.warn_ignored(prop);
             }
         }
 
@@ -102,7 +118,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
         self.update_parent(&def.props);
 
         for prop in &def.props {
-            if let ast::Property::Pre(expr) = prop {
+            if let ast::PropKind::Pre(expr) = &prop.kind {
                 self.visit_expression(expr)?;
             }
         }
@@ -113,20 +129,29 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
     fn visit_expression(
         &mut self,
         expr: &'ast ast::Expression,
-    ) -> CalyxResult<()> {
+    ) -> Result<(), ResolutionError> {
         self.result.props.insert(expr.uid, self.parent);
 
         match &expr.kind {
             ast::ExprKind::Num(_) => Ok(()),
             ast::ExprKind::Const(_) => Ok(()),
             ast::ExprKind::Id(sym) => {
-                let binding = self.find_name(sym.id).ok_or_else(|| {
-                    Error::undefined(sym.id, "variable").with_pos(sym)
-                })?;
+                if let Some(binding) = self.find_name(sym.id) {
+                    self.result.names.insert(expr.uid, *binding);
 
-                self.result.names.insert(expr.uid, *binding);
+                    Ok(())
+                } else {
+                    self.reporter.emit(
+                        &Diagnostic::error()
+                            .with_message(format!(
+                                "undefined name `{}`",
+                                sym.id,
+                            ))
+                            .with_primary(sym.span, "undefined name"),
+                    );
 
-                Ok(())
+                    Err(ResolutionError)
+                }
             }
             ast::ExprKind::Op(..) => visitor::visit_expression(self, expr),
             ast::ExprKind::If { .. } => visitor::visit_expression(self, expr),
@@ -135,7 +160,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 body,
                 sequential: false,
             } => {
-                let mut scope = HashMap::new();
+                let mut scope = HashMap::with_capacity(bindings.len());
 
                 for binding in bindings {
                     self.visit_expression(&binding.expr)?;
@@ -178,7 +203,7 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 body,
                 sequential: false,
             } => {
-                let mut scope = HashMap::new();
+                let mut scope = HashMap::with_capacity(vars.len());
 
                 for var in vars {
                     self.visit_expression(&var.init)?;
@@ -243,22 +268,30 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
 
                 Ok(())
             }
-            _ => unimplemented!(),
+            _ => {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("unsupported expression")
+                        .with_primary(expr.span, ""),
+                );
+
+                Err(ResolutionError)
+            }
         }
     }
 }
 
 /// Whether the property can be safely ignored without emitting a warning.
-fn is_silent(prop: &ast::Property) -> bool {
+fn is_silent(prop: &ast::PropKind) -> bool {
     matches!(
         prop,
-        ast::Property::Name(_)
-            | ast::Property::Description(_)
-            | ast::Property::Cite(_)
-            | ast::Property::Pre(_)
-            | ast::Property::Spec(_)
-            | ast::Property::Alt(_)
-            | ast::Property::Example(_)
-            | ast::Property::CalyxDomain(_)
+        ast::PropKind::Name(_)
+            | ast::PropKind::Description(_)
+            | ast::PropKind::Cite(_)
+            | ast::PropKind::Pre(_)
+            | ast::PropKind::Spec(_)
+            | ast::PropKind::Alt(_)
+            | ast::PropKind::Example(_)
+            | ast::PropKind::CalyxDomain(_)
     )
 }

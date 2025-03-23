@@ -3,15 +3,17 @@
 use std::iter;
 
 use calyx_ir::{self as ir, build_assignments, structure};
-use calyx_utils::CalyxResult;
 use itertools::{Itertools, Position};
 
 use super::{Cast, ComponentBuilder, ComponentManager};
 use crate::format::Format;
 use crate::functions::Datapath;
+use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::mangle;
 
 const INLINE: ir::Attribute = ir::Attribute::Bool(ir::BoolAttr::Inline);
+
+type Signature = (ir::Id, Vec<ir::PortDef<u64>>);
 
 pub struct Horner<'a> {
     pub format: &'a Format,
@@ -24,7 +26,7 @@ impl Horner<'_> {
         &self,
         cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<(ir::Id, Vec<ir::PortDef<u64>>)> {
+    ) -> Result<Signature, Diagnostic> {
         let cast = Cast {
             from: &Format {
                 scale: self.spec.sum_scale,
@@ -41,7 +43,7 @@ impl Horner<'_> {
         &self,
         cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<Vec<(ir::Id, Vec<ir::PortDef<u64>>)>> {
+    ) -> Result<Vec<Signature>, Diagnostic> {
         let max_width = *self.spec.lut_widths.iter().max().unwrap();
 
         self.spec
@@ -116,7 +118,7 @@ impl ComponentBuilder for Horner<'_> {
         name: ir::Id,
         cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<ir::Component> {
+    ) -> Result<ir::Component, Diagnostic> {
         let table_casts = self.table_casts(cm, lib)?;
         let output_cast = self.output_cast(cm, lib)?;
 

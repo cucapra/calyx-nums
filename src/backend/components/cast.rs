@@ -1,10 +1,10 @@
 //! Numeric casts.
 
 use calyx_ir as ir;
-use calyx_utils::CalyxResult;
 
 use super::{ComponentBuilder, ComponentManager};
 use crate::format::Format;
+use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::mangle;
 
 pub struct Cast<'a> {
@@ -39,7 +39,7 @@ impl ComponentBuilder for Cast<'_> {
         name: ir::Id,
         _cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<ir::Component> {
+    ) -> Result<ir::Component, Diagnostic> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, false, true, None);

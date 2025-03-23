@@ -1,12 +1,38 @@
+use std::fmt;
 use std::path::PathBuf;
-
-use argh::FromArgs;
-use log::LevelFilter;
+use std::str::FromStr;
 
 use crate::format::Format;
 
+#[derive(Clone, Copy, Default)]
+pub enum RangeAnalysis {
+    #[default]
+    None,
+    Interval,
+}
+
+impl FromStr for RangeAnalysis {
+    type Err = ParseRangeAnalysisError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(RangeAnalysis::None),
+            "interval" => Ok(RangeAnalysis::Interval),
+            _ => Err(ParseRangeAnalysisError),
+        }
+    }
+}
+
+pub struct ParseRangeAnalysisError;
+
+impl fmt::Display for ParseRangeAnalysisError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "unknown analysis mode")
+    }
+}
+
 /// FPCore frontend for Calyx.
-#[derive(FromArgs)]
+#[derive(argh::FromArgs)]
 pub struct Opts {
     /// input file
     #[argh(positional)]
@@ -24,13 +50,9 @@ pub struct Opts {
     #[argh(option, default = "Default::default()")]
     pub format: Format,
 
-    /// enable domain inference
-    #[argh(switch)]
-    pub infer_domains: bool,
-
-    /// logging level
-    #[argh(option, long = "log", default = "LevelFilter::Warn")]
-    pub log_level: LevelFilter,
+    /// range analysis mode
+    #[argh(option, default = "Default::default()")]
+    pub range_analysis: RangeAnalysis,
 }
 
 impl Opts {

@@ -3,13 +3,13 @@
 use std::{cmp, iter};
 
 use calyx_ir::{self as ir, build_assignments, structure};
-use calyx_utils::{CalyxResult, Error};
 
 use super::{ComponentBuilder, ComponentManager};
 use crate::backend::primitives::lut;
 use crate::format::Format;
 use crate::fpcore::ast::{Rational, Span};
 use crate::functions::AddressSpec;
+use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::{Mangle, mangle};
 use crate::utils::rational::FixedPoint;
 
@@ -40,13 +40,12 @@ impl LookupTable<'_> {
     fn build_primitive(
         &self,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<ir::Id> {
-        let format_error = |value| {
-            Error::misc("Implementation error")
-                .with_pos(&self.span)
-                .with_post_msg(Some(format!(
-                    "Generated constant {value} is not representable"
-                )))
+    ) -> Result<ir::Id, Diagnostic> {
+        let diagnostic = |value| {
+            Diagnostic::error()
+                .with_message("implementation error")
+                .with_secondary(self.span, "while compiling this operator")
+                .with_note(format!("generated constant {value} is not representable in the global format"))
         };
 
         let values: Vec<_> = self
@@ -58,12 +57,12 @@ impl LookupTable<'_> {
                     iter::zip(row, self.data.formats).map(|(value, format)| {
                         value
                             .to_fixed_point(format)
-                            .ok_or_else(|| format_error(value))
+                            .ok_or_else(|| diagnostic(value))
                     }),
                     |bits| lut::pack(bits, self.data.widths()),
                 )
             })
-            .collect::<CalyxResult<_>>()?;
+            .collect::<Result<_, _>>()?;
 
         let name = ir::Id::new(mangle!(
             "lut",
@@ -123,7 +122,7 @@ impl ComponentBuilder for LookupTable<'_> {
         name: ir::Id,
         _cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<ir::Component> {
+    ) -> Result<ir::Component, Diagnostic> {
         let lut = self.build_primitive(lib)?;
         let ports = self.signature();
 
@@ -133,11 +132,10 @@ impl ComponentBuilder for LookupTable<'_> {
         let primitive = builder.add_primitive("lut", lut, &[]);
 
         let width_error = |_| {
-            Error::misc("Implementation error")
-                .with_pos(&self.span)
-                .with_post_msg(Some(String::from(
-                    "Constant width exceeds 64 bits",
-                )))
+            Diagnostic::error()
+                .with_message("code generation failed")
+                .with_secondary(self.span, "while compiling this operator")
+                .with_note("calyx doesn't support constants wider than 64 bits")
         };
 
         let global = u64::from(self.format.width);

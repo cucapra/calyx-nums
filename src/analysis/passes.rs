@@ -1,10 +1,9 @@
-use std::cell::OnceCell;
-
-use calyx_utils::CalyxResult;
+use std::cell::{OnceCell, RefCell, RefMut};
 
 use super::{NameResolution, RangeAnalysis, TypeCheck};
 use crate::fpcore::ast;
 use crate::opts::Opts;
+use crate::utils::Reporter;
 
 pub trait Managed<Cache>
 where
@@ -40,12 +39,13 @@ pub trait Pass<'ast>
 where
     Self: Sized,
 {
-    fn run(pm: &PassManager<'_, 'ast>) -> CalyxResult<Self>;
+    fn run(pm: &PassManager<'_, 'ast>) -> Option<Self>;
 }
 
 pub struct PassManager<'pm, 'ast> {
     opts: &'pm Opts,
     defs: &'ast [ast::FPCore],
+    rpt: RefCell<&'pm mut Reporter<'ast>>,
     cache: Cache<'ast>,
 }
 
@@ -53,10 +53,12 @@ impl<'pm, 'ast> PassManager<'pm, 'ast> {
     pub fn new(
         opts: &'pm Opts,
         defs: &'ast [ast::FPCore],
+        rpt: &'pm mut Reporter<'ast>,
     ) -> PassManager<'pm, 'ast> {
         PassManager {
             opts,
             defs,
+            rpt: RefCell::new(rpt),
             cache: Default::default(),
         }
     }
@@ -69,18 +71,22 @@ impl<'pm, 'ast> PassManager<'pm, 'ast> {
         self.defs
     }
 
-    pub fn get_analysis<A>(&self) -> CalyxResult<&A>
+    pub fn rpt(&self) -> RefMut<'_, &'pm mut Reporter<'ast>> {
+        self.rpt.borrow_mut()
+    }
+
+    pub fn get_analysis<A>(&self) -> Option<&A>
     where
         A: Pass<'ast> + Managed<Cache<'ast>>,
     {
         let cell = A::get(&self.cache);
 
         if let Some(val) = cell.get() {
-            Ok(val)
+            Some(val)
         } else {
             let _ = cell.set(A::run(self)?);
 
-            Ok(cell.get().unwrap())
+            Some(cell.get().unwrap())
         }
     }
 }

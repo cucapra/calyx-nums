@@ -2,15 +2,18 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::ops::Index;
 
-use calyx_utils::{CalyxResult, Error};
+use strum_macros::Display;
 
 use super::bindings::{Binding, NameResolution};
 use super::passes::{Pass, PassManager};
 use crate::fpcore::ast;
+use crate::utils::{Diagnostic, Reporter};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Display)]
 pub enum Type {
+    #[strum(to_string = "boolean")]
     Boolean,
+    #[strum(to_string = "number")]
     Number,
 }
 
@@ -19,17 +22,18 @@ pub struct TypeCheck {
 }
 
 impl Pass<'_> for TypeCheck {
-    fn run(pm: &PassManager) -> CalyxResult<Self> {
+    fn run(pm: &PassManager) -> Option<Self> {
         let mut builder = Builder {
             bindings: pm.get_analysis()?,
+            reporter: &mut pm.rpt(),
             types: HashMap::new(),
         };
 
         for def in pm.ast() {
-            builder.check_definition(def)?;
+            builder.check_definition(def).ok()?;
         }
 
-        Ok(TypeCheck {
+        Some(TypeCheck {
             types: builder.types,
         })
     }
@@ -43,15 +47,19 @@ impl Index<ast::NodeId> for TypeCheck {
     }
 }
 
-struct Builder<'a> {
-    bindings: &'a NameResolution<'a>,
+#[derive(Debug)]
+pub struct TypeError;
+
+struct Builder<'p, 'ast> {
+    bindings: &'p NameResolution<'ast>,
+    reporter: &'p mut Reporter<'ast>,
     types: HashMap<ast::NodeId, Type>,
 }
 
-impl Builder<'_> {
-    fn check_definition(&mut self, def: &ast::FPCore) -> CalyxResult<()> {
+impl Builder<'_, '_> {
+    fn check_definition(&mut self, def: &ast::FPCore) -> Result<(), TypeError> {
         for prop in &def.props {
-            if let ast::Property::Pre(expr) = prop {
+            if let ast::PropKind::Pre(expr) = &prop.kind {
                 self.expect(expr, Type::Boolean)?;
             }
         }
@@ -62,7 +70,7 @@ impl Builder<'_> {
     fn check_expression(
         &mut self,
         expr: &ast::Expression,
-    ) -> CalyxResult<Type> {
+    ) -> Result<Type, TypeError> {
         let ty = match &expr.kind {
             ast::ExprKind::Num(_) => Type::Number,
             ast::ExprKind::Const(kind) => match kind {
@@ -72,7 +80,16 @@ impl Builder<'_> {
             ast::ExprKind::Id(_) => match self.bindings.names[&expr.uid] {
                 Binding::Argument(arg) => {
                     if !arg.dims.is_empty() {
-                        unimplemented!();
+                        self.reporter.emit(
+                            &Diagnostic::error()
+                                .with_message("tensor arguments not supported")
+                                .with_primary(
+                                    arg.var.span,
+                                    "unsupported argument type",
+                                ),
+                        );
+
+                        return Err(TypeError);
                     }
 
                     Type::Number
@@ -102,25 +119,39 @@ impl Builder<'_> {
 
                         (Type::Boolean, arg_ty, arity)
                     }
-                    _ => unimplemented!(),
+                    ast::OpKind::Tensor(_) => {
+                        self.reporter.emit(
+                            &Diagnostic::error()
+                                .with_message("tensor operations not supported")
+                                .with_primary(op.span, "unsupported operation"),
+                        );
+
+                        return Err(TypeError);
+                    }
                 };
 
                 let count = args.len();
 
                 if !arity.check(count) {
-                    let msg = match arity {
+                    let label = match arity {
                         Arity::Variadic => {
-                            format!("Expected 2+ arguments, got {count}")
+                            format!("expected 2+ arguments, found {count}")
                         }
                         Arity::UNARY => {
-                            format!("Expected 1 argument, got {count}")
+                            format!("expected 1 argument, found {count}")
                         }
                         Arity::Fixed(arity) => {
-                            format!("Expected {arity} arguments, got {count}")
+                            format!("expected {arity} arguments, found {count}")
                         }
                     };
 
-                    return Err(Error::misc(msg).with_pos(op));
+                    self.reporter.emit(
+                        &Diagnostic::error()
+                            .with_message("type error")
+                            .with_primary(op.span, label),
+                    );
+
+                    return Err(TypeError);
                 }
 
                 for arg in args {
@@ -136,10 +167,31 @@ impl Builder<'_> {
             } => {
                 self.expect(cond, Type::Boolean)?;
 
-                let ty = self.check_expression(true_branch)?;
-                self.expect(false_branch, ty)?;
+                let true_ty = self.check_expression(true_branch)?;
+                let false_ty = self.check_expression(false_branch)?;
 
-                ty
+                if true_ty != false_ty {
+                    self.reporter.emit(
+                        &Diagnostic::error()
+                            .with_message("mismatched types")
+                            .with_secondary(
+                                expr.span,
+                                "`if` branches have incompatible types",
+                            )
+                            .with_secondary(
+                                true_branch.span,
+                                format!("this has type `{true_ty}`"),
+                            )
+                            .with_primary(
+                                false_branch.span,
+                                format!("expected {true_ty}, found {false_ty}"),
+                            ),
+                    );
+
+                    return Err(TypeError);
+                }
+
+                true_ty
             }
             ast::ExprKind::Let { bindings, body, .. } => {
                 for binding in bindings {
@@ -156,7 +208,24 @@ impl Builder<'_> {
                 }
 
                 for var in vars {
-                    self.expect(&var.update, self.types[&var.init.uid])?;
+                    let init_ty = self.types[&var.init.uid];
+                    let update_ty = self.check_expression(&var.update)?;
+
+                    if init_ty != update_ty {
+                        let init_label =
+                            format!("variable initialized to type `{init_ty}`");
+                        let update_label =
+                            format!("expected {init_ty}, found {update_ty}");
+
+                        self.reporter.emit(
+                            &Diagnostic::error()
+                                .with_message("mismatched types")
+                                .with_secondary(var.init.span, init_label)
+                                .with_primary(var.update.span, update_label),
+                        );
+
+                        return Err(TypeError);
+                    }
                 }
 
                 self.expect(cond, Type::Boolean)?;
@@ -170,7 +239,15 @@ impl Builder<'_> {
             ast::ExprKind::Annotation { body, .. } => {
                 self.check_expression(body)?
             }
-            _ => unimplemented!(),
+            _ => {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("unsupported expression")
+                        .with_primary(expr.span, ""),
+                );
+
+                return Err(TypeError);
+            }
         };
 
         self.types.insert(expr.uid, ty);
@@ -178,14 +255,24 @@ impl Builder<'_> {
         Ok(ty)
     }
 
-    fn expect(&mut self, expr: &ast::Expression, ty: Type) -> CalyxResult<()> {
-        if self.check_expression(expr)? != ty {
-            let msg = match ty {
-                Type::Boolean => "Expected boolean",
-                Type::Number => "Expected number",
-            };
+    fn expect(
+        &mut self,
+        expr: &ast::Expression,
+        ty: Type,
+    ) -> Result<(), TypeError> {
+        let found = self.check_expression(expr)?;
 
-            return Err(Error::misc(msg).with_pos(expr));
+        if found != ty {
+            self.reporter.emit(
+                &Diagnostic::error()
+                    .with_message("mismatched types")
+                    .with_primary(
+                        expr.span,
+                        format!("expected {ty}, found {found}"),
+                    ),
+            );
+
+            return Err(TypeError);
         }
 
         Ok(())

@@ -1,11 +1,14 @@
 use std::cmp::{self, Ordering};
 use std::collections::HashMap;
 
-use calyx_utils::{CalyxResult, Error};
 use itertools::Itertools;
 
 use super::{Binding, NameResolution};
 use crate::fpcore::ast;
+use crate::utils::{Diagnostic, Reporter};
+
+#[derive(Debug)]
+pub struct UnsupportedPredicateError;
 
 #[derive(Default)]
 pub struct Precondition<'ast> {
@@ -21,32 +24,41 @@ impl<'ast> Precondition<'ast> {
         &mut self,
         pred: &'ast ast::Expression,
         bindings: &NameResolution,
-    ) -> CalyxResult<()> {
-        let unsupported = || Error::misc("Unsupported precondition");
+        reporter: &mut Reporter,
+    ) -> Result<(), UnsupportedPredicateError> {
+        let mut unsupported = || {
+            reporter.emit(
+                &Diagnostic::error()
+                    .with_message("unsupported precondition")
+                    .with_primary(pred.span, "not allowed here"),
+            );
+
+            Err(UnsupportedPredicateError)
+        };
 
         let ast::ExprKind::Op(op, args) = &pred.kind else {
-            return Err(unsupported());
+            return unsupported();
         };
 
         let ast::OpKind::Test(op) = op.kind else {
-            return Err(unsupported());
+            return unsupported();
         };
 
         match op {
             ast::TestOp::And => {
                 for arg in args {
-                    self.add_constraint(arg, bindings)?;
+                    self.add_constraint(arg, bindings, reporter)?;
                 }
             }
             ast::TestOp::Or => {
                 let mut disjunction = Precondition::new();
 
-                disjunction.add_constraint(&args[0], bindings)?;
+                disjunction.add_constraint(&args[0], bindings, reporter)?;
 
                 for arg in &args[1..] {
                     let mut disjunct = Precondition::new();
 
-                    disjunct.add_constraint(arg, bindings)?;
+                    disjunct.add_constraint(arg, bindings, reporter)?;
                     disjunction.union(disjunct);
                 }
 
@@ -82,12 +94,12 @@ impl<'ast> Precondition<'ast> {
                             (b.uid, domain)
                         }
                         _ => {
-                            return Err(unsupported());
+                            return unsupported();
                         }
                     };
 
                     let Binding::Argument(arg) = bindings.names[&var] else {
-                        return Err(unsupported());
+                        unreachable!("`:pre` only checked at top level");
                     };
 
                     self.domains
@@ -97,7 +109,7 @@ impl<'ast> Precondition<'ast> {
                 }
             }
             _ => {
-                return Err(unsupported());
+                return unsupported();
             }
         }
 

@@ -2,8 +2,7 @@
 
 use std::str::FromStr;
 
-use calyx_utils::{FileIdx, GPosIdx, GlobalPositionTable};
-use pest::error::{Error, ErrorVariant};
+use pest::error::{Error, ErrorVariant, InputLocation};
 use pest_consume::{Parser, match_nodes};
 
 use super::{ast, literals, metadata};
@@ -13,21 +12,15 @@ use super::{ast, literals, metadata};
 pub struct FPCoreParser;
 
 impl FPCoreParser {
-    pub fn parse_file(
-        name: String,
-        src: String,
-    ) -> Result<Vec<ast::FPCore>, Box<Error<Rule>>> {
-        let file = GlobalPositionTable::as_mut().add_file(name, src);
-        let src = GlobalPositionTable::as_ref().get_source(file);
-
-        let nodes = FPCoreParser::parse_with_userdata(Rule::file, src, file)?;
+    pub fn parse_file(src: &str) -> Result<Vec<ast::FPCore>, Box<Error<Rule>>> {
+        let nodes = FPCoreParser::parse(Rule::file, src)?;
 
         FPCoreParser::file(nodes.single()?).map_err(Box::new)
     }
 }
 
 type ParseResult<T> = Result<T, Error<Rule>>;
-type Node<'i> = pest_consume::Node<'i, Rule, FileIdx>;
+type Node<'i> = pest_consume::Node<'i, Rule, ()>;
 
 #[pest_consume::parser]
 impl FPCoreParser {
@@ -172,7 +165,7 @@ impl FPCoreParser {
     }
 
     fn expr(input: Node) -> ParseResult<ast::Expression> {
-        let span = intern_span(&input);
+        let span = ast::Span::from_node(&input);
 
         let kind = match_nodes!(input.into_children();
             [number(num)] => ast::ExprKind::Num(num),
@@ -240,7 +233,7 @@ impl FPCoreParser {
     }
 
     fn number(input: Node) -> ParseResult<ast::Number> {
-        let span = intern_span(&input);
+        let span = ast::Span::from_node(&input);
 
         let value = match_nodes!(input.into_children();
             [rational(value)] => value,
@@ -340,43 +333,47 @@ impl FPCoreParser {
     }
 
     fn property(input: Node) -> ParseResult<ast::Property> {
-        Ok(match_nodes!(input.into_children();
-            [name_kwd(_), string(name)] => ast::Property::Name(name),
+        let span = ast::Span::from_node(&input);
+
+        let kind = match_nodes!(input.into_children();
+            [name_kwd(_), string(name)] => ast::PropKind::Name(name),
             [description_kwd(_), string(description)] => {
-                ast::Property::Description(description)
+                ast::PropKind::Description(description)
             },
             [cite_kwd(_), symbol(symbols)..] => {
-                ast::Property::Cite(symbols.collect())
+                ast::PropKind::Cite(symbols.collect())
             },
             [precision_kwd(_), precision(precision)] => {
-                ast::Property::Precision(precision)
+                ast::PropKind::Precision(precision)
             },
             [round_kwd(_), rounding(round)] => {
-                ast::Property::Round(round.parse().unwrap())
+                ast::PropKind::Round(round.parse().unwrap())
             },
             [overflow_kwd(_), overflow(overflow)] => {
-                ast::Property::Overflow(overflow.parse().unwrap())
+                ast::PropKind::Overflow(overflow.parse().unwrap())
             },
-            [pre_kwd(_), expr(pre)] => ast::Property::Pre(pre),
-            [spec_kwd(_), expr(spec)] => ast::Property::Spec(spec),
-            [alt_kwd(_), expr(alt)] => ast::Property::Alt(alt),
-            [math_lib_kwd(_), symbol(lib)] => ast::Property::MathLib(lib),
+            [pre_kwd(_), expr(pre)] => ast::PropKind::Pre(pre),
+            [spec_kwd(_), expr(spec)] => ast::PropKind::Spec(spec),
+            [alt_kwd(_), expr(alt)] => ast::PropKind::Alt(alt),
+            [math_lib_kwd(_), symbol(lib)] => ast::PropKind::MathLib(lib),
             [example_kwd(_), binding(bindings)..] => {
-                ast::Property::Example(bindings.collect())
+                ast::PropKind::Example(bindings.collect())
             },
             [domain_kwd(_), number(left), number(right)] => {
-                ast::Property::CalyxDomain(metadata::CalyxDomain {
+                ast::PropKind::CalyxDomain(metadata::CalyxDomain {
                     left,
                     right,
                 })
             },
             [impl_kwd(_), strategy(strategy)] => {
-                ast::Property::CalyxImpl(strategy)
+                ast::PropKind::CalyxImpl(strategy)
             },
             [property_name(name), data(data)] => {
-                ast::Property::Unknown(name, data)
+                ast::PropKind::Unknown(name, data)
             },
-        ))
+        );
+
+        Ok(ast::Property { kind, span })
     }
 
     fn data(input: Node) -> ParseResult<metadata::Data> {
@@ -548,7 +545,7 @@ impl FPCoreParser {
     fn symbol(input: Node) -> ParseResult<ast::Symbol> {
         Ok(ast::Symbol {
             id: input.as_str().into(),
-            span: intern_span(&input),
+            span: ast::Span::from_node(&input),
         })
     }
 
@@ -579,11 +576,11 @@ impl FPCoreParser {
     }
 
     fn minus(input: Node) -> ParseResult<ast::Span> {
-        Ok(intern_span(&input))
+        Ok(ast::Span::from_node(&input))
     }
 
     fn operator(input: Node) -> ParseResult<ast::Operation> {
-        let span = intern_span(&input);
+        let span = ast::Span::from_node(&input);
 
         let kind = match_nodes!(input.into_children();
             [mathematical_op(name)] => ast::OpKind::Math(name.parse().unwrap()),
@@ -632,14 +629,21 @@ where
     })
 }
 
-fn intern_span(input: &Node) -> ast::Span {
-    let span = input.as_span();
+impl ast::Span {
+    fn from_node(node: &Node) -> ast::Span {
+        let span = node.as_span();
 
-    let pos = GlobalPositionTable::as_mut().add_pos(
-        *input.user_data(),
-        span.start(),
-        span.end(),
-    );
+        ast::Span::new(span.start(), span.end())
+    }
+}
 
-    ast::Span(GPosIdx(pos))
+impl From<InputLocation> for ast::Span {
+    fn from(value: InputLocation) -> Self {
+        let (start, end) = match value {
+            InputLocation::Pos(pos) => (pos, pos + 1),
+            InputLocation::Span((start, end)) => (start, end),
+        };
+
+        ast::Span::new(start, end)
+    }
 }

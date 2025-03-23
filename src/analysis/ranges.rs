@@ -2,15 +2,13 @@ use std::collections::HashMap;
 use std::fmt::{self, Write};
 use std::ops::Index;
 
-use calyx_utils::{CalyxResult, Error};
 use itertools::Itertools;
 
-use super::bindings::{Binding, NameResolution};
-use super::domain::Precondition;
 use super::passes::{Pass, PassManager};
-use super::type_check::TypeCheck;
+use super::{Binding, NameResolution, Precondition, TypeCheck};
 use crate::format::Format;
 use crate::fpcore::{Visitor, ast};
+use crate::utils::diagnostics::{Diagnostic, Reporter};
 use crate::utils::rational::Dyadic;
 use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 
@@ -35,20 +33,28 @@ pub struct RangeAnalysis {
 }
 
 impl Pass<'_> for RangeAnalysis {
-    fn run(pm: &PassManager) -> CalyxResult<Self> {
+    fn run(pm: &PassManager) -> Option<Self> {
         pm.get_analysis::<TypeCheck>()?;
 
         let mut builder = Builder {
             bindings: pm.get_analysis()?,
+            reporter: &mut pm.rpt(),
             script: String::from(PROLOGUE),
         };
 
-        builder.visit_definitions(pm.ast())?;
+        builder.visit_definitions(pm.ast()).ok()?;
         builder.script.push_str(EPILOGUE);
 
-        Ok(RangeAnalysis {
-            ranges: run_script(&builder.script, &pm.opts().format)?,
-        })
+        let ranges = run_script(&builder.script, &pm.opts().format)
+            .map_err(|err| {
+                builder.reporter.emit(
+                    &Diagnostic::from_sollya(err)
+                        .with_note("range analysis failed"),
+                );
+            })
+            .ok()?;
+
+        Some(RangeAnalysis { ranges })
     }
 }
 
@@ -87,12 +93,16 @@ impl Index<ast::NodeId> for RangeAnalysis {
     }
 }
 
-struct Builder<'ast> {
-    bindings: &'ast NameResolution<'ast>,
+#[derive(Debug)]
+pub struct RangeAnalysisError;
+
+struct Builder<'p, 'ast> {
+    bindings: &'p NameResolution<'ast>,
+    reporter: &'p mut Reporter<'ast>,
     script: String,
 }
 
-impl Builder<'_> {
+impl Builder<'_, '_> {
     fn script_bool(&mut self, dst: SollyaVar) {
         writeln!(self.script, "{dst} = [0;1];").unwrap();
     }
@@ -183,15 +193,19 @@ impl Builder<'_> {
     }
 }
 
-impl<'ast> Visitor<'ast> for Builder<'ast> {
-    type Error = Error;
+impl Visitor<'_> for Builder<'_, '_> {
+    type Error = RangeAnalysisError;
 
-    fn visit_definition(&mut self, def: &'ast ast::FPCore) -> CalyxResult<()> {
+    fn visit_definition(
+        &mut self,
+        def: &ast::FPCore,
+    ) -> Result<(), RangeAnalysisError> {
         let mut pre = Precondition::new();
 
         for prop in &def.props {
-            if let ast::Property::Pre(expr) = prop {
-                pre.add_constraint(expr, self.bindings)?;
+            if let ast::PropKind::Pre(expr) = &prop.kind {
+                pre.add_constraint(expr, self.bindings, self.reporter)
+                    .map_err(|_| RangeAnalysisError)?;
             }
         }
 
@@ -201,7 +215,16 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 .get(&arg.uid)
                 .and_then(|domain| domain.bounds())
                 .ok_or_else(|| {
-                    Error::misc("Under-constrained argument").with_pos(&arg.var)
+                    self.reporter.emit(
+                        &Diagnostic::error()
+                            .with_message("precondition is too weak")
+                            .with_primary(
+                                arg.var.span,
+                                "argument has unbounded domain",
+                            ),
+                    );
+
+                    RangeAnalysisError
                 })?;
 
             self.script_interval(arg, left, right);
@@ -213,8 +236,8 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
 
     fn visit_expression(
         &mut self,
-        expr: &'ast ast::Expression,
-    ) -> CalyxResult<()> {
+        expr: &ast::Expression,
+    ) -> Result<(), RangeAnalysisError> {
         match &expr.kind {
             ast::ExprKind::Num(num) => {
                 self.script_point(expr, &num.value);
@@ -226,15 +249,15 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 let binding = match self.bindings.names[&expr.uid] {
                     Binding::Argument(arg) => SollyaVar::from(arg),
                     Binding::Let(binding) => SollyaVar::from(&binding.expr),
-                    _ => unimplemented!(),
+                    _ => unreachable!("pass rejects loops"),
                 };
 
                 self.script_assign(expr, binding);
             }
             ast::ExprKind::Op(
-                op @ ast::Operation {
-                    kind: ast::OpKind::Math(function),
-                    ..
+                ast::Operation {
+                    kind: ast::OpKind::Math(op),
+                    span,
                 },
                 args,
             ) => {
@@ -242,17 +265,25 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                     self.visit_expression(arg)?;
                 }
 
-                let (function, is_binary) = match function {
+                let (op, is_binary) = match op {
                     ast::MathOp::Add => ("+", true),
                     ast::MathOp::Sub => ("-", true),
                     ast::MathOp::Mul => ("*", true),
                     ast::MathOp::Div => ("/", true),
                     ast::MathOp::Neg => ("-", false),
                     _ => (
-                        SollyaFunction::try_from(*function)
+                        SollyaFunction::try_from(*op)
                             .map_err(|_| {
-                                Error::misc("Unsupported operation")
-                                    .with_pos(op)
+                                self.reporter.emit(
+                                    &Diagnostic::error()
+                                        .with_message("unsupported operation")
+                                        .with_primary(
+                                            *span,
+                                            "unsupported operator",
+                                        ),
+                                );
+
+                                RangeAnalysisError
                             })?
                             .as_str(),
                         false,
@@ -260,9 +291,9 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 };
 
                 if is_binary {
-                    self.script_binary(expr, &args[0], function, &args[1]);
+                    self.script_binary(expr, &args[0], op, &args[1]);
                 } else {
-                    self.script_unary(expr, function, &args[0]);
+                    self.script_unary(expr, op, &args[0]);
                 }
             }
             ast::ExprKind::Op(
@@ -305,7 +336,15 @@ impl<'ast> Visitor<'ast> for Builder<'ast> {
                 self.visit_expression(body)?;
                 self.script_assign(expr, body.as_ref());
             }
-            _ => unimplemented!(),
+            _ => {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("unsupported expression")
+                        .with_primary(expr.span, ""),
+                );
+
+                return Err(RangeAnalysisError);
+            }
         };
 
         self.script_print(expr.into());

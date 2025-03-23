@@ -417,16 +417,16 @@ impl Property {
         D::Doc: Clone,
         A: Clone,
     {
-        match self {
-            Property::Name(name) => allocator
+        match &self.kind {
+            PropKind::Name(name) => allocator
                 .text(":name")
                 .append(allocator.space())
                 .append(allocator.text(name).double_quotes()),
-            Property::Description(desc) => allocator
+            PropKind::Description(desc) => allocator
                 .text(":description")
                 .append(allocator.space())
                 .append(allocator.text(desc).double_quotes()),
-            Property::Cite(symbols) => allocator
+            PropKind::Cite(symbols) => allocator
                 .text(":cite")
                 .append(allocator.softline())
                 .append(
@@ -440,7 +440,7 @@ impl Property {
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Precision(prec) => allocator
+            PropKind::Precision(prec) => allocator
                 .text(":precision")
                 .append(allocator.line())
                 .append(match prec {
@@ -476,43 +476,43 @@ impl Property {
                 })
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Round(mode) => allocator
+            PropKind::Round(mode) => allocator
                 .text(":round")
                 .append(allocator.line())
                 .append(allocator.text::<&str>(mode.into()))
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Overflow(mode) => allocator
+            PropKind::Overflow(mode) => allocator
                 .text(":overflow")
                 .append(allocator.line())
                 .append(allocator.text::<&str>(mode.into()))
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Pre(expr) => allocator
+            PropKind::Pre(expr) => allocator
                 .text(":pre")
                 .append(allocator.softline())
                 .append(expr.pretty(allocator).align())
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Spec(expr) => allocator
+            PropKind::Spec(expr) => allocator
                 .text(":spec")
                 .append(allocator.softline())
                 .append(expr.pretty(allocator).align())
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Alt(expr) => allocator
+            PropKind::Alt(expr) => allocator
                 .text(":alt")
                 .append(allocator.softline())
                 .append(expr.pretty(allocator).align())
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::MathLib(sym) => allocator
+            PropKind::MathLib(sym) => allocator
                 .text(":math-library")
                 .append(allocator.line())
                 .append(sym.pretty(allocator))
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Example(bindings) => allocator
+            PropKind::Example(bindings) => allocator
                 .text(":example")
                 .append(allocator.softline())
                 .append(
@@ -529,7 +529,7 @@ impl Property {
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::CalyxDomain(CalyxDomain { left, right }) => allocator
+            PropKind::CalyxDomain(CalyxDomain { left, right }) => allocator
                 .text(":calyx-domain")
                 .append(allocator.softline())
                 .append(
@@ -542,7 +542,7 @@ impl Property {
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::CalyxImpl(CalyxImpl::Lut { size }) => allocator
+            PropKind::CalyxImpl(CalyxImpl::Lut { size }) => allocator
                 .text(":calyx-impl")
                 .append(allocator.line())
                 .append(
@@ -556,7 +556,7 @@ impl Property {
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::CalyxImpl(CalyxImpl::Poly { degree }) => allocator
+            PropKind::CalyxImpl(CalyxImpl::Poly { degree }) => allocator
                 .text(":calyx-impl")
                 .append(allocator.line())
                 .append(
@@ -570,7 +570,7 @@ impl Property {
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            Property::Unknown(name, data) => allocator
+            PropKind::Unknown(name, data) => allocator
                 .text(":")
                 .append(name.pretty(allocator))
                 .append(allocator.softline())

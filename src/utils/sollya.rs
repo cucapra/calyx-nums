@@ -6,10 +6,8 @@ use std::process::{Command, Stdio};
 use std::string::FromUtf8Error;
 use std::{fmt, thread};
 
-use calyx_utils::Error as CalyxError;
-
 use crate::fpcore::ast;
-use crate::utils::mangling::Mangle;
+use crate::utils::{Diagnostic, Mangle};
 
 /// Invokes Sollya with the given command.
 pub fn sollya<S>(cmd: &[u8], args: &[S]) -> Result<String, SollyaError>
@@ -235,8 +233,25 @@ impl From<SollyaError> for ScriptError {
     }
 }
 
-impl From<ScriptError> for CalyxError {
-    fn from(err: ScriptError) -> Self {
-        CalyxError::misc(format!("Sollya error: {}", err))
+impl Diagnostic {
+    pub fn from_sollya(err: ScriptError) -> Diagnostic {
+        match err {
+            ScriptError::Sollya(err) => Diagnostic::error()
+                .with_message("sollya error")
+                .with_note(err.to_string()),
+            ScriptError::BadResponse => {
+                Diagnostic::bug().with_message("couldn't parse sollya output")
+            }
+        }
+    }
+
+    /// Formats a [`ScriptError`] arising during compilation of the operator
+    /// located at `span`.
+    pub fn from_sollya_and_span(
+        err: ScriptError,
+        span: ast::Span,
+    ) -> Diagnostic {
+        Diagnostic::from_sollya(err)
+            .with_secondary(span, "while compiling this operator")
     }
 }

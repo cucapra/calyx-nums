@@ -3,10 +3,10 @@
 use std::cmp;
 
 use calyx_ir::{self as ir, build_assignments};
-use calyx_utils::CalyxResult;
 
 use super::{ComponentBuilder, ComponentManager, Horner, LookupTable};
 use crate::functions::Datapath;
+use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::mangle;
 
 pub struct PiecewisePoly<'a> {
@@ -51,7 +51,7 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         name: ir::Id,
         cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<ir::Component> {
+    ) -> Result<ir::Component, Diagnostic> {
         let horner = Horner {
             format: self.table.format,
             spec: &self.spec,

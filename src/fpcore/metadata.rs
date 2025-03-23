@@ -6,7 +6,7 @@ use super::ast::{Binding, Expression, Number, Symbol};
 
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum Property {
+pub enum PropKind {
     /// Benchmark name.
     Name(String),
     /// Benchmark description.
@@ -47,23 +47,23 @@ pub enum Data {
     List(Vec<Data>),
 }
 
-impl Property {
+impl PropKind {
     pub fn name(&self) -> &str {
         match self {
-            Property::Name(_) => "name",
-            Property::Description(_) => "description",
-            Property::Cite(_) => "cite",
-            Property::Precision(_) => "precision",
-            Property::Round(_) => "round",
-            Property::Overflow(_) => "overflow",
-            Property::Pre(_) => "pre",
-            Property::Spec(_) => "spec",
-            Property::Alt(_) => "alt",
-            Property::MathLib(_) => "math-library",
-            Property::Example(_) => "example",
-            Property::CalyxDomain(_) => "calyx-domain",
-            Property::CalyxImpl(_) => "calyx-impl",
-            Property::Unknown(name, _) => name.id.as_ref(),
+            PropKind::Name(_) => "name",
+            PropKind::Description(_) => "description",
+            PropKind::Cite(_) => "cite",
+            PropKind::Precision(_) => "precision",
+            PropKind::Round(_) => "round",
+            PropKind::Overflow(_) => "overflow",
+            PropKind::Pre(_) => "pre",
+            PropKind::Spec(_) => "spec",
+            PropKind::Alt(_) => "alt",
+            PropKind::MathLib(_) => "math-library",
+            PropKind::Example(_) => "example",
+            PropKind::CalyxDomain(_) => "calyx-domain",
+            PropKind::CalyxImpl(_) => "calyx-impl",
+            PropKind::Unknown(name, _) => name.id.as_ref(),
         }
     }
 }

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use calyx_ir as ir;
-use calyx_utils::CalyxResult;
+
+use crate::utils::Diagnostic;
 
 pub trait ComponentBuilder {
     fn name(&self) -> ir::Id;
@@ -13,7 +14,7 @@ pub trait ComponentBuilder {
         name: ir::Id,
         cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<ir::Component>;
+    ) -> Result<ir::Component, Diagnostic>;
 }
 
 pub struct ComponentManager {
@@ -33,7 +34,7 @@ impl ComponentManager {
         &mut self,
         builder: &B,
         lib: &mut ir::LibrarySignatures,
-    ) -> CalyxResult<(ir::Id, Vec<ir::PortDef<u64>>)> {
+    ) -> Result<(ir::Id, Vec<ir::PortDef<u64>>), Diagnostic> {
         let name = builder.name();
 
         if self.generated.insert(name) {

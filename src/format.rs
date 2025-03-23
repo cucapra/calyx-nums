@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use itertools::PeekingNext;
 
-use crate::utils::mangling::Mangle;
+use crate::utils::Mangle;
 
 /// A fixed-point number format with `width` total bits and a scaling factor of
 /// 2^`scale`.
@@ -62,6 +62,28 @@ impl Format {
     pub fn vhdl(&self) -> (i64, i64) {
         (self.msb(), self.lsb())
     }
+
+    /// Returns an adapter for formatting `self` in ARM-style Q notation.
+    ///
+    /// Using the returned adapter will result in a panic if the format cannot
+    /// be expressed in Q notation.
+    pub fn q(&self) -> impl fmt::Display {
+        struct QNotation<'a>(&'a Format);
+
+        impl fmt::Display for QNotation<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                let (int_width, frac_width) = self.0.parts().unwrap();
+
+                if !self.0.is_signed {
+                    write!(f, "U")?;
+                }
+
+                write!(f, "Q{}.{}", int_width, frac_width)
+            }
+        }
+
+        QNotation(self)
+    }
 }
 
 impl Default for Format {
@@ -101,6 +123,7 @@ impl FromStr for Format {
     }
 }
 
+#[derive(Debug)]
 pub struct ParseFormatError;
 
 impl From<ParseIntError> for ParseFormatError {
