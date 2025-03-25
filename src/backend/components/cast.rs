@@ -3,9 +3,8 @@
 use calyx_ir as ir;
 
 use super::{ComponentBuilder, ComponentManager};
-use crate::format::Format;
-use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::mangle;
+use crate::utils::{Diagnostic, Format};
 
 pub struct Cast<'a> {
     pub from: &'a Format,

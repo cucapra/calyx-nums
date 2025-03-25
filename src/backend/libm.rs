@@ -10,14 +10,13 @@ use super::components::{
 };
 
 use crate::analysis::{Context, NameResolution, PassManager, RangeAnalysis};
-use crate::format::Format;
+use crate::approx::{AddressSpec, Datapath, TableDomain};
+use crate::approx::{faithful, remez};
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::{Visitor, ast, visitor};
-use crate::functions::{AddressSpec, Datapath, TableDomain};
-use crate::functions::{faithful, remez};
 use crate::opts::RangeAnalysis as AnalysisMode;
 use crate::utils::sollya::SollyaFunction;
-use crate::utils::{Diagnostic, Mangle, Reporter};
+use crate::utils::{Diagnostic, Format, Mangle, Reporter};
 
 pub struct Prototype {
     pub name: ir::Id,

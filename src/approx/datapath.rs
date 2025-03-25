@@ -9,9 +9,8 @@ use malachite::num::basic::traits::{NegativeOne, One};
 use malachite::num::conversion::traits::ExactFrom;
 
 use super::PolynomialApprox;
-use crate::format::Format;
 use crate::utils::interval::Interval;
-use crate::utils::mangling::Mangle;
+use crate::utils::{Format, Mangle};
 
 /// Architectural parameters for a polynomial evaluator.
 #[derive(Mangle)]

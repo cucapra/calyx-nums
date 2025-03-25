@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::format::Format;
+use crate::utils::Format;
 
 #[derive(Clone, Copy, Default)]
 pub enum RangeAnalysis {
@@ -56,7 +56,7 @@ pub struct Opts {
 }
 
 impl Opts {
-    /// Parse options from `env::args`.
+    /// Parses options from `env::args`.
     pub fn parse() -> Opts {
         argh::from_env()
     }

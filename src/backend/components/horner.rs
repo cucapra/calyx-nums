@@ -6,10 +6,9 @@ use calyx_ir::{self as ir, build_assignments, structure};
 use itertools::{Itertools, Position};
 
 use super::{Cast, ComponentBuilder, ComponentManager};
-use crate::format::Format;
-use crate::functions::Datapath;
-use crate::utils::diagnostics::Diagnostic;
+use crate::approx::Datapath;
 use crate::utils::mangling::mangle;
+use crate::utils::{Diagnostic, Format};
 
 const INLINE: ir::Attribute = ir::Attribute::Bool(ir::BoolAttr::Inline);
 

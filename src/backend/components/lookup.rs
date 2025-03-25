@@ -5,13 +5,12 @@ use std::{cmp, iter};
 use calyx_ir::{self as ir, build_assignments, structure};
 
 use super::{ComponentBuilder, ComponentManager};
+use crate::approx::AddressSpec;
 use crate::backend::primitives::lut;
-use crate::format::Format;
 use crate::fpcore::ast::{Rational, Span};
-use crate::functions::AddressSpec;
-use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::{Mangle, mangle};
 use crate::utils::rational::FixedPoint;
+use crate::utils::{Diagnostic, Format};
 
 pub struct TableData<'a> {
     pub values: &'a [Vec<Rational>],

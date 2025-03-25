@@ -5,7 +5,7 @@ use std::cmp;
 use calyx_ir::{self as ir, build_assignments};
 
 use super::{ComponentBuilder, ComponentManager, Horner, LookupTable};
-use crate::functions::Datapath;
+use crate::approx::Datapath;
 use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::mangle;
 

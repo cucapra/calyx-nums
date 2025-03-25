@@ -8,9 +8,8 @@ use malachite::num::arithmetic::traits::{IsPowerOf2, PowerOf2};
 use malachite::num::basic::traits::{Two, Zero};
 use malachite::{Natural, Rational};
 
-use crate::format::Format;
-use crate::utils::mangling::Mangle;
 use crate::utils::rational::{FixedPoint, RoundBinary};
+use crate::utils::{Format, Mangle};
 
 /// A specification for obtaining table indices from raw input values.
 #[derive(Mangle)]

@@ -11,11 +11,10 @@ use super::builtins;
 use super::libm::{MathLib, Prototype};
 use super::stdlib::{self, Arguments, Primitive, Signature};
 use crate::analysis::{Binding, NameResolution, PassManager, TypeCheck};
-use crate::format::Format;
 use crate::fpcore::ast;
 use crate::opts::Opts;
-use crate::utils::diagnostics::{Diagnostic, Reporter};
 use crate::utils::rational::FixedPoint;
+use crate::utils::{Diagnostic, Format, Reporter};
 
 /// A compiled expression.
 ///

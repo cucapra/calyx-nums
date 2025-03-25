@@ -2,7 +2,7 @@
 
 use smallvec::{SmallVec, smallvec};
 
-use crate::format::Format;
+use crate::utils::Format;
 
 pub enum Parameters {
     Boolean,

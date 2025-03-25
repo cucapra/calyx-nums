@@ -6,11 +6,10 @@ use itertools::Itertools;
 
 use super::passes::{Pass, PassManager};
 use super::{Binding, NameResolution, Precondition, TypeCheck};
-use crate::format::Format;
 use crate::fpcore::{Visitor, ast};
-use crate::utils::diagnostics::{Diagnostic, Reporter};
 use crate::utils::rational::Dyadic;
 use crate::utils::sollya::{self, ScriptError, SollyaFunction};
+use crate::utils::{Diagnostic, Format, Reporter};
 
 const PROLOGUE: &str = "\
 dieonerrormode = on!;

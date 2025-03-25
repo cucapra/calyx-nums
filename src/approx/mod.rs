@@ -1,4 +1,4 @@
-//! Implementation of elementary functions.
+//! Function approximations.
 
 pub mod addressing;
 pub mod datapath;

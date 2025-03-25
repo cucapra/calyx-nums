@@ -1,7 +1,7 @@
 //! Built-in functions.
 
 use super::stdlib::{self, Primitive};
-use crate::format::Format;
+use crate::utils::Format;
 
 pub fn add(format: &Format) -> &'static Primitive<'static> {
     match (format.scale, format.is_signed) {
