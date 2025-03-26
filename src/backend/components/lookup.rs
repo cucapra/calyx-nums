@@ -19,7 +19,7 @@ pub struct TableData<'a> {
 }
 
 impl TableData<'_> {
-    pub fn widths(&self) -> impl Iterator<Item = u32> + '_ {
+    pub fn widths(&self) -> impl Iterator<Item = u32> {
         self.formats.iter().map(|format| format.width)
     }
 
@@ -44,7 +44,9 @@ impl LookupTable<'_> {
             Diagnostic::error()
                 .with_message("implementation error")
                 .with_secondary(self.span, "while compiling this operator")
-                .with_note(format!("generated constant {value} is not representable in the global format"))
+                .with_note(format!(
+                    "generated constant {value} overflows the target format"
+                ))
         };
 
         let values: Vec<_> = self

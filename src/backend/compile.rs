@@ -13,7 +13,7 @@ use super::stdlib::{self, Arguments, Primitive, Signature};
 use crate::analysis::{Binding, NameResolution, PassManager, TypeCheck};
 use crate::fpcore::ast;
 use crate::opts::Opts;
-use crate::utils::rational::FixedPoint;
+use crate::utils::rational::{FixedPoint, RoundBinary};
 use crate::utils::{Diagnostic, Format, Reporter};
 
 /// A compiled expression.
@@ -47,14 +47,13 @@ struct ExpressionBuilder<'b, 'ast, 'comp> {
 
 impl ExpressionBuilder<'_, '_, '_> {
     fn compile_number(&mut self, num: &ast::Number) -> Option<Expression> {
-        let Some(val) = num.value.to_fixed_point(self.format) else {
+        let rounded = (&num.value).round_convergent(self.format.lsb());
+
+        let Some(val) = rounded.to_fixed_point(self.format) else {
             self.reporter.emit(
                 &Diagnostic::error()
-                    .with_message("unrepresentable constant")
-                    .with_primary(
-                        num.span,
-                        "constant is not representable in the global format",
-                    ),
+                    .with_message("overflow")
+                    .with_primary(num.span, "constant overflows target format"),
             );
 
             return None;
@@ -64,7 +63,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             self.reporter.emit(
                 &Diagnostic::error()
                     .with_message("code generation failed")
-                    .with_primary(num.span, "generated constant is too large")
+                    .with_primary(num.span, "constant is too wide")
                     .with_note(
                         "calyx doesn't support constants wider than 64 bits",
                     ),

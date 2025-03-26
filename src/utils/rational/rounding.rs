@@ -17,13 +17,18 @@ pub trait RoundBinary: Sized {
     }
 
     #[inline]
-    fn round_towards_zero(self, position: i64) -> Self::Output {
+    fn round_toward_zero(self, position: i64) -> Self::Output {
         self.round(position, RoundingMode::Down)
     }
 
     #[inline]
-    fn round_towards_infinity(self, position: i64) -> Self::Output {
+    fn round_away_from_zero(self, position: i64) -> Self::Output {
         self.round(position, RoundingMode::Up)
+    }
+
+    #[inline]
+    fn round_convergent(self, position: i64) -> Self::Output {
+        self.round(position, RoundingMode::Nearest)
     }
 }
 

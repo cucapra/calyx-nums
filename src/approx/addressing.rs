@@ -143,7 +143,7 @@ impl TableDomain {
             &a * ((&b << 1u32) - &diameter) / (a + b)
         };
 
-        let left = q.round_towards_infinity(format.lsb());
+        let left = q.round_away_from_zero(format.lsb());
         let right = &left + diameter;
 
         Ok((TableDomain { left, right }, stride))
