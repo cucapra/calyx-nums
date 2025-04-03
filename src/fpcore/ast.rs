@@ -132,6 +132,7 @@ pub enum OpKind {
     Math(MathOp),
     Test(TestOp),
     Tensor(TensorOp),
+    FPCore(Id),
 }
 
 #[derive(Debug)]

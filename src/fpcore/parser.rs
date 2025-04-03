@@ -36,7 +36,7 @@ impl FPCoreParser {
 
     fn fpcore(input: Node) -> ParseResult<ast::FPCore> {
         Ok(match_nodes!(input.into_children();
-            [symbol_opt(name), argument_list(args), property(props).., expr(body)] => {
+            [fpcore_kwd(_), symbol_opt(name), argument_list(args), property(props).., expr(body)] => {
                 ast::FPCore {
                     name,
                     args,
@@ -124,6 +124,10 @@ impl FPCoreParser {
         ))
     }
 
+    fn fpcore_kwd(_input: Node) -> ParseResult<()> {
+        Ok(())
+    }
+
     fn if_kwd(_input: Node) -> ParseResult<()> {
         Ok(())
     }
@@ -171,7 +175,21 @@ impl FPCoreParser {
             [number(num)] => ast::ExprKind::Num(num),
             [constant(constant)] => ast::ExprKind::Const(constant),
             [symbol(sym)] => ast::ExprKind::Id(sym),
-            [operation(op)] => op,
+            [operation(op), expr(args)..] => {
+                let args: Vec<_> = args.collect();
+
+                let op = match op.kind {
+                    ast::OpKind::Math(ast::MathOp::Sub) if args.len() == 1 => {
+                        ast::Operation {
+                            kind: ast::OpKind::Math(ast::MathOp::Neg),
+                            ..op
+                        }
+                    }
+                    _ => op,
+                };
+
+                ast::ExprKind::Op(op, args)
+            },
             [if_kwd(_), expr(cond), expr(true_branch), expr(false_branch)] => {
                 ast::ExprKind::If {
                     cond: Box::new(cond),
@@ -254,22 +272,12 @@ impl FPCoreParser {
         ))
     }
 
-    fn operation(input: Node) -> ParseResult<ast::ExprKind> {
+    fn operation(input: Node) -> ParseResult<ast::Operation> {
         Ok(match_nodes!(input.into_children();
-            [minus(span), expr(arg)] => {
-                let kind = ast::OpKind::Math(ast::MathOp::Neg);
-                let args = vec![arg];
-
-                ast::ExprKind::Op(ast::Operation { kind, span }, args)
-            },
-            [minus(span), expr(minuend), expr(subtrahend)] => {
-                let kind = ast::OpKind::Math(ast::MathOp::Sub);
-                let args = vec![minuend, subtrahend];
-
-                ast::ExprKind::Op(ast::Operation { kind, span }, args)
-            },
-            [operator(op), expr(args)..] => {
-                ast::ExprKind::Op(op, args.collect())
+            [operator(op)] => op,
+            [symbol(sym)] => ast::Operation {
+                kind: ast::OpKind::FPCore(sym.id),
+                span: sym.span,
             },
         ))
     }
@@ -573,10 +581,6 @@ impl FPCoreParser {
 
     fn tensor_op(input: Node) -> ParseResult<&str> {
         Ok(input.as_str())
-    }
-
-    fn minus(input: Node) -> ParseResult<ast::Span> {
-        Ok(ast::Span::from_node(&input))
     }
 
     fn operator(input: Node) -> ParseResult<ast::Operation> {

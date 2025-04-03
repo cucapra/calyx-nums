@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::num::NonZeroUsize;
 use std::ops::Index;
 
 use strum_macros::Display;
@@ -48,7 +47,7 @@ impl Index<ast::NodeId> for TypeCheck {
 }
 
 #[derive(Debug)]
-pub struct TypeError;
+struct TypeError;
 
 struct Builder<'p, 'ast> {
     bindings: &'p NameResolution<'ast>,
@@ -101,7 +100,9 @@ impl Builder<'_, '_> {
             ast::ExprKind::Op(op, args) => {
                 let (ret_ty, arg_ty, arity) = match op.kind {
                     ast::OpKind::Math(op) => {
-                        (Type::Number, Type::Number, Arity::Fixed(op.arity()))
+                        let arity = usize::from(op.arity());
+
+                        (Type::Number, Type::Number, Arity::Fixed(arity))
                     }
                     ast::OpKind::Test(op) => {
                         let arg_ty = match op {
@@ -127,6 +128,11 @@ impl Builder<'_, '_> {
                         );
 
                         return Err(TypeError);
+                    }
+                    ast::OpKind::FPCore(id) => {
+                        let arity = self.bindings.defs[&id].args.len();
+
+                        (Type::Number, Type::Number, Arity::Fixed(arity))
                     }
                 };
 
@@ -282,17 +288,16 @@ impl Builder<'_, '_> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Arity {
     Variadic,
-    Fixed(NonZeroUsize),
+    Fixed(usize),
 }
 
 impl Arity {
-    const UNARY: Arity =
-        Arity::Fixed(unsafe { NonZeroUsize::new_unchecked(1) });
+    const UNARY: Arity = Arity::Fixed(1);
 
     fn check(self, count: usize) -> bool {
         match self {
             Arity::Variadic => count >= 2,
-            Arity::Fixed(arity) => count == arity.get(),
+            Arity::Fixed(arity) => count == arity,
         }
     }
 }

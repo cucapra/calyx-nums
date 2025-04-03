@@ -393,6 +393,7 @@ impl Operation {
             OpKind::Math(op) => op.into(),
             OpKind::Test(op) => op.into(),
             OpKind::Tensor(op) => op.into(),
+            OpKind::FPCore(op) => op.id.as_str(),
         })
     }
 }

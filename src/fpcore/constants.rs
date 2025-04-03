@@ -2,8 +2,6 @@
 
 #![allow(unreachable_patterns)]
 
-use std::num::NonZeroUsize;
-
 use strum_macros::{EnumString, IntoStaticStr};
 
 #[derive(Clone, Copy, Debug, EnumString, IntoStaticStr)]
@@ -58,8 +56,8 @@ pub enum MathOp {
 }
 
 impl MathOp {
-    pub fn arity(self) -> NonZeroUsize {
-        let arity = match self {
+    pub fn arity(self) -> u8 {
+        match self {
             MathOp::Add => 2,
             MathOp::Sub => 2,
             MathOp::Mul => 2,
@@ -106,9 +104,7 @@ impl MathOp {
             MathOp::Trunc => 1,
             MathOp::Round => 1,
             MathOp::NearbyInt => 1,
-        };
-
-        unsafe { NonZeroUsize::new_unchecked(arity) }
+        }
     }
 }
 

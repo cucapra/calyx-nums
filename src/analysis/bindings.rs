@@ -19,15 +19,19 @@ pub struct Context<'ast> {
 }
 
 pub struct NameResolution<'ast> {
+    pub defs: HashMap<ast::Id, &'ast ast::FPCore>,
     pub names: HashMap<ast::NodeId, Binding<'ast>>,
     pub props: HashMap<ast::NodeId, Context<'ast>>,
 }
 
 impl<'ast> Pass<'ast> for NameResolution<'ast> {
     fn run(pm: &PassManager<'_, 'ast>) -> Option<Self> {
+        let defs = gather_definitions(pm)?;
+
         let mut builder = Builder {
             reporter: &mut pm.rpt(),
             result: NameResolution {
+                defs,
                 names: HashMap::new(),
                 props: HashMap::new(),
             },
@@ -41,8 +45,36 @@ impl<'ast> Pass<'ast> for NameResolution<'ast> {
     }
 }
 
+fn gather_definitions<'ast>(
+    pm: &PassManager<'_, 'ast>,
+) -> Option<HashMap<ast::Id, &'ast ast::FPCore>> {
+    let mut defs = HashMap::new();
+
+    for def in pm.ast() {
+        if let Some(sym) = &def.name {
+            let prev = defs.insert(sym.id, def);
+
+            if let Some(prev) = prev.and_then(|prev| prev.name.as_ref()) {
+                pm.rpt().emit(
+                    &Diagnostic::error()
+                        .with_message(format!(
+                            "redefinition of operator `{}`",
+                            prev.id,
+                        ))
+                        .with_secondary(prev.span, "name first defined here")
+                        .with_primary(sym.span, "name already defined"),
+                );
+
+                return None;
+            }
+        }
+    }
+
+    Some(defs)
+}
+
 #[derive(Debug)]
-pub struct ResolutionError;
+struct ResolutionError;
 
 struct Builder<'p, 'ast> {
     reporter: &'p mut Reporter<'ast>,
@@ -153,7 +185,23 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
                     Err(ResolutionError)
                 }
             }
-            ast::ExprKind::Op(..) => visitor::visit_expression(self, expr),
+            ast::ExprKind::Op(op, _) => {
+                if let ast::OpKind::FPCore(id) = op.kind {
+                    if !self.result.defs.contains_key(&id) {
+                        self.reporter.emit(
+                            &Diagnostic::error()
+                                .with_message(format!(
+                                    "undefined operator `{id}`",
+                                ))
+                                .with_primary(op.span, "undefined operator"),
+                        );
+
+                        return Err(ResolutionError);
+                    }
+                }
+
+                visitor::visit_expression(self, expr)
+            }
             ast::ExprKind::If { .. } => visitor::visit_expression(self, expr),
             ast::ExprKind::Let {
                 bindings,

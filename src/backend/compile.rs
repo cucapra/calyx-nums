@@ -1,16 +1,14 @@
-//! FPCore to Calyx compiler.
-
 use std::collections::HashMap;
-use std::iter;
+use std::{iter, mem};
 
 use calyx_ir as ir;
-use calyx_utils::{Id, NameGenerator};
+use calyx_utils::NameGenerator;
 use itertools::Itertools;
 
 use super::builtins;
 use super::libm::{MathLib, Prototype};
 use super::stdlib::{self, Arguments, Primitive, Signature};
-use crate::analysis::{Binding, NameResolution, PassManager, TypeCheck};
+use crate::analysis::{self as sem, Binding, PassManager};
 use crate::fpcore::ast;
 use crate::opts::Opts;
 use crate::utils::rational::{FixedPoint, RoundBinary};
@@ -38,7 +36,8 @@ impl Expression {
 
 struct ExpressionBuilder<'b, 'ast, 'comp> {
     format: &'b Format,
-    bindings: &'b NameResolution<'ast>,
+    bindings: &'b sem::NameResolution<'ast>,
+    signatures: &'b HashMap<ast::Id, Prototype>,
     reporter: &'b mut Reporter<'ast>,
     libm: &'b mut HashMap<ast::NodeId, Prototype>,
     builder: &'b mut ir::Builder<'comp>,
@@ -130,18 +129,16 @@ impl ExpressionBuilder<'_, '_, '_> {
         op: ast::TestOp,
         args: &[ast::Expression],
     ) -> Option<Expression> {
-        let mut control = Vec::with_capacity(args.len());
         let mut assignments = Vec::new();
 
-        let args: Vec<_> = args
+        let (control, args): (Vec<_>, Vec<_>) = args
             .iter()
             .map(|arg| {
                 let expr = self.compile_expression(arg)?;
 
-                control.push(expr.control);
                 assignments.extend(expr.assignments);
 
-                Some(expr.out)
+                Some((expr.control, expr.out))
             })
             .collect::<Option<_>>()?;
 
@@ -220,102 +217,51 @@ impl ExpressionBuilder<'_, '_, '_> {
         })
     }
 
-    fn compile_library_operation(
+    fn compile_instantiated_operation(
         &mut self,
-        op: &ast::Operation,
-        uid: ast::NodeId,
+        cell: ir::RRC<ir::Cell>,
+        signature: &Signature,
+        is_comb: bool,
         args: &[ast::Expression],
     ) -> Option<Expression> {
-        let (arg_ctrl, arg_assigns, arg_ports): (Vec<_>, Vec<_>, Vec<_>) = args
+        let mut assignments = Vec::new();
+
+        let (control, args): (Vec<_>, Vec<_>) = args
             .iter()
             .map(|arg| {
                 let expr = self.compile_expression(arg)?;
 
-                Some((expr.control, expr.assignments, expr.out))
+                assignments.extend(expr.assignments);
+
+                Some((expr.control, expr.out))
             })
             .collect::<Option<_>>()?;
 
-        let decl = match op.kind {
-            ast::OpKind::Math(op) => match op {
-                ast::MathOp::Add => Some(builtins::add(self.format)),
-                ast::MathOp::Sub => Some(builtins::sub(self.format)),
-                ast::MathOp::Mul => Some(builtins::mul(self.format)),
-                ast::MathOp::Div => Some(builtins::div(self.format)),
-                ast::MathOp::Neg => Some(&stdlib::numbers::NUM_NEG),
-                ast::MathOp::Sqrt => Some(builtins::sqrt(self.format)),
-                _ => None,
-            },
-            ast::OpKind::Test(op) => match op {
-                ast::TestOp::Not => Some(&stdlib::core::STD_NOT),
-                _ => None,
-            },
-            ast::OpKind::Tensor(_) => None,
-        };
-
-        let (cell, signature, is_comb) = if let Some(decl) = decl {
-            let prim = self.builder.add_primitive(
-                decl.prefix_hint,
-                decl.name,
-                &decl.build_params(self.format),
-            );
-
-            (prim, &decl.signature, decl.is_comb)
-        } else if let Some(proto) = self.libm.remove(&uid) {
-            let comp = self.builder.add_component(
-                proto.prefix_hint,
-                proto.name,
-                proto.signature,
-            );
-
-            (comp, &Signature::UNARY_DEFAULT, proto.is_comb)
-        } else {
-            self.reporter.emit(
-                &Diagnostic::error()
-                    .with_message("unsupported operation")
-                    .with_primary(op.span, "unsupported operator"),
-            );
-
-            return None;
-        };
-
-        let inputs = match signature.args {
-            Arguments::Unary { input } => {
-                let (arg,) = arg_ports.into_iter().collect_tuple().unwrap();
-
-                vec![(Id::new(input), arg)]
-            }
-            Arguments::Binary { left, right } => {
-                let (left_arg, right_arg) =
-                    arg_ports.into_iter().collect_tuple().unwrap();
-
-                vec![(Id::new(left), left_arg), (Id::new(right), right_arg)]
-            }
-        };
-
-        let arg_ctrl = collapse(arg_ctrl, ir::Control::par);
-        let arg_assigns = arg_assigns.into_iter().flatten().collect();
-
+        let control = collapse(control, ir::Control::par);
         let out = cell.borrow().get(signature.output);
 
-        let (control, assignments) = if is_comb {
-            let assigns = inputs
-                .into_iter()
-                .map(|(dst, src)| {
-                    self.builder.build_assignment(
-                        cell.borrow().get(dst),
-                        src,
-                        ir::Guard::True,
-                    )
-                })
-                .chain(arg_assigns)
-                .collect();
+        let inputs: Vec<_> =
+            signature.args.iter().map(ir::Id::new).zip(args).collect();
 
-            (arg_ctrl, assigns)
+        let control = if is_comb {
+            assignments.extend(inputs.into_iter().map(|(dst, src)| {
+                self.builder.build_assignment(
+                    cell.borrow().get(dst),
+                    src,
+                    ir::Guard::True,
+                )
+            }));
+
+            control
         } else {
-            let invoke = invoke_with(cell, inputs, arg_assigns, self.builder);
-            let control = collapse([arg_ctrl, invoke], ir::Control::seq);
+            let invoke = invoke_with(
+                cell,
+                inputs,
+                mem::take(&mut assignments),
+                self.builder,
+            );
 
-            (control, vec![])
+            collapse([control, invoke], ir::Control::seq)
         };
 
         Some(Expression {
@@ -325,17 +271,99 @@ impl ExpressionBuilder<'_, '_, '_> {
         })
     }
 
+    fn compile_primitive_operation(
+        &mut self,
+        primitive: &Primitive,
+        args: &[ast::Expression],
+    ) -> Option<Expression> {
+        let cell = self.builder.add_primitive(
+            primitive.prefix_hint,
+            primitive.name,
+            &primitive.build_params(self.format),
+        );
+
+        self.compile_instantiated_operation(
+            cell,
+            &primitive.signature,
+            primitive.is_comb,
+            args,
+        )
+    }
+
+    fn compile_component_operation(
+        &mut self,
+        prototype: &Prototype,
+        args: &[ast::Expression],
+    ) -> Option<Expression> {
+        let cell = self.builder.add_component(
+            prototype.prefix_hint,
+            prototype.name,
+            prototype.signature.clone(),
+        );
+
+        let signature_args: Vec<_> = prototype
+            .signature
+            .iter()
+            .filter_map(|port| {
+                (port.direction == ir::Direction::Input)
+                    .then_some(port.name().id.as_str())
+            })
+            .collect();
+
+        let signature = Signature {
+            args: Arguments(&signature_args),
+            output: "out",
+        };
+
+        self.compile_instantiated_operation(
+            cell,
+            &signature,
+            prototype.is_comb,
+            args,
+        )
+    }
+
     fn compile_operation(
         &mut self,
         op: &ast::Operation,
         uid: ast::NodeId,
         args: &[ast::Expression],
     ) -> Option<Expression> {
+        if let Some(prototype) = self.libm.remove(&uid) {
+            return self.compile_component_operation(&prototype, args);
+        }
+
         match op.kind {
+            ast::OpKind::Math(ast::MathOp::Add) => self
+                .compile_primitive_operation(builtins::add(self.format), args),
+            ast::OpKind::Math(ast::MathOp::Sub) => self
+                .compile_primitive_operation(builtins::sub(self.format), args),
+            ast::OpKind::Math(ast::MathOp::Mul) => self
+                .compile_primitive_operation(builtins::mul(self.format), args),
+            ast::OpKind::Math(ast::MathOp::Div) => self
+                .compile_primitive_operation(builtins::div(self.format), args),
+            ast::OpKind::Math(ast::MathOp::Neg) => self
+                .compile_primitive_operation(&stdlib::numbers::NUM_NEG, args),
+            ast::OpKind::Math(ast::MathOp::Sqrt) => self
+                .compile_primitive_operation(builtins::sqrt(self.format), args),
             ast::OpKind::Test(op) if op.is_variadic() => {
                 self.compile_variadic_operation(op, args)
             }
-            _ => self.compile_library_operation(op, uid, args),
+            ast::OpKind::Test(ast::TestOp::Not) => {
+                self.compile_primitive_operation(&stdlib::core::STD_NOT, args)
+            }
+            ast::OpKind::FPCore(id) => {
+                self.compile_component_operation(&self.signatures[&id], args)
+            }
+            _ => {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("unsupported operation")
+                        .with_primary(op.span, "unsupported operator"),
+                );
+
+                None
+            }
         }
     }
 
@@ -389,14 +417,14 @@ impl ExpressionBuilder<'_, '_, '_> {
 
                 let store_true = invoke_with(
                     reg.clone(),
-                    vec![(Id::new("in"), true_branch.out)],
+                    vec![(ir::Id::new("in"), true_branch.out)],
                     true_branch.assignments,
                     self.builder,
                 );
 
                 let store_false = invoke_with(
                     reg,
-                    vec![(Id::new("in"), false_branch.out)],
+                    vec![(ir::Id::new("in"), false_branch.out)],
                     false_branch.assignments,
                     self.builder,
                 );
@@ -445,7 +473,7 @@ impl ExpressionBuilder<'_, '_, '_> {
 
                 let invoke = invoke_with(
                     reg.clone(),
-                    vec![(Id::new("in"), expr.out)],
+                    vec![(ir::Id::new("in"), expr.out)],
                     expr.assignments,
                     self.builder,
                 );
@@ -519,11 +547,12 @@ impl ExpressionBuilder<'_, '_, '_> {
 
 struct GlobalContext<'c, 'ast> {
     format: &'c Format,
-    bindings: &'c NameResolution<'ast>,
+    bindings: &'c sem::NameResolution<'ast>,
     reporter: &'c mut Reporter<'ast>,
     lib: &'c ir::LibrarySignatures,
     names: &'c mut NameGenerator,
     libm: &'c mut HashMap<ast::NodeId, Prototype>,
+    signatures: HashMap<ast::Id, Prototype>,
 }
 
 fn compile_definition(
@@ -535,28 +564,33 @@ fn compile_definition(
         .as_ref()
         .map_or_else(|| ctx.names.gen_name("main"), |sym| sym.id);
 
-    let mut ports = vec![ir::PortDef::new(
-        "out",
-        u64::from(ctx.format.width),
-        ir::Direction::Output,
-        Default::default(),
-    )];
+    let ports = || {
+        def.args
+            .iter()
+            .map(|arg| {
+                ir::PortDef::new(
+                    arg.var.id,
+                    u64::from(ctx.format.width),
+                    ir::Direction::Input,
+                    Default::default(),
+                )
+            })
+            .chain(iter::once(ir::PortDef::new(
+                "out",
+                u64::from(ctx.format.width),
+                ir::Direction::Output,
+                Default::default(),
+            )))
+            .collect()
+    };
 
-    ports.extend(def.args.iter().map(|arg| {
-        ir::PortDef::new(
-            arg.var.id,
-            u64::from(ctx.format.width),
-            ir::Direction::Input,
-            Default::default(),
-        )
-    }));
-
-    let mut component = ir::Component::new(name, ports, false, false, None);
+    let mut component = ir::Component::new(name, ports(), false, false, None);
     let mut builder = ir::Builder::new(&mut component, ctx.lib).not_generated();
 
     let mut expr_builder = ExpressionBuilder {
         format: ctx.format,
         bindings: ctx.bindings,
+        signatures: &ctx.signatures,
         reporter: ctx.reporter,
         libm: ctx.libm,
         builder: &mut builder,
@@ -578,6 +612,17 @@ fn compile_definition(
 
     *component.control.borrow_mut() = body.control;
 
+    if let Some(sym) = &def.name {
+        let prototype = Prototype {
+            name: component.name,
+            prefix_hint: sym.id,
+            signature: ports(),
+            is_comb: component.is_comb,
+        };
+
+        ctx.signatures.insert(sym.id, prototype);
+    }
+
     Some(component)
 }
 
@@ -595,7 +640,8 @@ pub fn compile_fpcore<'ast>(
 
     let pm = PassManager::new(opts, defs, rpt);
 
-    pm.get_analysis::<TypeCheck>()?;
+    let _: &sem::TypeCheck = pm.get_analysis()?;
+    let call_graph: &sem::CallGraph = pm.get_analysis()?;
 
     let MathLib {
         mut components,
@@ -609,9 +655,10 @@ pub fn compile_fpcore<'ast>(
         lib: &lib,
         names: &mut names,
         libm: &mut prototypes,
+        signatures: HashMap::new(),
     };
 
-    for def in defs {
+    for def in &call_graph.linearized {
         components.push(compile_definition(def, &mut ctx)?);
     }
 
@@ -619,7 +666,7 @@ pub fn compile_fpcore<'ast>(
         components,
         lib,
         bc: Default::default(),
-        entrypoint: Id::new("main"),
+        entrypoint: ir::Id::new("main"),
         extra_opts: Vec::new(),
         metadata: None,
     })
@@ -644,7 +691,7 @@ where
 
 fn invoke_with(
     comp: ir::RRC<ir::Cell>,
-    inputs: Vec<(Id, ir::RRC<ir::Port>)>,
+    inputs: Vec<(ir::Id, ir::RRC<ir::Port>)>,
     assignments: Vec<ir::Assignment<ir::Nothing>>,
     builder: &mut ir::Builder,
 ) -> ir::Control {

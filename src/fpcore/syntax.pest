@@ -8,7 +8,7 @@ file = { SOI ~ fpcore* ~ EOI }
 
 fpcore = {
       open
-    ~ "FPCore"
+    ~ fpcore_kwd
     ~ symbol_opt
     ~ argument_list
     ~ property*
@@ -34,6 +34,7 @@ index_var   = { "[" ~ symbol ~ expr ~ "]" }
 mut_vars    = { mut_var* }
 index_vars  = { index_var* }
 
+fpcore_kwd      = @{ "FPCore"       ~ !symbol_continue }
 if_kwd          = @{ "if"           ~ !symbol_continue }
 let_kwd         = @{ "let" ~ "*"?   ~ !symbol_continue }
 while_kwd       = @{ "while" ~ "*"? ~ !symbol_continue }
@@ -44,6 +45,11 @@ cast_kwd        = @{ "cast"         ~ !symbol_continue }
 array_kwd       = @{ "array"        ~ !symbol_continue }
 bang_kwd        = @{ "!"            ~ !symbol_continue }
 digits_kwd      = @{ "digits"       ~ !symbol_continue }
+
+reserved_op = _{
+      "tensor*" | "digits" | "tensor" | "while*" | "array" | "while" | "cast"
+    | "for*"    | "let*"   | "for"    | "let"    | "if"    | "!"
+}
 
 expr = {
       constant
@@ -60,7 +66,7 @@ expr = {
     | (open ~ cast_kwd ~ expr ~ close)
     | (open ~ array_kwd ~ expr* ~ close)
     | (open ~ annotation ~ expr ~ close)
-    | (open ~ operation ~ close)
+    | (open ~ operation ~ expr+ ~ close)
 }
 
 number = {
@@ -70,12 +76,8 @@ number = {
     | (open ~ digits_kwd ~ mantissa ~ exponent ~ dec_digits ~ close)
 }
 
-annotation = { bang_kwd ~ property* }
-
-operation = {
-      (minus ~ expr ~ expr?)
-    | (operator ~ expr+)
-}
+annotation  = { bang_kwd ~ property* }
+operation   = ${ operator | !(reserved_op ~ !symbol_continue) ~ symbol }
 
 name_kwd        = @{ ":name"            ~ !symbol_continue }
 description_kwd = @{ ":description"     ~ !symbol_continue }
@@ -203,8 +205,6 @@ testing_op = {
 tensor_op = {
     "size" | "dim" | "ref"
 }
-
-minus = @{ "-" ~ !symbol_continue }
 
 operator = ${
     (mathematical_op | testing_op | tensor_op) ~ !symbol_continue

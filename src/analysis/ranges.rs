@@ -5,7 +5,7 @@ use std::ops::Index;
 use itertools::Itertools;
 
 use super::passes::{Pass, PassManager};
-use super::{Binding, NameResolution, Precondition, TypeCheck};
+use super::{Binding, CallGraph, NameResolution, Precondition, TypeCheck};
 use crate::fpcore::{Visitor, ast};
 use crate::utils::rational::Dyadic;
 use crate::utils::sollya::{self, ScriptError, SollyaFunction};
@@ -33,7 +33,8 @@ pub struct RangeAnalysis {
 
 impl Pass<'_> for RangeAnalysis {
     fn run(pm: &PassManager) -> Option<Self> {
-        pm.get_analysis::<TypeCheck>()?;
+        let _: &TypeCheck = pm.get_analysis()?;
+        let call_graph: &CallGraph = pm.get_analysis()?;
 
         let mut builder = Builder {
             bindings: pm.get_analysis()?,
@@ -41,7 +42,10 @@ impl Pass<'_> for RangeAnalysis {
             script: String::from(PROLOGUE),
         };
 
-        builder.visit_definitions(pm.ast()).ok()?;
+        builder
+            .visit_definitions(call_graph.linearized.iter().copied())
+            .ok()?;
+
         builder.script.push_str(EPILOGUE);
 
         let ranges = run_script(&builder.script, &pm.opts().format)
@@ -93,7 +97,7 @@ impl Index<ast::NodeId> for RangeAnalysis {
 }
 
 #[derive(Debug)]
-pub struct RangeAnalysisError;
+struct RangeAnalysisError;
 
 struct Builder<'p, 'ast> {
     bindings: &'p NameResolution<'ast>,
@@ -307,6 +311,19 @@ impl Visitor<'_> for Builder<'_, '_> {
                 }
 
                 self.script_bool(SollyaVar::from(expr));
+            }
+            ast::ExprKind::Op(
+                ast::Operation {
+                    kind: ast::OpKind::FPCore(id),
+                    ..
+                },
+                args,
+            ) => {
+                for arg in args {
+                    self.visit_expression(arg)?;
+                }
+
+                self.script_assign(expr, &self.bindings.defs[id].body);
             }
             ast::ExprKind::If {
                 cond,

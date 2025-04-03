@@ -1,6 +1,5 @@
 use std::cell::{OnceCell, RefCell, RefMut};
 
-use super::{NameResolution, RangeAnalysis, TypeCheck};
 use crate::fpcore::ast;
 use crate::opts::Opts;
 use crate::utils::Reporter;
@@ -30,9 +29,10 @@ macro_rules! register_passes {
 }
 
 register_passes!(Cache<'ast> {
-    bindings: NameResolution<'ast>,
-    types: TypeCheck,
-    ranges: RangeAnalysis,
+    bindings: super::NameResolution<'ast>,
+    types: super::TypeCheck,
+    call_graph: super::CallGraph<'ast>,
+    ranges: super::RangeAnalysis,
 });
 
 pub trait Pass<'ast>

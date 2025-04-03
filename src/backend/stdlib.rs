@@ -1,5 +1,7 @@
 //! Standard library primitive declarations.
 
+use std::slice;
+
 use smallvec::{SmallVec, smallvec};
 
 use crate::utils::Format;
@@ -10,18 +12,16 @@ pub enum Parameters {
     FixedPoint,
 }
 
-pub enum Arguments<'a> {
-    Unary { input: &'a str },
-    Binary { left: &'a str, right: &'a str },
-}
+pub struct Arguments<'a>(pub &'a [&'a str]);
 
 impl Arguments<'_> {
-    pub const UNARY_DEFAULT: Self = Self::Unary { input: "in" };
+    pub const UNARY_DEFAULT: Self = Self(&["in"]);
 
-    pub const BINARY_DEFAULT: Self = Self::Binary {
-        left: "left",
-        right: "right",
-    };
+    pub const BINARY_DEFAULT: Self = Self(&["left", "right"]);
+
+    pub fn iter(&self) -> slice::Iter<'_, &'_ str> {
+        self.0.iter()
+    }
 }
 
 pub struct Signature<'a> {
@@ -66,7 +66,7 @@ impl Primitive<'_> {
                 smallvec![
                     u64::from(format.width),
                     u64::from(int_width),
-                    u64::from(frac_width)
+                    u64::from(frac_width),
                 ]
             }
         }
