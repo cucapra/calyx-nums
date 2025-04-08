@@ -7,9 +7,9 @@ from fpcorelib import FPCore
 from fpcorelib.interp.fixedpoint import LIB_FIXED_POINT
 from fpcorelib.rand import random_fpcore
 
+import driver
+import harness
 from qformat import QFormat, RoundingMode
-from sim import harness
-from sim import run as runner
 
 
 def run(
@@ -19,12 +19,12 @@ def run(
     nums: Path,
     lib: Path,
 ) -> int:
-    compiled = runner.compile(benchmark, fmt, nums, lib)
+    compiled = driver.compile(benchmark, fmt, nums, lib)
 
     prog = harness.wrap(benchmark, compiled, fmt, 'mem')
-    data = runner.format_data('mem', vals, fmt)
+    data = driver.format_data('mem', vals, fmt)
 
-    result = runner.simulate(prog, data)
+    result = driver.simulate(prog, data)
 
     return result['memories']['mem'][0]
 

@@ -13,7 +13,7 @@ Finally, clone the repository and build with `cargo build`.
 Optionally, you can register the compiler as an external stage for the
 [Calyx driver][fud], `fud`. After installing `fud`, register the compiler with
 
-    fud register -p <absolute path to calyx-nums repository>/fud/stage.py calyx-nums
+    fud register -p <absolute path to this repository>/tools/fud/stage.py calyx-nums
 
 [brew]: https://brew.sh/
 [fud]: https://docs.calyxir.org/running-calyx/fud/index.html
