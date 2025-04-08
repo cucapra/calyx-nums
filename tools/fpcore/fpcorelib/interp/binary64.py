@@ -3,9 +3,10 @@ import operator
 import sys
 from collections.abc import Callable
 from itertools import combinations
-from typing import Any
 
 from more_itertools import pairwise
+
+from ..ast import Ctx, Lib
 
 
 def all_windows(f: Callable[[float, float], bool]):
@@ -30,7 +31,7 @@ eq = all_windows(operator.eq)
 ne = all_combinations(operator.ne)
 
 
-BINARY64: dict[str, Any] = {
+LIB_BINARY64: Lib[float] = {
     '+': operator.add,
     '-': lambda a, b=None: -a if b is None else a - b,
     '*': operator.mul,
@@ -69,7 +70,7 @@ BINARY64: dict[str, Any] = {
     'fmax': max,  # handles NaNs incorrectly
     'fmin': min,  # handles NaNs incorrectly
     'copysign': math.copysign,
-    'trunc': math.trunc,
+    'trunc': math.trunc,  # type: ignore
     '<': lt,
     '>': gt,
     '<=': le,
@@ -87,11 +88,11 @@ BINARY64: dict[str, Any] = {
 
 
 if sys.version_info >= (3, 11):
-    BINARY64['exp2'] = math.exp2
-    BINARY64['cbrt'] = math.cbrt
+    LIB_BINARY64['exp2'] = math.exp2
+    LIB_BINARY64['cbrt'] = math.cbrt
 
 
-CONSTANTS: dict[str, float] = {
+ENV_BINARY64: Ctx[float] = {
     'E': math.e,
     'PI': math.pi,
     'PI_2': math.pi / 2,

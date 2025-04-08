@@ -2,8 +2,8 @@ from typing import Any, Optional
 
 import calyx.builder as cb
 from calyx.py_ast import Program, Stdlib
+from fpcorelib import FPCore
 
-from fpcore.ast import FPCore
 from qformat import QFormat
 
 

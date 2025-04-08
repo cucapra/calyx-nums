@@ -1,7 +1,9 @@
 import math
-from typing import Any, Optional
+from typing import Optional
 
 from fixedpoint import FixedPoint
+
+from ..ast import Lib
 
 
 def add(a: FixedPoint, b: FixedPoint) -> FixedPoint:
@@ -36,7 +38,7 @@ def sqrt(x: FixedPoint) -> FixedPoint:
     return new
 
 
-FIXED: dict[str, Any] = {
+LIB_FIXED_POINT: Lib[FixedPoint] = {
     '+': add,
     '-': minus,
     '*': mul,

@@ -6,8 +6,8 @@ from tempfile import TemporaryDirectory
 from typing import Any, Union
 
 from fixedpoint import FixedPoint
+from fpcorelib import FPCore
 
-from fpcore.ast import FPCore
 from qformat import QFormat
 
 Args = list[FixedPoint]

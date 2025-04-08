@@ -3,10 +3,10 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 from fixedpoint import FixedPoint
+from fpcorelib import FPCore
+from fpcorelib.interp.fixedpoint import LIB_FIXED_POINT
+from fpcorelib.rand import random_fpcore
 
-from fpcore.ast import FPCore
-from fpcore.rand import random_fpcore
-from interp.fixed import FIXED
 from qformat import QFormat, RoundingMode
 from sim import harness
 from sim import run as runner
@@ -131,7 +131,7 @@ def main():
                 )
             )
 
-            expected = bench.interp(vals, FIXED)
+            expected = bench.interp(vals, LIB_FIXED_POINT)
 
             if got == expected and not opts.verbose:
                 print(f'ok - {got:#x}')

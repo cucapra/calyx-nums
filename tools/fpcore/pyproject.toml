@@ -1,0 +1,15 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "fpcorelib"
+dynamic = ["version", "description"]
+requires-python = ">=3.9"
+dependencies = [
+    "lark",
+    "more_itertools",
+]
+
+[project.optional-dependencies]
+fixedpoint = ["fixedpoint"]
