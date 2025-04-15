@@ -2,8 +2,7 @@ import math
 from typing import Optional
 
 from fixedpoint import FixedPoint
-
-from ..ast import Lib
+from fpcorelib.ast import Lib
 
 
 def add(a: FixedPoint, b: FixedPoint) -> FixedPoint:

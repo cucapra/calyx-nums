@@ -10,6 +10,3 @@ dependencies = [
     "lark",
     "more_itertools",
 ]
-
-[project.optional-dependencies]
-fixedpoint = ["fixedpoint"]

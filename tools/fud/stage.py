@@ -206,16 +206,16 @@ class TestBenchMacros:
         if match := re.search(r'module main\(([^)]*)\)', verilog):
             ports = match.group(1)
 
-            for match in re.finditer(r'input logic (\[[^]]*\]) (\w+)', ports):
-                dim, ident = match.groups()
+            for match in re.finditer(r'input logic (\[[^]]*\])? ?(\w+)', ports):
+                dim, ident = match.groups(default='')
 
                 if ident not in ('go', 'clk', 'reset'):
                     inputs.append(ident)
+                    self.dim = dim
         else:
             raise errors.Malformed('Verilog', "Couldn't find main module")
 
         self.dut = self.instantiate_dut(inputs)
-        self.dim = dim
         self.argc = len(inputs)
         self.comb = 'output logic done' not in ports
 

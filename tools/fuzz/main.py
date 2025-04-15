@@ -1,32 +1,59 @@
+import json
 import random
+import subprocess
 from argparse import ArgumentParser
+from enum import Enum
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from fixedpoint import FixedPoint
 from fpcorelib import FPCore
-from fpcorelib.interp.fixedpoint import LIB_FIXED_POINT
 from fpcorelib.rand import random_fpcore
 
-import driver
-import harness
+from interp import LIB_FIXED_POINT
 from qformat import QFormat, RoundingMode
+
+
+class Simulator(Enum):
+    IVERILOG = 'icarus-verilog'
+    VERILATOR = 'verilog'
+
+    def __str__(self) -> str:
+        return self.value
 
 
 def run(
     benchmark: FPCore[FixedPoint],
     vals: list[FixedPoint],
     fmt: QFormat,
-    nums: Path,
-    lib: Path,
+    sim: Simulator,
 ) -> int:
-    compiled = driver.compile(benchmark, fmt, nums, lib)
+    with TemporaryDirectory() as tmp:
+        file = Path(tmp, 'data.json')
 
-    prog = harness.wrap(benchmark, compiled, fmt, 'mem')
-    data = driver.format_data('mem', vals, fmt)
+        with file.open('w') as f:
+            print(*(format(val.bits, 'x') for val in vals), file=f)
 
-    result = driver.simulate(prog, data)
+        cmd = [
+            'fud', 'exec',
+            '--from', 'fpcore',
+            '--through', sim.value,
+            '--to', 'nums-dat',
+            '-s', 'calyx-nums.flags', f'--format {fmt}',
+            '-s', 'verilog.data', file,
+        ]  # fmt: skip
 
-    return result['memories']['mem'][0]
+        proc = subprocess.run(
+            cmd,
+            check=True,
+            text=True,
+            input=str(benchmark),
+            stdout=subprocess.PIPE,
+        )
+
+    result = json.loads(proc.stdout)
+
+    return result['output'][0]
 
 
 def format_diagnostic(
@@ -53,20 +80,6 @@ def main():
     parser = ArgumentParser(description='FPCore fuzzer.')
 
     parser.add_argument(
-        '-e',
-        '--nums-exec',
-        type=Path,
-        required=True,
-        help='path to the calyx-nums executable',
-    )
-    parser.add_argument(
-        '-l',
-        '--lib-path',
-        type=Path,
-        required=True,
-        help='path to the primitives library',
-    )
-    parser.add_argument(
         '-n',
         '--trials',
         type=int,
@@ -90,6 +103,13 @@ def main():
         type=float,
         default=25,
         help='target size for the generated benchmarks',
+    )
+    parser.add_argument(
+        '--sim',
+        type=Simulator,
+        choices=tuple(Simulator),
+        default=Simulator.IVERILOG,
+        help='simulator',
     )
     parser.add_argument(
         '-v',
@@ -119,18 +139,9 @@ def main():
             args = [f'x{i}' for i in range(opts.argc)]
             vals = [dist() for _ in range(opts.argc)]
 
-            bench = random_fpcore('benchmark', args, opts.size, dist)
+            bench = random_fpcore(None, args, opts.size, dist)
 
-            got = fmt.decode(
-                run(
-                    bench,
-                    vals,
-                    fmt,
-                    opts.nums_exec,
-                    opts.lib_path,
-                )
-            )
-
+            got = fmt.decode(run(bench, vals, fmt, opts.sim))
             expected = bench.interp(vals, LIB_FIXED_POINT)
 
             if got == expected and not opts.verbose:
