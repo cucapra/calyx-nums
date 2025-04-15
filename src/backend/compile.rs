@@ -1,18 +1,47 @@
 use std::collections::HashMap;
-use std::{iter, mem};
+use std::{io, iter, mem};
 
 use calyx_ir as ir;
 use calyx_utils::NameGenerator;
 use itertools::Itertools;
 
-use super::builtins;
 use super::libm::{MathLib, Prototype};
-use super::stdlib::{self, Arguments, Primitive, Signature};
+use super::stdlib::{Arguments, Primitive, Signature};
+use super::stdlib::{Import, ImportPaths, ImportSet, Importer};
 use crate::analysis::{self as sem, Binding, PassManager};
 use crate::fpcore::ast;
 use crate::opts::Opts;
 use crate::utils::rational::{FixedPoint, RoundBinary};
 use crate::utils::{Diagnostic, Format, Reporter};
+
+pub struct Program {
+    imports: ImportSet,
+    context: ir::Context,
+}
+
+impl Program {
+    pub fn write<W: io::Write>(&self, out: &mut W) -> io::Result<()> {
+        for import in self.imports.paths() {
+            writeln!(out, "import \"{}\";", import)?;
+        }
+
+        ir::Printer::write_context(&self.context, true, out)
+    }
+
+    pub fn write_with_paths<W: io::Write>(
+        &self,
+        paths: &ImportPaths,
+        out: &mut W,
+    ) -> io::Result<()> {
+        for &import in Import::ALL {
+            if self.imports.contains(import) {
+                writeln!(out, "import \"{}\";", paths[import])?;
+            }
+        }
+
+        ir::Printer::write_context(&self.context, true, out)
+    }
+}
 
 /// A compiled expression.
 ///
@@ -39,6 +68,7 @@ struct ExpressionBuilder<'b, 'ast, 'comp> {
     bindings: &'b sem::NameResolution<'ast>,
     signatures: &'b HashMap<ast::Id, Prototype>,
     reporter: &'b mut Reporter<'ast>,
+    importer: &'b mut Importer,
     libm: &'b mut HashMap<ast::NodeId, Prototype>,
     builder: &'b mut ir::Builder<'comp>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
@@ -174,11 +204,11 @@ impl ExpressionBuilder<'_, '_, '_> {
             | ast::TestOp::Geq
             | ast::TestOp::Eq => {
                 let decl = match op {
-                    ast::TestOp::Lt => builtins::lt(self.format),
-                    ast::TestOp::Gt => builtins::gt(self.format),
-                    ast::TestOp::Leq => builtins::le(self.format),
-                    ast::TestOp::Geq => builtins::ge(self.format),
-                    ast::TestOp::Eq => builtins::eq(self.format),
+                    ast::TestOp::Lt => self.importer.lt(self.format),
+                    ast::TestOp::Gt => self.importer.gt(self.format),
+                    ast::TestOp::Leq => self.importer.le(self.format),
+                    ast::TestOp::Geq => self.importer.ge(self.format),
+                    ast::TestOp::Eq => self.importer.eq(self.format),
                     _ => unreachable!(),
                 };
 
@@ -188,7 +218,7 @@ impl ExpressionBuilder<'_, '_, '_> {
                     .collect()
             }
             ast::TestOp::Neq => {
-                let decl = builtins::neq(self.format);
+                let decl = self.importer.neq(self.format);
 
                 args.into_iter()
                     .tuple_combinations()
@@ -200,9 +230,9 @@ impl ExpressionBuilder<'_, '_, '_> {
         };
 
         let decl = if matches!(op, ast::TestOp::Or) {
-            &stdlib::core::STD_OR
+            self.importer.or()
         } else {
-            &stdlib::core::STD_AND
+            self.importer.and()
         };
 
         let out = args
@@ -330,27 +360,41 @@ impl ExpressionBuilder<'_, '_, '_> {
         args: &[ast::Expression],
     ) -> Option<Expression> {
         if let Some(prototype) = self.libm.remove(&uid) {
+            self.importer.import(Import::Numbers);
             return self.compile_component_operation(&prototype, args);
         }
 
         match op.kind {
-            ast::OpKind::Math(ast::MathOp::Add) => self
-                .compile_primitive_operation(builtins::add(self.format), args),
-            ast::OpKind::Math(ast::MathOp::Sub) => self
-                .compile_primitive_operation(builtins::sub(self.format), args),
-            ast::OpKind::Math(ast::MathOp::Mul) => self
-                .compile_primitive_operation(builtins::mul(self.format), args),
-            ast::OpKind::Math(ast::MathOp::Div) => self
-                .compile_primitive_operation(builtins::div(self.format), args),
-            ast::OpKind::Math(ast::MathOp::Neg) => self
-                .compile_primitive_operation(&stdlib::numbers::NUM_NEG, args),
-            ast::OpKind::Math(ast::MathOp::Sqrt) => self
-                .compile_primitive_operation(builtins::sqrt(self.format), args),
-            ast::OpKind::Test(op) if op.is_variadic() => {
-                self.compile_variadic_operation(op, args)
+            ast::OpKind::Math(ast::MathOp::Add) => {
+                let decl = self.importer.add(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Math(ast::MathOp::Sub) => {
+                let decl = self.importer.sub(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Math(ast::MathOp::Mul) => {
+                let decl = self.importer.mul(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Math(ast::MathOp::Div) => {
+                let decl = self.importer.div(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Math(ast::MathOp::Neg) => {
+                let decl = self.importer.neg(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Math(ast::MathOp::Sqrt) => {
+                let decl = self.importer.sqrt(self.format);
+                self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Test(ast::TestOp::Not) => {
-                self.compile_primitive_operation(&stdlib::core::STD_NOT, args)
+                let decl = self.importer.not();
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Test(op) if op.is_variadic() => {
+                self.compile_variadic_operation(op, args)
             }
             ast::OpKind::FPCore(id) => {
                 self.compile_component_operation(&self.signatures[&id], args)
@@ -552,6 +596,7 @@ struct GlobalContext<'c, 'ast> {
     lib: &'c ir::LibrarySignatures,
     names: &'c mut NameGenerator,
     libm: &'c mut HashMap<ast::NodeId, Prototype>,
+    importer: Importer,
     signatures: HashMap<ast::Id, Prototype>,
 }
 
@@ -592,6 +637,7 @@ fn compile_definition(
         bindings: ctx.bindings,
         signatures: &ctx.signatures,
         reporter: ctx.reporter,
+        importer: &mut ctx.importer,
         libm: ctx.libm,
         builder: &mut builder,
         stores: HashMap::new(),
@@ -631,7 +677,7 @@ pub fn compile_fpcore<'ast>(
     opts: &Opts,
     rpt: &mut Reporter<'ast>,
     mut lib: ir::LibrarySignatures,
-) -> Option<ir::Context> {
+) -> Option<Program> {
     let mut names = NameGenerator::with_prev_defined_names(
         defs.iter()
             .filter_map(|def| def.name.as_ref().map(|sym| sym.id))
@@ -655,6 +701,7 @@ pub fn compile_fpcore<'ast>(
         lib: &lib,
         names: &mut names,
         libm: &mut prototypes,
+        importer: Importer::new(),
         signatures: HashMap::new(),
     };
 
@@ -662,13 +709,16 @@ pub fn compile_fpcore<'ast>(
         components.push(compile_definition(def, &mut ctx)?);
     }
 
-    Some(ir::Context {
-        components,
-        lib,
-        bc: Default::default(),
-        entrypoint: ir::Id::new("main"),
-        extra_opts: Vec::new(),
-        metadata: None,
+    Some(Program {
+        imports: ctx.importer.into_imports(),
+        context: ir::Context {
+            components,
+            lib,
+            bc: Default::default(),
+            entrypoint: ir::Id::new("main"),
+            extra_opts: Vec::new(),
+            metadata: None,
+        },
     })
 }
 

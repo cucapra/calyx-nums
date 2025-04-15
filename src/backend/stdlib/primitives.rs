@@ -1,11 +1,15 @@
 //! Standard library primitive declarations.
 
-use std::slice;
+use std::ops::Index;
+use std::{array, iter, slice};
 
 use smallvec::{SmallVec, smallvec};
+use strum::{EnumCount, VariantArray, VariantNames};
+use strum_macros::{EnumCount, VariantArray, VariantNames};
 
 use crate::utils::Format;
 
+#[derive(Clone, Copy)]
 pub enum Parameters {
     Boolean,
     Integer,
@@ -47,6 +51,7 @@ pub struct Primitive<'a> {
     pub signature: Signature<'a>,
     pub params: Parameters,
     pub is_comb: bool,
+    pub import: Import,
 }
 
 impl Primitive<'_> {
@@ -76,7 +81,7 @@ impl Primitive<'_> {
 pub mod compile {
     use super::*;
 
-    pub const IMPORT: &str = "primitives/compile.futil";
+    pub const IMPORT: Import = Import::Compile;
 
     pub const STD_ADD: Primitive = Primitive {
         name: "std_add",
@@ -84,13 +89,14 @@ pub mod compile {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 }
 
 pub mod core {
     use super::*;
 
-    pub const IMPORT: &str = "primitives/core.futil";
+    pub const IMPORT: Import = Import::Core;
 
     pub const STD_NOT: Primitive = Primitive {
         name: "std_not",
@@ -98,6 +104,7 @@ pub mod core {
         signature: Signature::UNARY_DEFAULT,
         params: Parameters::Boolean,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_AND: Primitive = Primitive {
@@ -106,6 +113,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Boolean,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_OR: Primitive = Primitive {
@@ -114,6 +122,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Boolean,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SUB: Primitive = Primitive {
@@ -122,6 +131,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_GT: Primitive = Primitive {
@@ -130,6 +140,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_LT: Primitive = Primitive {
@@ -138,6 +149,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_EQ: Primitive = Primitive {
@@ -146,6 +158,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_NEQ: Primitive = Primitive {
@@ -154,6 +167,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_GE: Primitive = Primitive {
@@ -162,6 +176,7 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_LE: Primitive = Primitive {
@@ -170,13 +185,14 @@ pub mod core {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 }
 
 pub mod binary_operators {
     use super::*;
 
-    pub const IMPORT: &str = "primitives/binary_operators.futil";
+    pub const IMPORT: Import = Import::BinaryOperators;
 
     pub const STD_FP_ADD: Primitive = Primitive {
         name: "std_fp_add",
@@ -184,6 +200,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_FP_SUB: Primitive = Primitive {
@@ -192,6 +209,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_FP_MULT_PIPE: Primitive = Primitive {
@@ -200,6 +218,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_FP_DIV_PIPE_REMAINDER: Primitive = Primitive {
@@ -211,6 +230,7 @@ pub mod binary_operators {
         },
         params: Parameters::FixedPoint,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_FP_DIV_PIPE_QUOTIENT: Primitive = Primitive {
@@ -222,6 +242,7 @@ pub mod binary_operators {
         },
         params: Parameters::FixedPoint,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_FP_GT: Primitive = Primitive {
@@ -230,6 +251,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_FP_SADD: Primitive = Primitive {
@@ -238,6 +260,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_FP_SSUB: Primitive = Primitive {
@@ -246,6 +269,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_FP_SMULT_PIPE: Primitive = Primitive {
@@ -254,6 +278,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_FP_SDIV_PIPE_REMAINDER: Primitive = Primitive {
@@ -265,6 +290,7 @@ pub mod binary_operators {
         },
         params: Parameters::FixedPoint,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_FP_SDIV_PIPE_QUOTIENT: Primitive = Primitive {
@@ -276,6 +302,7 @@ pub mod binary_operators {
         },
         params: Parameters::FixedPoint,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_FP_SGT: Primitive = Primitive {
@@ -284,6 +311,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_FP_SLT: Primitive = Primitive {
@@ -292,6 +320,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_MULT_PIPE: Primitive = Primitive {
@@ -300,6 +329,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_DIV_PIPE_REMAINDER: Primitive = Primitive {
@@ -311,6 +341,7 @@ pub mod binary_operators {
         },
         params: Parameters::Integer,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_DIV_PIPE_QUOTIENT: Primitive = Primitive {
@@ -322,6 +353,7 @@ pub mod binary_operators {
         },
         params: Parameters::Integer,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_SADD: Primitive = Primitive {
@@ -330,6 +362,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SSUB: Primitive = Primitive {
@@ -338,6 +371,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SMULT_PIPE: Primitive = Primitive {
@@ -346,6 +380,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_SDIV_PIPE_REMAINDER: Primitive = Primitive {
@@ -357,6 +392,7 @@ pub mod binary_operators {
         },
         params: Parameters::Integer,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_SDIV_PIPE_QUOTIENT: Primitive = Primitive {
@@ -368,6 +404,7 @@ pub mod binary_operators {
         },
         params: Parameters::Integer,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_SGT: Primitive = Primitive {
@@ -376,6 +413,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SLT: Primitive = Primitive {
@@ -384,6 +422,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SEQ: Primitive = Primitive {
@@ -392,6 +431,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SNEQ: Primitive = Primitive {
@@ -400,6 +440,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SGE: Primitive = Primitive {
@@ -408,6 +449,7 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 
     pub const STD_SLE: Primitive = Primitive {
@@ -416,13 +458,14 @@ pub mod binary_operators {
         signature: Signature::BINARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
 }
 
 pub mod math {
     use super::*;
 
-    pub const IMPORT: &str = "primitives/math.futil";
+    pub const IMPORT: Import = Import::Math;
 
     pub const STD_FP_SQRT: Primitive = Primitive {
         name: "fp_sqrt",
@@ -430,6 +473,7 @@ pub mod math {
         signature: Signature::UNARY_DEFAULT,
         params: Parameters::FixedPoint,
         is_comb: false,
+        import: IMPORT,
     };
 
     pub const STD_SQRT: Primitive = Primitive {
@@ -438,13 +482,14 @@ pub mod math {
         signature: Signature::UNARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: false,
+        import: IMPORT,
     };
 }
 
 pub mod numbers {
     use super::*;
 
-    pub const IMPORT: &str = "primitives/numbers.futil";
+    pub const IMPORT: Import = Import::Numbers;
 
     pub const NUM_NEG: Primitive = Primitive {
         name: "num_neg",
@@ -452,5 +497,93 @@ pub mod numbers {
         signature: Signature::UNARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,
+        import: IMPORT,
     };
+}
+
+type ImportRepr = u8;
+
+#[derive(Clone, Copy, EnumCount, VariantArray, VariantNames)]
+#[repr(u8)]
+pub enum Import {
+    #[strum(to_string = "primitives/compile.futil")]
+    Compile = 1 << 0,
+    #[strum(to_string = "primitives/core.futil")]
+    Core = 1 << 1,
+    #[strum(to_string = "primitives/binary_operators.futil")]
+    BinaryOperators = 1 << 2,
+    #[strum(to_string = "primitives/math.futil")]
+    Math = 1 << 3,
+    #[strum(to_string = "primitives/numbers.futil")]
+    Numbers = 1 << 4,
+}
+
+impl Import {
+    pub const ALL: &[Import] = <Self as VariantArray>::VARIANTS;
+    pub const PATHS: &[&str] = <Self as VariantNames>::VARIANTS;
+
+    #[inline]
+    const fn mask(self) -> ImportRepr {
+        self as ImportRepr
+    }
+
+    #[inline]
+    const fn index(self) -> usize {
+        (self as ImportRepr).trailing_zeros() as usize
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct ImportSet(ImportRepr);
+
+impl ImportSet {
+    #[inline]
+    pub const fn new() -> ImportSet {
+        ImportSet(0)
+    }
+
+    #[inline]
+    pub const fn contains(&self, file: Import) -> bool {
+        self.0 & file.mask() != 0
+    }
+
+    #[inline]
+    pub const fn insert(&mut self, file: Import) {
+        self.0 |= file.mask();
+    }
+
+    pub fn paths(&self) -> impl Iterator<Item = &'static str> {
+        iter::zip(Import::ALL, Import::PATHS).filter_map(|(&import, &path)| {
+            self.contains(import).then_some(path)
+        })
+    }
+}
+
+impl Default for ImportSet {
+    fn default() -> Self {
+        ImportSet::new()
+    }
+}
+
+pub struct ImportPaths {
+    paths: [String; Import::COUNT],
+}
+
+impl ImportPaths {
+    pub fn new<F>(f: F) -> ImportPaths
+    where
+        F: FnMut(usize) -> String,
+    {
+        ImportPaths {
+            paths: array::from_fn(f),
+        }
+    }
+}
+
+impl Index<Import> for ImportPaths {
+    type Output = String;
+
+    fn index(&self, file: Import) -> &Self::Output {
+        &self.paths[file.index()]
+    }
 }

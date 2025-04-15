@@ -1,74 +1,13 @@
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::fs::{self, File};
-use std::io::{self, Write};
-use std::iter;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::{io, iter};
 
-use calyx_frontend::{Workspace, parser::CalyxParser};
-use calyx_ir as ir;
-use calyx_utils::{CalyxResult, Error};
-
-use calyx_nums::backend;
+use calyx_nums::backend::{self, ImportPaths, Program};
 use calyx_nums::fpcore::{FPCoreParser, ast::Span};
 use calyx_nums::opts::Opts;
 use calyx_nums::utils::{Diagnostic, Reporter};
-
-const IMPORTS: &[&str] = &[
-    backend::stdlib::compile::IMPORT,
-    backend::stdlib::core::IMPORT,
-    backend::stdlib::binary_operators::IMPORT,
-    backend::stdlib::math::IMPORT,
-    backend::stdlib::numbers::IMPORT,
-];
-
-fn build_workspace(
-    imports: &[&str],
-    search_paths: &[PathBuf],
-) -> CalyxResult<Workspace> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    let mut stack: Vec<_> = imports
-        .iter()
-        .map(|import| {
-            itertools::chain(search_paths, iter::once(&root))
-                .find_map(|lib_path| {
-                    let import = lib_path.join(import).canonicalize().ok()?;
-
-                    import.exists().then_some((import, lib_path))
-                })
-                .ok_or(Error::invalid_file(format!(
-                    "Unresolved import `{import}`"
-                )))
-        })
-        .collect::<CalyxResult<_>>()?;
-
-    let mut workspace = Workspace::default();
-    let mut imported = HashSet::new();
-
-    workspace.original_imports = stack
-        .iter()
-        .map(|(import, _)| import.to_string_lossy().into_owned())
-        .collect();
-
-    while let Some((import, lib_path)) = stack.pop() {
-        if imported.contains(&import) {
-            continue;
-        }
-
-        let namespace = CalyxParser::parse_file(&import)?;
-        let parent = import.parent().unwrap();
-
-        let next = workspace
-            .merge_namespace(namespace, false, parent, true, lib_path)?;
-
-        stack.extend(next.into_iter().map(|(import, _)| (import, lib_path)));
-        imported.insert(import);
-    }
-
-    Ok(workspace)
-}
 
 fn read_input(file: &Option<PathBuf>) -> io::Result<(Cow<'_, str>, String)> {
     match file {
@@ -88,21 +27,21 @@ fn read_input(file: &Option<PathBuf>) -> io::Result<(Cow<'_, str>, String)> {
 }
 
 fn write_output(
-    imports: &[String],
-    ctx: &ir::Context,
+    program: &Program,
+    paths: Option<&ImportPaths>,
     file: &Option<PathBuf>,
 ) -> io::Result<()> {
-    let mut out: Box<dyn Write> = if let Some(path) = file {
+    let mut out: Box<dyn io::Write> = if let Some(path) = file {
         Box::new(File::create(path)?)
     } else {
         Box::new(io::stdout())
     };
 
-    for import in imports {
-        writeln!(out, "import \"{}\";", import)?;
+    if let Some(paths) = paths {
+        program.write_with_paths(paths, &mut out)
+    } else {
+        program.write(&mut out)
     }
-
-    ir::Printer::write_context(ctx, true, &mut out)
 }
 
 fn main() -> ExitCode {
@@ -117,12 +56,12 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut rpt = Reporter::new(&filename, &src);
+    let mut reporter = Reporter::new(&filename, &src);
 
     let defs = match FPCoreParser::parse_file(&src) {
         Ok(result) => result,
         Err(err) => {
-            rpt.emit(
+            reporter.emit(
                 &Diagnostic::error()
                     .with_message("syntax error")
                     .with_primary(
@@ -135,8 +74,15 @@ fn main() -> ExitCode {
         }
     };
 
-    let (lib, imports) = match build_workspace(IMPORTS, &opts.lib_path) {
-        Ok(workspace) => (workspace.lib, workspace.original_imports),
+    let search_paths: Vec<_> = opts
+        .lib_path
+        .iter()
+        .map(PathBuf::as_path)
+        .chain(iter::once(Path::new(env!("CARGO_MANIFEST_DIR"))))
+        .collect();
+
+    let (lib, paths) = match backend::build_library(&search_paths) {
+        Ok(result) => result,
         Err(err) => {
             eprintln!("error: {err:?}");
 
@@ -144,12 +90,16 @@ fn main() -> ExitCode {
         }
     };
 
-    let Some(ctx) = backend::compile_fpcore(&defs, &opts, &mut rpt, lib) else {
+    let Some(program) =
+        backend::compile_fpcore(&defs, &opts, &mut reporter, lib)
+    else {
         return ExitCode::FAILURE;
     };
 
-    if let Err(err) = write_output(&imports, &ctx, &opts.output) {
-        rpt.emit(&Diagnostic::from(err));
+    if let Err(err) =
+        write_output(&program, opts.absolute.then_some(&paths), &opts.output)
+    {
+        reporter.emit(&Diagnostic::from(err));
 
         return ExitCode::FAILURE;
     }

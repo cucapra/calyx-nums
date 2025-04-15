@@ -13,8 +13,8 @@ pest_derive = "2"
 pest_consume = "1"
 pretty = { version = "0.12", optional = true }
 smallvec = "1"
-strum = "0.25"
-strum_macros = "0.25"
+strum = "0.27"
+strum_macros = "0.27"
 
 calyx-frontend = "0.6.0"
 calyx-ir = "0.6.0"

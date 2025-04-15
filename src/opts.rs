@@ -46,6 +46,10 @@ pub struct Opts {
     #[argh(option, short = 'o')]
     pub output: Option<PathBuf>,
 
+    /// emit absolute import paths
+    #[argh(switch)]
+    pub absolute: bool,
+
     /// global numeric format
     #[argh(option, default = "Default::default()")]
     pub format: Format,

@@ -1,8 +1,8 @@
-mod builtins;
 mod compile;
 mod components;
 mod libm;
 mod primitives;
-pub mod stdlib;
+mod stdlib;
 
-pub use compile::compile_fpcore;
+pub use compile::{Program, compile_fpcore};
+pub use stdlib::{ImportPaths, build_library};
