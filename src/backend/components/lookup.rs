@@ -6,6 +6,7 @@ use calyx_ir::{self as ir, build_assignments, structure};
 
 use super::{ComponentBuilder, ComponentManager};
 use crate::approx::AddressSpec;
+use crate::backend::IRBuilder;
 use crate::backend::primitives::lut;
 use crate::fpcore::ast::{Rational, Span};
 use crate::utils::mangling::{Mangle, mangle};
@@ -128,7 +129,7 @@ impl ComponentBuilder for LookupTable<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, false, true, None);
-        let mut builder = ir::Builder::new(&mut component, lib).not_generated();
+        let mut builder = IRBuilder::new(&mut component, lib);
 
         let primitive = builder.add_primitive("lut", lut, &[]);
 
@@ -164,7 +165,7 @@ impl ComponentBuilder for LookupTable<'_> {
             signature[out] = ? primitive[out];
         );
 
-        builder.component.continuous_assignments.extend(assigns);
+        builder.add_continuous_assignments(assigns);
 
         if self.spec.idx_lsb == 0 {
             let zero = builder.add_constant(0, 1);
@@ -174,7 +175,7 @@ impl ComponentBuilder for LookupTable<'_> {
                 signature["arg"] = ? zero[out];
             );
 
-            builder.component.continuous_assignments.push(assign);
+            builder.add_continuous_assignment(assign);
         } else {
             let msb = self.spec.idx_lsb - 1;
 
@@ -192,7 +193,7 @@ impl ComponentBuilder for LookupTable<'_> {
                     signature["arg"] = ? com[out];
                 );
 
-                builder.component.continuous_assignments.extend(assigns);
+                builder.add_continuous_assignments(assigns);
             } else {
                 structure!(builder;
                     let low = prim std_slice(global, msb);
@@ -210,7 +211,7 @@ impl ComponentBuilder for LookupTable<'_> {
                     signature["arg"] = ? cat[out];
                 );
 
-                builder.component.continuous_assignments.extend(assigns);
+                builder.add_continuous_assignments(assigns);
             }
         }
 

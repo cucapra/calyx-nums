@@ -7,6 +7,7 @@ use itertools::{Itertools, Position};
 
 use super::{Cast, ComponentBuilder, ComponentManager};
 use crate::approx::Datapath;
+use crate::backend::IRBuilder;
 use crate::utils::mangling::mangle;
 use crate::utils::{Diagnostic, Format};
 
@@ -124,7 +125,7 @@ impl ComponentBuilder for Horner<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);
-        let mut builder = ir::Builder::new(&mut component, lib).not_generated();
+        let mut builder = IRBuilder::new(&mut component, lib);
 
         assert!(self.spec.sum_scale <= self.spec.lut_scale);
 
@@ -162,7 +163,7 @@ impl ComponentBuilder for Horner<'_> {
                     );
                 );
 
-                let cast = builder.add_component("cast".into(), id, ports);
+                let cast = builder.add_component("cast", id, ports);
                 cast.borrow_mut().add_attribute(INLINE, 1);
 
                 let signature = &builder.component.signature;
@@ -172,7 +173,7 @@ impl ComponentBuilder for Horner<'_> {
                     cast[in_] = ? slice[out];
                 );
 
-                builder.component.continuous_assignments.extend(assigns);
+                builder.add_continuous_assignments(assigns);
 
                 *lsb += width;
 
@@ -206,29 +207,23 @@ impl ComponentBuilder for Horner<'_> {
         let sums: Vec<_> = addends
             .iter()
             .map(|addend| {
-                let group = builder.add_comb_group("addend");
-
                 let assigns = build_assignments!(builder;
                     add[left] = ? addend[out];
                     add[right] = ? mul[out];
                 );
 
-                group.borrow_mut().assignments.extend(assigns);
-
-                ir::Control::Invoke(ir::Invoke {
-                    comp: acc.clone(),
-                    inputs: vec![(in_, add.borrow().get(out))],
-                    outputs: vec![],
-                    attributes: Default::default(),
-                    comb_group: Some(group),
-                    ref_cells: vec![],
-                })
+                builder.invoke_with(
+                    acc.clone(),
+                    vec![(in_, add.borrow().get(out))],
+                    "addend",
+                    assigns.to_vec(),
+                )
             })
             .collect();
 
         let (cast, ports) = output_cast;
 
-        let cast = builder.add_component("cast".into(), cast, ports);
+        let cast = builder.add_component("cast", cast, ports);
         cast.borrow_mut().add_attribute(INLINE, 1);
 
         let signature = &builder.component.signature;
@@ -238,7 +233,7 @@ impl ComponentBuilder for Horner<'_> {
             signature[out] = ? cast[out];
         );
 
-        builder.component.continuous_assignments.extend(assigns);
+        builder.add_continuous_assignments(assigns);
 
         *component.control.borrow_mut() = ir::Control::seq(
             iter::once(init)

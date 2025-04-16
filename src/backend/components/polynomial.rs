@@ -6,6 +6,7 @@ use calyx_ir::{self as ir, build_assignments};
 
 use super::{ComponentBuilder, ComponentManager, Horner, LookupTable};
 use crate::approx::Datapath;
+use crate::backend::IRBuilder;
 use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::mangle;
 
@@ -64,12 +65,10 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);
-        let mut builder = ir::Builder::new(&mut component, lib).not_generated();
+        let mut builder = IRBuilder::new(&mut component, lib);
 
-        let lookup =
-            builder.add_component(ir::Id::new("lookup"), lookup, lookup_ports);
-        let horner =
-            builder.add_component(ir::Id::new("horner"), horner, horner_ports);
+        let lookup = builder.add_component("lookup", lookup, lookup_ports);
+        let horner = builder.add_component("horner", horner, horner_ports);
 
         let signature = &builder.component.signature;
 
@@ -78,26 +77,17 @@ impl ComponentBuilder for PiecewisePoly<'_> {
             signature["out"] = ? horner["out"];
         );
 
-        builder.component.continuous_assignments.push(component_out);
+        builder.add_continuous_assignment(component_out);
 
         let inputs = vec![
             (ir::Id::new("in"), lookup.borrow().get("arg")),
             (ir::Id::new("lut"), lookup.borrow().get("out")),
         ];
 
-        let group = builder.add_comb_group("index");
-        group.borrow_mut().assignments.push(lookup_in);
+        let control =
+            builder.invoke_with(horner, inputs, "index", vec![lookup_in]);
 
-        let invoke = ir::Invoke {
-            comp: horner,
-            inputs,
-            outputs: Vec::new(),
-            attributes: Default::default(),
-            comb_group: Some(group),
-            ref_cells: Vec::new(),
-        };
-
-        *component.control.borrow_mut() = ir::Control::Invoke(invoke);
+        *component.control.borrow_mut() = control;
 
         Ok(component)
     }

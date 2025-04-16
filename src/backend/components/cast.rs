@@ -3,6 +3,7 @@
 use calyx_ir as ir;
 
 use super::{ComponentBuilder, ComponentManager};
+use crate::backend::IRBuilder;
 use crate::utils::mangling::mangle;
 use crate::utils::{Diagnostic, Format};
 
@@ -42,7 +43,7 @@ impl ComponentBuilder for Cast<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, false, true, None);
-        let mut builder = ir::Builder::new(&mut component, lib).not_generated();
+        let mut builder = IRBuilder::new(&mut component, lib);
 
         let (msb_in, lsb_in) = self.from.vhdl();
         let (msb_out, lsb_out) = self.to.vhdl();
@@ -62,15 +63,12 @@ impl ComponentBuilder for Cast<'_> {
             let params = [in_width, out_width];
             let prim = builder.add_primitive(prefix, prim, &params);
 
-            let signature = &builder.component.signature;
+            let signature_in = builder.component.signature.borrow().get(in_);
 
-            builder.component.continuous_assignments.push(
-                builder.build_assignment(
-                    prim.borrow().get(in_),
-                    signature.borrow().get(in_),
-                    ir::Guard::True,
-                ),
-            );
+            builder.add_continuous_assignment(ir::Assignment::new(
+                prim.borrow().get(in_),
+                signature_in,
+            ));
 
             (prim, out, out_width)
         } else {
@@ -86,13 +84,10 @@ impl ComponentBuilder for Cast<'_> {
             let params = [in_width, out_width];
             let prim = builder.add_primitive("pad", "num_rpad", &params);
 
-            builder.component.continuous_assignments.push(
-                builder.build_assignment(
-                    prim.borrow().get(in_),
-                    cell.borrow().get(port),
-                    ir::Guard::True,
-                ),
-            );
+            builder.add_continuous_assignment(ir::Assignment::new(
+                prim.borrow().get(in_),
+                cell.borrow().get(port),
+            ));
 
             (prim, out, out_width)
         } else {
@@ -112,28 +107,22 @@ impl ComponentBuilder for Cast<'_> {
             let params = [in_width, lsb, lsb + out_width - 1, out_width];
             let prim = builder.add_primitive("slice", "std_bit_slice", &params);
 
-            builder.component.continuous_assignments.push(
-                builder.build_assignment(
-                    prim.borrow().get(in_),
-                    cell.borrow().get(port),
-                    ir::Guard::True,
-                ),
-            );
+            builder.add_continuous_assignment(ir::Assignment::new(
+                prim.borrow().get(in_),
+                cell.borrow().get(port),
+            ));
 
             (prim, out)
         } else {
             (cell, port)
         };
 
-        let signature = &builder.component.signature;
+        let signature_out = builder.component.signature.borrow().get(out);
 
-        builder.component.continuous_assignments.push(
-            builder.build_assignment(
-                signature.borrow().get(out),
-                cell.borrow().get(port),
-                ir::Guard::True,
-            ),
-        );
+        builder.add_continuous_assignment(ir::Assignment::new(
+            signature_out,
+            cell.borrow().get(port),
+        ));
 
         Ok(component)
     }

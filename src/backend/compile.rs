@@ -5,6 +5,7 @@ use calyx_ir as ir;
 use calyx_utils::NameGenerator;
 use itertools::Itertools;
 
+use super::IRBuilder;
 use super::libm::{MathLib, Prototype};
 use super::stdlib::{Arguments, Primitive, Signature};
 use super::stdlib::{Import, ImportPaths, ImportSet, Importer};
@@ -70,7 +71,7 @@ struct ExpressionBuilder<'b, 'ast, 'comp> {
     reporter: &'b mut Reporter<'ast>,
     importer: &'b mut Importer,
     libm: &'b mut HashMap<ast::NodeId, Prototype>,
-    builder: &'b mut ir::Builder<'comp>,
+    builder: &'b mut IRBuilder<'comp>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
 }
 
@@ -172,7 +173,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             })
             .collect::<Option<_>>()?;
 
-        let control = collapse(control, ir::Control::par);
+        let control = IRBuilder::collapse(control, ir::Control::par);
 
         let mut reduce = |left, right, decl: &Primitive| {
             let prim = self.builder.add_primitive(
@@ -185,11 +186,7 @@ impl ExpressionBuilder<'_, '_, '_> {
 
             let assigns =
                 [("left", left), ("right", right)].map(|(dst, src)| {
-                    self.builder.build_assignment(
-                        prim.borrow().get(dst),
-                        src,
-                        ir::Guard::True,
-                    )
+                    ir::Assignment::new(prim.borrow().get(dst), src)
                 });
 
             assignments.extend(assigns);
@@ -267,7 +264,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             })
             .collect::<Option<_>>()?;
 
-        let control = collapse(control, ir::Control::par);
+        let control = IRBuilder::collapse(control, ir::Control::par);
         let out = cell.borrow().get(signature.output);
 
         let inputs: Vec<_> =
@@ -275,23 +272,19 @@ impl ExpressionBuilder<'_, '_, '_> {
 
         let control = if is_comb {
             assignments.extend(inputs.into_iter().map(|(dst, src)| {
-                self.builder.build_assignment(
-                    cell.borrow().get(dst),
-                    src,
-                    ir::Guard::True,
-                )
+                ir::Assignment::new(cell.borrow().get(dst), src)
             }));
 
             control
         } else {
-            let invoke = invoke_with(
+            let invoke = self.builder.invoke_with(
                 cell,
                 inputs,
+                "args",
                 mem::take(&mut assignments),
-                self.builder,
             );
 
-            collapse([control, invoke], ir::Control::seq)
+            IRBuilder::collapse([control, invoke], ir::Control::seq)
         };
 
         Some(Expression {
@@ -437,11 +430,7 @@ impl ExpressionBuilder<'_, '_, '_> {
                 let mut assignments: Vec<_> = inputs
                     .into_iter()
                     .map(|(dst, src)| {
-                        self.builder.build_assignment(
-                            mux.borrow().get(dst),
-                            src,
-                            ir::Guard::True,
-                        )
+                        ir::Assignment::new(mux.borrow().get(dst), src)
                     })
                     .collect();
 
@@ -459,38 +448,40 @@ impl ExpressionBuilder<'_, '_, '_> {
                 let reg = self.builder.add_primitive("r", "std_reg", &params);
                 let out = reg.borrow().get("out");
 
-                let store_true = invoke_with(
+                let store_true = self.builder.invoke_with(
                     reg.clone(),
                     vec![(ir::Id::new("in"), true_branch.out)],
+                    "branch",
                     true_branch.assignments,
-                    self.builder,
                 );
 
-                let store_false = invoke_with(
+                let store_false = self.builder.invoke_with(
                     reg,
                     vec![(ir::Id::new("in"), false_branch.out)],
+                    "branch",
                     false_branch.assignments,
-                    self.builder,
                 );
 
-                let group = self.builder.add_comb_group("cond");
-                group.borrow_mut().assignments = cond.assignments;
+                let group =
+                    self.builder.add_comb_group("cond", cond.assignments);
 
                 let conditional = ir::Control::if_(
                     cond.out,
                     Some(group),
-                    Box::new(collapse(
+                    Box::new(IRBuilder::collapse(
                         [true_branch.control, store_true],
                         ir::Control::seq,
                     )),
-                    Box::new(collapse(
+                    Box::new(IRBuilder::collapse(
                         [false_branch.control, store_false],
                         ir::Control::seq,
                     )),
                 );
 
-                let control =
-                    collapse([cond.control, conditional], ir::Control::seq);
+                let control = IRBuilder::collapse(
+                    [cond.control, conditional],
+                    ir::Control::seq,
+                );
 
                 Some(Expression {
                     control,
@@ -515,11 +506,11 @@ impl ExpressionBuilder<'_, '_, '_> {
                 let params = [expr.out.borrow().width];
                 let reg = self.builder.add_primitive("r", "std_reg", &params);
 
-                let invoke = invoke_with(
+                let invoke = self.builder.invoke_with(
                     reg.clone(),
                     vec![(ir::Id::new("in"), expr.out)],
+                    "expr",
                     expr.assignments,
-                    self.builder,
                 );
 
                 self.stores.insert(binding.expr.uid, reg);
@@ -531,16 +522,16 @@ impl ExpressionBuilder<'_, '_, '_> {
         let body = self.compile_expression(body)?;
 
         let control = if sequential {
-            collapse(
+            IRBuilder::collapse(
                 itertools::interleave(args, stores)
                     .chain(iter::once(body.control)),
                 ir::Control::seq,
             )
         } else {
-            collapse(
+            IRBuilder::collapse(
                 [
-                    collapse(args, ir::Control::par),
-                    collapse(stores, ir::Control::par),
+                    IRBuilder::collapse(args, ir::Control::par),
+                    IRBuilder::collapse(stores, ir::Control::par),
                     body.control,
                 ],
                 ir::Control::seq,
@@ -593,7 +584,7 @@ struct GlobalContext<'c, 'ast> {
     format: &'c Format,
     bindings: &'c sem::NameResolution<'ast>,
     reporter: &'c mut Reporter<'ast>,
-    lib: &'c ir::LibrarySignatures,
+    lib: &'c mut ir::LibrarySignatures,
     names: &'c mut NameGenerator,
     libm: &'c mut HashMap<ast::NodeId, Prototype>,
     importer: Importer,
@@ -630,7 +621,7 @@ fn compile_definition(
     };
 
     let mut component = ir::Component::new(name, ports(), false, false, None);
-    let mut builder = ir::Builder::new(&mut component, ctx.lib).not_generated();
+    let mut builder = IRBuilder::new(&mut component, ctx.lib);
 
     let mut expr_builder = ExpressionBuilder {
         format: ctx.format,
@@ -645,14 +636,13 @@ fn compile_definition(
 
     let body = expr_builder.compile_expression(&def.body)?;
 
-    let assign = builder.build_assignment(
+    let assign = ir::Assignment::new(
         builder.component.signature.borrow().get("out"),
         body.out,
-        ir::Guard::True,
     );
 
-    component.continuous_assignments.extend(body.assignments);
-    component.continuous_assignments.push(assign);
+    builder.add_continuous_assignments(body.assignments);
+    builder.add_continuous_assignment(assign);
 
     component.is_comb = matches!(body.control, ir::Control::Empty(_));
 
@@ -698,7 +688,7 @@ pub fn compile_fpcore<'ast>(
         format: &opts.format,
         bindings: pm.get_analysis()?,
         reporter: &mut pm.rpt(),
-        lib: &lib,
+        lib: &mut lib,
         names: &mut names,
         libm: &mut prototypes,
         importer: Importer::new(),
@@ -719,45 +709,5 @@ pub fn compile_fpcore<'ast>(
             extra_opts: Vec::new(),
             metadata: None,
         },
-    })
-}
-
-fn collapse<I, F>(stmts: I, f: F) -> ir::Control
-where
-    I: IntoIterator<Item = ir::Control>,
-    F: FnOnce(Vec<ir::Control>) -> ir::Control,
-{
-    let stmts: Vec<_> = stmts
-        .into_iter()
-        .filter(|stmt| !matches!(stmt, ir::Control::Empty(_)))
-        .collect();
-
-    match stmts.len() {
-        0 => ir::Control::empty(),
-        1 => stmts.into_iter().next().unwrap(),
-        _ => f(stmts),
-    }
-}
-
-fn invoke_with(
-    comp: ir::RRC<ir::Cell>,
-    inputs: Vec<(ir::Id, ir::RRC<ir::Port>)>,
-    assignments: Vec<ir::Assignment<ir::Nothing>>,
-    builder: &mut ir::Builder,
-) -> ir::Control {
-    let comb_group = (!assignments.is_empty()).then(|| {
-        let group = builder.add_comb_group("expr");
-        group.borrow_mut().assignments = assignments;
-
-        group
-    });
-
-    ir::Control::Invoke(ir::Invoke {
-        comp,
-        inputs,
-        outputs: Vec::new(),
-        attributes: Default::default(),
-        comb_group,
-        ref_cells: Vec::new(),
     })
 }
