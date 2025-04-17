@@ -1,35 +1,9 @@
 import math
 import operator
 import sys
-from collections.abc import Callable
-from itertools import combinations
-
-from more_itertools import pairwise
 
 from ..ast import Ctx, Lib
-
-
-def all_windows(f: Callable[[float, float], bool]):
-    def variadic(*args: float):
-        return all(f(*pair) for pair in pairwise(args))
-
-    return variadic
-
-
-def all_combinations(f: Callable[[float, float], bool]):
-    def variadic(*args: float):
-        return all(f(*pair) for pair in combinations(args, 2))
-
-    return variadic
-
-
-lt = all_windows(operator.lt)
-gt = all_windows(operator.gt)
-le = all_windows(operator.le)
-ge = all_windows(operator.ge)
-eq = all_windows(operator.eq)
-ne = all_combinations(operator.ne)
-
+from . import variadic
 
 LIB_BINARY64: Lib[float] = {
     '+': operator.add,
@@ -71,14 +45,14 @@ LIB_BINARY64: Lib[float] = {
     'fmin': min,  # handles NaNs incorrectly
     'copysign': math.copysign,
     'trunc': math.trunc,  # type: ignore
-    '<': lt,
-    '>': gt,
-    '<=': le,
-    '>=': ge,
-    '==': eq,
-    '!=': ne,
-    'and': lambda *args: all(args),
-    'or': lambda *args: any(args),
+    '<': variadic.lt,
+    '>': variadic.gt,
+    '<=': variadic.le,
+    '>=': variadic.ge,
+    '==': variadic.eq,
+    '!=': variadic.ne,
+    'and': variadic.and_,
+    'or': variadic.or_,
     'not': operator.not_,
     'isfinite': math.isfinite,
     'isinf': math.isinf,

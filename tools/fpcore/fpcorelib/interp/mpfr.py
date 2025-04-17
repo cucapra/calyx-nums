@@ -1,0 +1,81 @@
+import operator
+from typing import Any
+
+import gmpy2
+
+from ..ast import Ctx, Lib
+from . import variadic
+
+LIB_MPFR: Lib[Any] = {
+    '+': gmpy2.add,
+    '-': lambda a, b=None: -a if b is None else a - b,
+    '*': gmpy2.mul,
+    '/': gmpy2.div,
+    'fabs': abs,
+    'fma': gmpy2.fma,
+    'exp': gmpy2.exp,
+    'exp2': gmpy2.exp2,
+    'expm1': gmpy2.expm1,
+    'log': gmpy2.log,
+    'log10': gmpy2.log10,
+    'log2': gmpy2.log2,
+    'log1p': gmpy2.log1p,
+    'pow': operator.pow,
+    'sqrt': gmpy2.sqrt,
+    'cbrt': gmpy2.cbrt,
+    'hypot': gmpy2.hypot,
+    'sin': gmpy2.sin,
+    'cos': gmpy2.cos,
+    'tan': gmpy2.tan,
+    'asin': gmpy2.asin,
+    'acos': gmpy2.acos,
+    'atan': gmpy2.atan,
+    'atan2': gmpy2.atan2,
+    'sinh': gmpy2.sinh,
+    'cosh': gmpy2.cosh,
+    'tanh': gmpy2.tanh,
+    'asinh': gmpy2.asinh,
+    'acosh': gmpy2.acosh,
+    'atanh': gmpy2.atanh,
+    'erf': gmpy2.erf,
+    'erfc': gmpy2.erfc,
+    'tgamma': gmpy2.gamma,
+    'lgamma': lambda x: gmpy2.lgamma(x)[0],
+    'ceil': gmpy2.ceil,
+    'floor': gmpy2.floor,
+    'fmod': gmpy2.fmod,
+    'remainder': gmpy2.remainder,
+    'fmax': gmpy2.maxnum,
+    'fmin': gmpy2.minnum,
+    'copysign': gmpy2.copy_sign,
+    'trunc': gmpy2.trunc,
+    'round': gmpy2.round_away,
+    '<': variadic.lt,
+    '>': variadic.gt,
+    '<=': variadic.le,
+    '>=': variadic.ge,
+    '==': variadic.eq,
+    '!=': variadic.ne,
+    'and': variadic.and_,
+    'or': variadic.or_,
+    'not': operator.not_,
+    'isfinite': gmpy2.is_finite,
+    'isinf': gmpy2.is_infinite,
+    'isnan': gmpy2.is_nan,
+    'isnormal': gmpy2.is_regular,
+    'signbit': gmpy2.is_signed,
+    'cast': lambda x: x,
+}
+
+
+def env_mpfr(ctx: gmpy2.context) -> Ctx[Any]:
+    return {
+        'LN2': ctx.const_log2(),
+        'PI': ctx.const_pi(),
+        'PI_2': ctx.const_pi() / 2,
+        'PI_4': ctx.const_pi() / 4,
+        'INFINITY': gmpy2.inf(),
+        'NAN': gmpy2.nan(),
+        'TRUE': True,
+        'FALSE': False,
+    }

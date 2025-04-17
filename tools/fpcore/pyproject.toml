@@ -10,3 +10,6 @@ dependencies = [
     "lark",
     "more_itertools",
 ]
+
+[project.optional-dependencies]
+mpfr = ["gmpy2", "gmpy2-stubs"]

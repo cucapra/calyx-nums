@@ -12,7 +12,7 @@ Lib = dict[str, Callable[..., Num]]
 
 class Expr(ABC, Generic[Num]):
     @abstractmethod
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num: ...
+    def interp(self, ctx: Ctx[Num], lib: Lib[Num]) -> Num: ...
 
     @abstractmethod
     def __str__(self) -> str: ...
@@ -22,8 +22,8 @@ class Expr(ABC, Generic[Num]):
 class Symbol(Expr[Num]):
     id: str
 
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        return libm['cast'](context[self.id])
+    def interp(self, ctx: Ctx[Num], lib: Lib[Num]) -> Num:
+        return ctx[self.id]
 
     def __str__(self) -> str:
         return self.id
@@ -33,8 +33,8 @@ class Symbol(Expr[Num]):
 class Number(Expr[Num]):
     val: Num
 
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        return libm['cast'](self.val)
+    def interp(self, ctx: Ctx[Num], lib: Lib[Num]) -> Num:
+        return lib['cast'](self.val)
 
     def __str__(self) -> str:
         val = float(self.val)
@@ -47,10 +47,10 @@ class Operation(Expr[Num]):
     op: str
     args: list[Expr[Num]]
 
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        args = [arg.interp(context, libm) for arg in self.args]
+    def interp(self, ctx: Ctx[Num], lib: Lib[Num]) -> Num:
+        args = [arg.interp(ctx, lib) for arg in self.args]
 
-        return libm[self.op](*args)
+        return lib[self.op](*args)
 
     def __str__(self) -> str:
         args = ' '.join(map(str, self.args))
@@ -64,11 +64,11 @@ class If(Expr[Num]):
     true: Expr[Num]
     false: Expr[Num]
 
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        if self.cond.interp(context, libm):
-            return self.true.interp(context, libm)
+    def interp(self, ctx: Ctx[Num], lib: Lib[Num]) -> Num:
+        if self.cond.interp(ctx, lib):
+            return self.true.interp(ctx, lib)
         else:
-            return self.false.interp(context, libm)
+            return self.false.interp(ctx, lib)
 
     def __str__(self) -> str:
         return f'(if {self.cond} {self.true} {self.false})'
@@ -89,15 +89,15 @@ class Let(Expr[Num]):
     body: Expr[Num]
     seq: bool
 
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        scope = context.copy()
+    def interp(self, ctx: Ctx[Num], lib: Lib[Num]) -> Num:
+        scope = ctx.copy()
 
         for binder in self.binders:
-            inner = scope if self.seq else context
+            inner = scope if self.seq else ctx
 
-            scope[binder.var] = binder.expr.interp(inner, libm)
+            scope[binder.var] = binder.expr.interp(inner, lib)
 
-        return self.body.interp(scope, libm)
+        return self.body.interp(scope, lib)
 
     def __str__(self) -> str:
         binders = ' '.join(map(str, self.binders))
@@ -129,8 +129,8 @@ class Annotation(Expr[Num]):
     props: list[Property[Num]]
     body: Expr[Num]
 
-    def interp(self, context: Ctx[Num], libm: Lib[Num]) -> Num:
-        return self.body.interp(context, libm)
+    def interp(self, ctx: Ctx[Num], lib: Lib[Num]) -> Num:
+        return self.body.interp(ctx, lib)
 
     def __str__(self) -> str:
         props = ' '.join(map(str, self.props))
@@ -160,11 +160,11 @@ class FPCore(Generic[Num]):
     body: Expr[Num]
 
     def interp(
-        self, args: Iterable[Num], libm: Lib[Num], consts: Ctx[Num] = {}
+        self, args: Iterable[Num], lib: Lib[Num], env: Ctx[Num] = {}
     ) -> Num:
-        context = {arg.var: val for arg, val in zip(self.args, args)}
+        ctx = {arg.var: lib['cast'](val) for arg, val in zip(self.args, args)}
 
-        return self.body.interp(consts | context, libm)
+        return self.body.interp(env | ctx, lib)
 
     def __str__(self) -> str:
         name = self.name or ''
