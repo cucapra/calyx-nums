@@ -2,6 +2,7 @@
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::{DefaultHasher, Hasher};
 
 use malachite::num::arithmetic::traits::Sign;
 use malachite::{Natural, Rational};
@@ -12,10 +13,10 @@ pub use calyx_nums_macros::Mangle;
 /// a valid name in the IA-64 C++ ABI's name mangling scheme.
 macro_rules! mangle {
     ($name:expr, $($arg:expr),+ $(,)?) => {{
-        use $crate::utils::mangling::Mangle as _;
+        use $crate::utils::Mangle as _;
 
         let mut res = match $name {
-            name => format!("_Z{}{}I", name.len(), name),
+            name => ::std::format!("_Z{}{}I", name.len(), name),
         };
 
         $(
@@ -112,5 +113,20 @@ impl Mangle for Rational {
             self.numerator_ref(),
             self.denominator_ref(),
         )
+    }
+}
+
+#[derive(Clone, Copy, Mangle)]
+pub struct Hash(u64);
+
+impl Hash {
+    pub fn new<T>(data: &T) -> Hash
+    where
+        T: std::hash::Hash + ?Sized,
+    {
+        let mut hasher = DefaultHasher::new();
+        data.hash(&mut hasher);
+
+        Hash(hasher.finish())
     }
 }

@@ -2,7 +2,6 @@ mod builder;
 mod compile;
 mod components;
 mod libm;
-mod primitives;
 mod stdlib;
 
 use builder::IRBuilder;

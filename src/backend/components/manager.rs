@@ -4,6 +4,12 @@ use calyx_ir as ir;
 
 use crate::utils::Diagnostic;
 
+pub trait PrimitiveBuilder {
+    fn name(&self) -> ir::Id;
+
+    fn build(&self, name: ir::Id) -> Result<ir::Primitive, Diagnostic>;
+}
+
 pub trait ComponentBuilder {
     fn name(&self) -> ir::Id;
 
@@ -28,6 +34,20 @@ impl ComponentManager {
             components: Vec::new(),
             generated: HashSet::new(),
         }
+    }
+
+    pub fn get_primitive<B: PrimitiveBuilder>(
+        &mut self,
+        builder: &B,
+        lib: &mut ir::LibrarySignatures,
+    ) -> Result<ir::Id, Diagnostic> {
+        let name = builder.name();
+
+        if self.generated.insert(name) {
+            lib.add_inline_primitive(builder.build(name)?).set_source();
+        }
+
+        Ok(name)
     }
 
     pub fn get<B: ComponentBuilder>(

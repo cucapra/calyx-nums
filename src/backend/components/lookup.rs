@@ -1,17 +1,29 @@
-//! Coefficient lookup tables.
+//! Lookup tables.
 
 use std::{cmp, iter};
 
 use calyx_ir::{self as ir, build_assignments, structure};
+use malachite::num::basic::traits::Zero;
+use malachite::{Natural, Rational};
 
-use super::{ComponentBuilder, ComponentManager};
+use super::{ComponentBuilder, ComponentManager, Rom};
 use crate::approx::AddressSpec;
 use crate::backend::IRBuilder;
-use crate::backend::primitives::lut;
-use crate::fpcore::ast::{Rational, Span};
+use crate::fpcore::ast::Span;
 use crate::utils::mangling::{Mangle, mangle};
 use crate::utils::rational::FixedPoint;
 use crate::utils::{Diagnostic, Format};
+
+/// Packs a sequence of values into a single bit vector. The first element of
+/// the sequence occupies the most-significant position.
+fn pack<V, W>(values: V, widths: W) -> Natural
+where
+    V: IntoIterator<Item = Natural>,
+    W: IntoIterator<Item = u32>,
+{
+    iter::zip(values, widths)
+        .fold(Natural::ZERO, |acc, (value, width)| (acc << width) | value)
+}
 
 pub struct TableData<'a> {
     pub values: &'a [Vec<Rational>],
@@ -37,8 +49,9 @@ pub struct LookupTable<'a> {
 }
 
 impl LookupTable<'_> {
-    fn build_primitive(
+    fn build_rom(
         &self,
+        cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
     ) -> Result<ir::Id, Diagnostic> {
         let diagnostic = |value| {
@@ -50,7 +63,7 @@ impl LookupTable<'_> {
                 ))
         };
 
-        let values: Vec<_> = self
+        let data: Vec<_> = self
             .data
             .values
             .iter()
@@ -61,27 +74,18 @@ impl LookupTable<'_> {
                             .to_fixed_point(format)
                             .ok_or_else(|| diagnostic(value))
                     }),
-                    |bits| lut::pack(bits, self.data.widths()),
+                    |bits| pack(bits, self.data.widths()),
                 )
             })
             .collect::<Result<_, _>>()?;
 
-        let name = ir::Id::new(mangle!(
-            "lut",
-            self.data.spec,
-            self.data.formats,
-            self.format,
-            self.spec,
-        ));
+        let rom = Rom {
+            idx_width: self.spec.idx_width,
+            out_width: u64::from(self.data.width()),
+            data: &data,
+        };
 
-        let out_width = u64::from(self.data.width());
-
-        let primitive =
-            lut::compile_lut(name, self.spec.idx_width, out_width, &values);
-
-        lib.add_inline_primitive(primitive).set_source();
-
-        Ok(name)
+        cm.get_primitive(&rom, lib)
     }
 }
 
@@ -122,16 +126,16 @@ impl ComponentBuilder for LookupTable<'_> {
     fn build(
         &self,
         name: ir::Id,
-        _cm: &mut ComponentManager,
+        cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
     ) -> Result<ir::Component, Diagnostic> {
-        let lut = self.build_primitive(lib)?;
+        let rom = self.build_rom(cm, lib)?;
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, false, true, None);
         let mut builder = IRBuilder::new(&mut component, lib);
 
-        let primitive = builder.add_primitive("lut", lut, &[]);
+        let primitive = builder.add_primitive("rom", rom, &[]);
 
         let width_error = |_| {
             Diagnostic::error()
