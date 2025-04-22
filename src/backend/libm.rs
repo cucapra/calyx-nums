@@ -1,17 +1,11 @@
-//! Math library construction.
-
 use std::collections::HashMap;
 use std::slice;
 
 use calyx_ir as ir;
 
-use super::components::{
-    ComponentManager, LookupTable, PiecewisePoly, TableData,
-};
-
-use crate::analysis::{Context, NameResolution, PassManager, RangeAnalysis};
-use crate::approx::{AddressSpec, Datapath, TableDomain};
-use crate::approx::{faithful, remez};
+use super::components::{self, ComponentManager};
+use crate::analysis::{self as sem, Context, PassManager};
+use crate::approx::{AddressSpec, Datapath, TableDomain, faithful, remez};
 use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
 use crate::fpcore::{Visitor, ast, visitor};
 use crate::opts::RangeAnalysis as AnalysisMode;
@@ -25,40 +19,31 @@ pub struct Prototype {
     pub is_comb: bool,
 }
 
-pub struct MathLib {
-    pub components: Vec<ir::Component>,
-    pub prototypes: HashMap<ast::NodeId, Prototype>,
-}
+pub fn compile_math_library(
+    pm: &PassManager,
+    cm: &mut ComponentManager,
+    lib: &mut ir::LibrarySignatures,
+) -> Option<HashMap<ast::NodeId, Prototype>> {
+    let opts = pm.opts();
 
-impl MathLib {
-    pub fn new(
-        pm: &PassManager,
-        lib: &mut ir::LibrarySignatures,
-    ) -> Option<MathLib> {
-        let opts = pm.opts();
+    let ranges = match opts.range_analysis {
+        AnalysisMode::Interval => Some(pm.get_analysis()?),
+        AnalysisMode::None => None,
+    };
 
-        let ranges = match opts.range_analysis {
-            AnalysisMode::Interval => Some(pm.get_analysis()?),
-            AnalysisMode::None => None,
-        };
+    let mut builder = Builder {
+        format: &opts.format,
+        bindings: pm.get_analysis()?,
+        ranges,
+        reporter: &mut pm.rpt(),
+        cm,
+        lib,
+        prototypes: HashMap::new(),
+    };
 
-        let mut builder = Builder {
-            format: &opts.format,
-            bindings: pm.get_analysis()?,
-            ranges,
-            reporter: &mut pm.rpt(),
-            lib,
-            cm: ComponentManager::new(),
-            prototypes: HashMap::new(),
-        };
+    builder.visit_definitions(pm.ast()).ok()?;
 
-        builder.visit_definitions(pm.ast()).ok()?;
-
-        Some(MathLib {
-            components: builder.cm.into_components(),
-            prototypes: builder.prototypes,
-        })
-    }
+    Some(builder.prototypes)
 }
 
 #[derive(Debug)]
@@ -66,11 +51,11 @@ pub struct LibraryError;
 
 struct Builder<'b, 'ast> {
     format: &'b Format,
-    bindings: &'b NameResolution<'ast>,
-    ranges: Option<&'b RangeAnalysis>,
+    bindings: &'b sem::NameResolution<'ast>,
+    ranges: Option<&'b sem::RangeAnalysis>,
     reporter: &'b mut Reporter<'ast>,
+    cm: &'b mut ComponentManager,
     lib: &'b mut ir::LibrarySignatures,
-    cm: ComponentManager,
     prototypes: HashMap<ast::NodeId, Prototype>,
 }
 
@@ -178,7 +163,7 @@ impl<'b> Builder<'b, '_> {
         let values = &remez::build_table(op.kind, degree, domain, size, scale)
             .map_err(|err| Diagnostic::from_sollya_and_span(err, op.span))?;
 
-        let data = TableData {
+        let data = components::TableData {
             values,
             formats: slice::from_ref(self.format),
             spec: &TableSpec {
@@ -190,7 +175,7 @@ impl<'b> Builder<'b, '_> {
             },
         };
 
-        let builder = LookupTable {
+        let builder = components::LookupTable {
             data,
             format: self.format,
             spec,
@@ -233,7 +218,7 @@ impl<'b> Builder<'b, '_> {
         let datapath = Datapath::from_approx(&approx, degree, scale);
         let formats = &datapath.lut_formats();
 
-        let data = TableData {
+        let data = components::TableData {
             values: &approx.table,
             formats,
             spec: &TableSpec {
@@ -245,8 +230,8 @@ impl<'b> Builder<'b, '_> {
             },
         };
 
-        let builder = PiecewisePoly {
-            table: LookupTable {
+        let builder = components::PiecewisePoly {
+            table: components::LookupTable {
                 data,
                 format: self.format,
                 spec,

@@ -1,7 +1,7 @@
 //! Standard library primitive declarations.
 
 use std::ops::Index;
-use std::{array, iter, slice};
+use std::{array, iter};
 
 use smallvec::{SmallVec, smallvec};
 use strum::{EnumCount, VariantArray, VariantNames};
@@ -16,30 +16,26 @@ pub enum Parameters {
     FixedPoint,
 }
 
-pub struct Arguments<'a>(pub &'a [&'a str]);
+struct Arguments;
 
-impl Arguments<'_> {
-    pub const UNARY_DEFAULT: Self = Self(&["in"]);
+impl Arguments {
+    const UNARY_DEFAULT: &[&str] = &["in"];
 
-    pub const BINARY_DEFAULT: Self = Self(&["left", "right"]);
-
-    pub fn iter(&self) -> slice::Iter<'_, &'_ str> {
-        self.0.iter()
-    }
+    const BINARY_DEFAULT: &[&str] = &["left", "right"];
 }
 
 pub struct Signature<'a> {
-    pub args: Arguments<'a>,
+    pub args: &'a [&'a str],
     pub output: &'a str,
 }
 
 impl Signature<'_> {
-    pub const UNARY_DEFAULT: Self = Self {
+    const UNARY_DEFAULT: Self = Self {
         args: Arguments::UNARY_DEFAULT,
         output: "out",
     };
 
-    pub const BINARY_DEFAULT: Self = Self {
+    const BINARY_DEFAULT: Self = Self {
         args: Arguments::BINARY_DEFAULT,
         output: "out",
     };
@@ -555,6 +551,15 @@ impl ImportSet {
     pub fn paths(&self) -> impl Iterator<Item = &'static str> {
         iter::zip(Import::ALL, Import::PATHS).filter_map(|(&import, &path)| {
             self.contains(import).then_some(path)
+        })
+    }
+
+    pub fn paths_from<'a>(
+        &self,
+        paths: &'a ImportPaths,
+    ) -> impl Iterator<Item = &'a str> {
+        iter::zip(Import::ALL, &paths.paths).filter_map(|(&import, path)| {
+            self.contains(import).then_some(path.as_str())
         })
     }
 }

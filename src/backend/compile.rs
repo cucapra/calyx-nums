@@ -2,13 +2,12 @@ use std::collections::HashMap;
 use std::{io, iter, mem};
 
 use calyx_ir as ir;
-use calyx_utils::NameGenerator;
 use itertools::Itertools;
 
 use super::IRBuilder;
-use super::libm::{MathLib, Prototype};
-use super::stdlib::{Arguments, Primitive, Signature};
-use super::stdlib::{Import, ImportPaths, ImportSet, Importer};
+use super::components::{ComponentManager, Constant};
+use super::libm::{self, Prototype};
+use super::stdlib::{Import, ImportPaths, ImportSet, Importer, Primitive};
 use crate::analysis::{self as sem, Binding, PassManager};
 use crate::fpcore::ast;
 use crate::opts::Opts;
@@ -34,10 +33,8 @@ impl Program {
         paths: &ImportPaths,
         out: &mut W,
     ) -> io::Result<()> {
-        for &import in Import::ALL {
-            if self.imports.contains(import) {
-                writeln!(out, "import \"{}\";", paths[import])?;
-            }
+        for import in self.imports.paths_from(paths) {
+            writeln!(out, "import \"{}\";", import)?;
         }
 
         ir::Printer::write_context(&self.context, true, out)
@@ -68,9 +65,10 @@ struct ExpressionBuilder<'b, 'ast, 'comp> {
     format: &'b Format,
     bindings: &'b sem::NameResolution<'ast>,
     signatures: &'b HashMap<ast::Id, Prototype>,
+    math_lib: &'b HashMap<ast::NodeId, Prototype>,
     reporter: &'b mut Reporter<'ast>,
     importer: &'b mut Importer,
-    libm: &'b mut HashMap<ast::NodeId, Prototype>,
+    cm: &'b mut ComponentManager,
     builder: &'b mut IRBuilder<'comp>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
 }
@@ -79,7 +77,7 @@ impl ExpressionBuilder<'_, '_, '_> {
     fn compile_number(&mut self, num: &ast::Number) -> Option<Expression> {
         let rounded = (&num.value).round_convergent(self.format.lsb());
 
-        let Some(val) = rounded.to_fixed_point(self.format) else {
+        let Some(value) = rounded.to_fixed_point(self.format) else {
             self.reporter.emit(
                 &Diagnostic::error()
                     .with_message("overflow")
@@ -89,20 +87,25 @@ impl ExpressionBuilder<'_, '_, '_> {
             return None;
         };
 
-        let Ok(val) = u64::try_from(&val) else {
-            self.reporter.emit(
-                &Diagnostic::error()
-                    .with_message("code generation failed")
-                    .with_primary(num.span, "constant is too wide")
-                    .with_note(
-                        "calyx doesn't support constants wider than 64 bits",
-                    ),
-            );
+        let width = u64::from(self.format.width);
 
-            return None;
+        let cell = if let Ok(value) = u64::try_from(&value) {
+            self.builder.add_constant(value, width)
+        } else {
+            let constant = Constant {
+                width,
+                value: &value,
+            };
+
+            let constant = self
+                .cm
+                .get_primitive(&constant, self.builder.lib)
+                .inspect_err(|err| self.reporter.emit(err))
+                .ok()?;
+
+            self.builder.add_primitive("c", constant, &[])
         };
 
-        let cell = self.builder.add_constant(val, u64::from(self.format.width));
         let port = cell.borrow().get("out");
 
         Some(Expression::from_constant(port))
@@ -176,22 +179,18 @@ impl ExpressionBuilder<'_, '_, '_> {
         let control = IRBuilder::collapse(control, ir::Control::par);
 
         let mut reduce = |left, right, decl: &Primitive| {
-            let prim = self.builder.add_primitive(
+            let cell = self.builder.add_primitive(
                 decl.prefix_hint,
                 decl.name,
                 &decl.build_params(self.format),
             );
 
-            let out = prim.borrow().get("out");
+            let cell = cell.borrow();
 
-            let assigns =
-                [("left", left), ("right", right)].map(|(dst, src)| {
-                    ir::Assignment::new(prim.borrow().get(dst), src)
-                });
+            assignments.push(ir::Assignment::new(cell.get("left"), left));
+            assignments.push(ir::Assignment::new(cell.get("right"), right));
 
-            assignments.extend(assigns);
-
-            out
+            cell.get("out")
         };
 
         let args = match op {
@@ -247,7 +246,8 @@ impl ExpressionBuilder<'_, '_, '_> {
     fn compile_instantiated_operation(
         &mut self,
         cell: ir::RRC<ir::Cell>,
-        signature: &Signature,
+        input_ports: &[ir::Id],
+        output_port: ir::Id,
         is_comb: bool,
         args: &[ast::Expression],
     ) -> Option<Expression> {
@@ -265,18 +265,17 @@ impl ExpressionBuilder<'_, '_, '_> {
             .collect::<Option<_>>()?;
 
         let control = IRBuilder::collapse(control, ir::Control::par);
-        let out = cell.borrow().get(signature.output);
-
-        let inputs: Vec<_> =
-            signature.args.iter().map(ir::Id::new).zip(args).collect();
+        let out = cell.borrow().get(output_port);
 
         let control = if is_comb {
-            assignments.extend(inputs.into_iter().map(|(dst, src)| {
-                ir::Assignment::new(cell.borrow().get(dst), src)
-            }));
+            assignments.extend(iter::zip(input_ports, args).map(
+                |(dst, src)| ir::Assignment::new(cell.borrow().get(dst), src),
+            ));
 
             control
         } else {
+            let inputs = input_ports.iter().copied().zip(args).collect();
+
             let invoke = self.builder.invoke_with(
                 cell,
                 inputs,
@@ -305,9 +304,13 @@ impl ExpressionBuilder<'_, '_, '_> {
             &primitive.build_params(self.format),
         );
 
+        let inputs: Vec<_> =
+            primitive.signature.args.iter().map(ir::Id::new).collect();
+
         self.compile_instantiated_operation(
             cell,
-            &primitive.signature,
+            &inputs,
+            ir::Id::new(primitive.signature.output),
             primitive.is_comb,
             args,
         )
@@ -324,23 +327,18 @@ impl ExpressionBuilder<'_, '_, '_> {
             prototype.signature.clone(),
         );
 
-        let signature_args: Vec<_> = prototype
+        let inputs: Vec<_> = prototype
             .signature
             .iter()
             .filter_map(|port| {
-                (port.direction == ir::Direction::Input)
-                    .then_some(port.name().id.as_str())
+                (port.direction == ir::Direction::Input).then_some(port.name())
             })
             .collect();
 
-        let signature = Signature {
-            args: Arguments(&signature_args),
-            output: "out",
-        };
-
         self.compile_instantiated_operation(
             cell,
-            &signature,
+            &inputs,
+            ir::Id::new("out"),
             prototype.is_comb,
             args,
         )
@@ -352,9 +350,9 @@ impl ExpressionBuilder<'_, '_, '_> {
         uid: ast::NodeId,
         args: &[ast::Expression],
     ) -> Option<Expression> {
-        if let Some(prototype) = self.libm.remove(&uid) {
+        if let Some(prototype) = self.math_lib.get(&uid) {
             self.importer.import(Import::Numbers);
-            return self.compile_component_operation(&prototype, args);
+            return self.compile_component_operation(prototype, args);
         }
 
         match op.kind {
@@ -580,13 +578,40 @@ impl ExpressionBuilder<'_, '_, '_> {
     }
 }
 
+struct NameGenerator {
+    generated: usize,
+}
+
+impl NameGenerator {
+    fn new() -> NameGenerator {
+        NameGenerator { generated: 0 }
+    }
+
+    fn next(&mut self, bindings: &sem::NameResolution) -> ir::Id {
+        loop {
+            let name = if self.generated == 0 {
+                ir::Id::new("main")
+            } else {
+                ir::Id::new(format!("main{}", self.generated - 1))
+            };
+
+            self.generated += 1;
+
+            if !bindings.defs.contains_key(&name) {
+                break name;
+            }
+        }
+    }
+}
+
 struct GlobalContext<'c, 'ast> {
     format: &'c Format,
     bindings: &'c sem::NameResolution<'ast>,
+    math_lib: &'c HashMap<ast::NodeId, Prototype>,
     reporter: &'c mut Reporter<'ast>,
+    cm: &'c mut ComponentManager,
     lib: &'c mut ir::LibrarySignatures,
-    names: &'c mut NameGenerator,
-    libm: &'c mut HashMap<ast::NodeId, Prototype>,
+    names: NameGenerator,
     importer: Importer,
     signatures: HashMap<ast::Id, Prototype>,
 }
@@ -598,7 +623,7 @@ fn compile_definition(
     let name = def
         .name
         .as_ref()
-        .map_or_else(|| ctx.names.gen_name("main"), |sym| sym.id);
+        .map_or_else(|| ctx.names.next(ctx.bindings), |sym| sym.id);
 
     let ports = || {
         def.args
@@ -627,9 +652,10 @@ fn compile_definition(
         format: ctx.format,
         bindings: ctx.bindings,
         signatures: &ctx.signatures,
+        math_lib: ctx.math_lib,
         reporter: ctx.reporter,
         importer: &mut ctx.importer,
-        libm: ctx.libm,
+        cm: ctx.cm,
         builder: &mut builder,
         stores: HashMap::new(),
     };
@@ -668,41 +694,36 @@ pub fn compile_fpcore<'ast>(
     rpt: &mut Reporter<'ast>,
     mut lib: ir::LibrarySignatures,
 ) -> Option<Program> {
-    let mut names = NameGenerator::with_prev_defined_names(
-        defs.iter()
-            .filter_map(|def| def.name.as_ref().map(|sym| sym.id))
-            .collect(),
-    );
-
     let pm = PassManager::new(opts, defs, rpt);
 
     let _: &sem::TypeCheck = pm.get_analysis()?;
     let call_graph: &sem::CallGraph = pm.get_analysis()?;
 
-    let MathLib {
-        mut components,
-        mut prototypes,
-    } = MathLib::new(&pm, &mut lib)?;
+    let mut cm = ComponentManager::new();
+    let math_lib = libm::compile_math_library(&pm, &mut cm, &mut lib)?;
 
     let mut ctx = GlobalContext {
         format: &opts.format,
         bindings: pm.get_analysis()?,
+        math_lib: &math_lib,
         reporter: &mut pm.rpt(),
+        cm: &mut cm,
         lib: &mut lib,
-        names: &mut names,
-        libm: &mut prototypes,
+        names: NameGenerator::new(),
         importer: Importer::new(),
         signatures: HashMap::new(),
     };
 
     for def in &call_graph.linearized {
-        components.push(compile_definition(def, &mut ctx)?);
+        let component = compile_definition(def, &mut ctx)?;
+
+        ctx.cm.add(component);
     }
 
     Some(Program {
         imports: ctx.importer.into_imports(),
         context: ir::Context {
-            components,
+            components: cm.into_components(),
             lib,
             bc: Default::default(),
             entrypoint: ir::Id::new("main"),

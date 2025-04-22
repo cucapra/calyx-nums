@@ -4,6 +4,4 @@ mod primitives;
 
 pub use importer::Importer;
 pub use library::build_library;
-pub use primitives::{
-    Arguments, Import, ImportPaths, ImportSet, Primitive, Signature,
-};
+pub use primitives::{Import, ImportPaths, ImportSet, Primitive};

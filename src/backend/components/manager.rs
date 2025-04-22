@@ -66,6 +66,10 @@ impl ComponentManager {
         Ok((name, builder.signature()))
     }
 
+    pub fn add(&mut self, component: ir::Component) {
+        self.components.push(component);
+    }
+
     pub fn into_components(self) -> Vec<ir::Component> {
         self.components
     }

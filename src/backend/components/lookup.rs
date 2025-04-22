@@ -6,7 +6,7 @@ use calyx_ir::{self as ir, build_assignments, structure};
 use malachite::num::basic::traits::Zero;
 use malachite::{Natural, Rational};
 
-use super::{ComponentBuilder, ComponentManager, Rom};
+use super::{ComponentBuilder, ComponentManager, Constant, Rom};
 use crate::approx::AddressSpec;
 use crate::backend::IRBuilder;
 use crate::fpcore::ast::Span;
@@ -87,6 +87,19 @@ impl LookupTable<'_> {
 
         cm.get_primitive(&rom, lib)
     }
+
+    fn build_subtrahend(
+        &self,
+        cm: &mut ComponentManager,
+        lib: &mut ir::LibrarySignatures,
+    ) -> Result<ir::Id, Diagnostic> {
+        let constant = Constant {
+            width: u64::from(self.format.width),
+            value: &self.spec.subtrahend,
+        };
+
+        cm.get_primitive(&constant, lib)
+    }
 }
 
 impl ComponentBuilder for LookupTable<'_> {
@@ -135,17 +148,15 @@ impl ComponentBuilder for LookupTable<'_> {
         let mut component = ir::Component::new(name, ports, false, true, None);
         let mut builder = IRBuilder::new(&mut component, lib);
 
-        let primitive = builder.add_primitive("rom", rom, &[]);
-
-        let width_error = |_| {
-            Diagnostic::error()
-                .with_message("code generation failed")
-                .with_secondary(self.span, "while compiling this operator")
-                .with_note("calyx doesn't support constants wider than 64 bits")
-        };
-
+        let rom = builder.add_primitive("rom", rom, &[]);
         let global = u64::from(self.format.width);
-        let left = u64::try_from(&self.spec.subtrahend).map_err(width_error)?;
+
+        let left = if let Ok(value) = u64::try_from(&self.spec.subtrahend) {
+            builder.add_constant(value, global)
+        } else {
+            let primitive = self.build_subtrahend(cm, builder.lib)?;
+            builder.add_primitive("c", primitive, &[])
+        };
 
         structure!(builder;
             let sub = prim std_sub(global);
@@ -155,7 +166,6 @@ impl ComponentBuilder for LookupTable<'_> {
                 self.spec.idx_lsb + self.spec.idx_width - 1,
                 self.spec.idx_width
             );
-            let left = constant(left, global);
         );
 
         let [in_, out] = ["in", "out"].map(ir::Id::new);
@@ -165,8 +175,8 @@ impl ComponentBuilder for LookupTable<'_> {
             sub["left"] = ? signature[in_];
             sub["right"] = ? left[out];
             slice[in_] = ? sub[out];
-            primitive["idx"] = ? slice[out];
-            signature[out] = ? primitive[out];
+            rom["idx"] = ? slice[out];
+            signature[out] = ? rom[out];
         );
 
         builder.add_continuous_assignments(assigns);
