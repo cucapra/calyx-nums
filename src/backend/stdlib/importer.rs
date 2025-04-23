@@ -104,7 +104,18 @@ impl Importer {
     }
 
     pub fn neg(&mut self, _format: &Format) -> &'static Primitive<'static> {
-        let primitive = &primitives::numbers::NUM_NEG;
+        let primitive = &primitives::numbers::NUM_SNEG;
+
+        self.import(primitive.import);
+
+        primitive
+    }
+
+    pub fn abs(&mut self, format: &Format) -> &'static Primitive<'static> {
+        let primitive = match NumericType::from_format(format) {
+            UInt | UFixed => &primitives::compile::STD_WIRE,
+            SInt | SFixed => &primitives::numbers::NUM_SABS,
+        };
 
         self.import(primitive.import);
 
@@ -193,6 +204,28 @@ impl Importer {
         let primitive = match NumericType::from_format(format) {
             UInt | SInt => &primitives::math::STD_SQRT,
             UFixed | SFixed => &primitives::math::STD_FP_SQRT,
+        };
+
+        self.import(primitive.import);
+
+        primitive
+    }
+
+    pub fn min(&mut self, format: &Format) -> &'static Primitive<'static> {
+        let primitive = match NumericType::from_format(format) {
+            UInt | UFixed => &primitives::numbers::NUM_MIN,
+            SInt | SFixed => &primitives::numbers::NUM_SMIN,
+        };
+
+        self.import(primitive.import);
+
+        primitive
+    }
+
+    pub fn max(&mut self, format: &Format) -> &'static Primitive<'static> {
+        let primitive = match NumericType::from_format(format) {
+            UInt | UFixed => &primitives::numbers::NUM_MAX,
+            SInt | SFixed => &primitives::numbers::NUM_SMAX,
         };
 
         self.import(primitive.import);

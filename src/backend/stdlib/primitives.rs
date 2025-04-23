@@ -79,6 +79,15 @@ pub mod compile {
 
     pub const IMPORT: Import = Import::Compile;
 
+    pub const STD_WIRE: Primitive = Primitive {
+        name: "std_wire",
+        prefix_hint: "id",
+        signature: Signature::UNARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
+        import: IMPORT,
+    };
+
     pub const STD_ADD: Primitive = Primitive {
         name: "std_add",
         prefix_hint: "add",
@@ -487,9 +496,64 @@ pub mod numbers {
 
     pub const IMPORT: Import = Import::Numbers;
 
-    pub const NUM_NEG: Primitive = Primitive {
-        name: "num_neg",
+    pub const NUM_SNEG: Primitive = Primitive {
+        name: "num_sneg",
         prefix_hint: "neg",
+        signature: Signature::UNARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
+        import: IMPORT,
+    };
+
+    pub const NUM_SABS: Primitive = Primitive {
+        name: "num_sabs",
+        prefix_hint: "abs",
+        signature: Signature::UNARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
+        import: IMPORT,
+    };
+
+    pub const NUM_MIN: Primitive = Primitive {
+        name: "num_min",
+        prefix_hint: "min",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
+        import: IMPORT,
+    };
+
+    pub const NUM_MAX: Primitive = Primitive {
+        name: "num_max",
+        prefix_hint: "max",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
+        import: IMPORT,
+    };
+
+    pub const NUM_SMIN: Primitive = Primitive {
+        name: "num_smin",
+        prefix_hint: "min",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
+        import: IMPORT,
+    };
+
+    pub const NUM_SMAX: Primitive = Primitive {
+        name: "num_smax",
+        prefix_hint: "max",
+        signature: Signature::BINARY_DEFAULT,
+        params: Parameters::Integer,
+        is_comb: true,
+        import: IMPORT,
+    };
+
+    #[allow(dead_code)]
+    pub const NUM_SSIGNBIT: Primitive = Primitive {
+        name: "num_ssignbit",
+        prefix_hint: "sign",
         signature: Signature::UNARY_DEFAULT,
         params: Parameters::Integer,
         is_comb: true,

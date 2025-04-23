@@ -274,6 +274,7 @@ impl Visitor<'_> for Builder<'_, '_> {
                     ast::MathOp::Mul => ("*", true),
                     ast::MathOp::Div => ("/", true),
                     ast::MathOp::Neg => ("-", false),
+                    ast::MathOp::FAbs => ("abs", false),
                     _ => (
                         SollyaFunction::try_from(*op)
                             .map_err(|_| {

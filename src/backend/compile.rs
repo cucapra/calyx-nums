@@ -376,8 +376,20 @@ impl ExpressionBuilder<'_, '_, '_> {
                 let decl = self.importer.neg(self.format);
                 self.compile_primitive_operation(decl, args)
             }
+            ast::OpKind::Math(ast::MathOp::FAbs) => {
+                let decl = self.importer.abs(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
             ast::OpKind::Math(ast::MathOp::Sqrt) => {
                 let decl = self.importer.sqrt(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Math(ast::MathOp::FMax) => {
+                let decl = self.importer.max(self.format);
+                self.compile_primitive_operation(decl, args)
+            }
+            ast::OpKind::Math(ast::MathOp::FMin) => {
+                let decl = self.importer.min(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Test(ast::TestOp::Not) => {

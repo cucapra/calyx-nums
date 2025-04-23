@@ -296,7 +296,10 @@ impl ast::MathOp {
                 | ast::MathOp::Mul
                 | ast::MathOp::Div
                 | ast::MathOp::Neg
+                | ast::MathOp::FAbs
                 | ast::MathOp::Sqrt
+                | ast::MathOp::FMax
+                | ast::MathOp::FMin
         )
     }
 }

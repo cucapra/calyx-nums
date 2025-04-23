@@ -12,13 +12,71 @@ module num_rpad #(
   assign out = {in, {EXTEND{1'b0}}};
 endmodule
 
-module num_neg #(
+module num_sneg #(
     parameter int WIDTH = 32
 ) (
-    input  logic [WIDTH-1:0] in,
-    output logic [WIDTH-1:0] out
+    input  logic signed [WIDTH-1:0] in,
+    output logic signed [WIDTH-1:0] out
 );
   assign out = -in;
+endmodule
+
+module num_sabs #(
+    parameter int WIDTH = 32
+) (
+    input  logic signed [WIDTH-1:0] in,
+    output logic signed [WIDTH-1:0] out
+);
+  assign out = in[WIDTH-1] ? -in : in;
+endmodule
+
+module num_min #(
+    parameter int WIDTH = 32
+) (
+    input  logic [WIDTH-1:0] left,
+    input  logic [WIDTH-1:0] right,
+    output logic [WIDTH-1:0] out
+);
+  assign out = (left < right) ? left : right;
+endmodule
+
+module num_max #(
+    parameter int WIDTH = 32
+) (
+    input  logic [WIDTH-1:0] left,
+    input  logic [WIDTH-1:0] right,
+    output logic [WIDTH-1:0] out
+);
+  assign out = (left > right) ? left : right;
+endmodule
+
+module num_smin #(
+    parameter int WIDTH = 32
+) (
+    input  logic signed [WIDTH-1:0] left,
+    input  logic signed [WIDTH-1:0] right,
+    output logic signed [WIDTH-1:0] out
+);
+  assign out = (left < right) ? left : right;
+endmodule
+
+module num_smax #(
+    parameter int WIDTH = 32
+) (
+    input  logic signed [WIDTH-1:0] left,
+    input  logic signed [WIDTH-1:0] right,
+    output logic signed [WIDTH-1:0] out
+);
+  assign out = (left > right) ? left : right;
+endmodule
+
+module num_ssignbit #(
+    parameter int WIDTH = 32
+) (
+    input logic signed [WIDTH-1:0] in,
+    output logic out
+);
+  assign out = in[WIDTH-1];
 endmodule
 
 module num_sadd #(

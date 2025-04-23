@@ -3,9 +3,26 @@ extern "numbers.sv" {
     IN_WIDTH, OUT_WIDTH
   ](@data in: IN_WIDTH) -> (out: OUT_WIDTH);
 
-  comb primitive num_neg<"share"=1>[
+  comb primitive num_sneg<"share"=1>[WIDTH](@data in: WIDTH) -> (out: WIDTH);
+  comb primitive num_sabs<"share"=1>[WIDTH](@data in: WIDTH) -> (out: WIDTH);
+
+  comb primitive num_min<"share"=1>[
     WIDTH
-  ](@data in: WIDTH) -> (out: WIDTH);
+  ](@data left: WIDTH, @data right: WIDTH) -> (out: WIDTH);
+
+  comb primitive num_max<"share"=1>[
+    WIDTH
+  ](@data left: WIDTH, @data right: WIDTH) -> (out: WIDTH);
+
+  comb primitive num_smin<"share"=1>[
+    WIDTH
+  ](@data left: WIDTH, @data right: WIDTH) -> (out: WIDTH);
+
+  comb primitive num_smax<"share"=1>[
+    WIDTH
+  ](@data left: WIDTH, @data right: WIDTH) -> (out: WIDTH);
+
+  comb primitive num_ssignbit<"share"=1>[WIDTH](@data in: WIDTH) -> (out: 1);
 
   comb primitive num_sadd<"share"=1>[
     LEFT_WIDTH, LEFT_LSB, RIGHT_WIDTH, RIGHT_LSB, OUT_WIDTH
