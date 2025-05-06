@@ -208,6 +208,11 @@ impl<'a> IRBuilder<'a> {
             _ => f(statements),
         }
     }
+
+    #[inline]
+    pub fn clone_control(control: &ir::Control) -> ir::Control {
+        clone_control(control)
+    }
 }
 
 fn add_ports_to_cell<I>(cell: &ir::RRC<ir::Cell>, ports: I)
@@ -227,5 +232,157 @@ where
         });
 
         cell_ports.push(port);
+    }
+}
+
+fn clone_control(control: &ir::Control) -> ir::Control {
+    match control {
+        ir::Control::Seq(ir::Seq { stmts, attributes }) => {
+            ir::Control::Seq(ir::Seq {
+                stmts: stmts.iter().map(clone_control).collect(),
+                attributes: attributes.clone(),
+            })
+        }
+        ir::Control::Par(ir::Par { stmts, attributes }) => {
+            ir::Control::Par(ir::Par {
+                stmts: stmts.iter().map(clone_control).collect(),
+                attributes: attributes.clone(),
+            })
+        }
+        ir::Control::If(ir::If {
+            port,
+            cond,
+            tbranch,
+            fbranch,
+            attributes,
+        }) => ir::Control::If(ir::If {
+            port: port.clone(),
+            cond: cond.clone(),
+            tbranch: Box::new(clone_control(tbranch)),
+            fbranch: Box::new(clone_control(fbranch)),
+            attributes: attributes.clone(),
+        }),
+        ir::Control::While(ir::While {
+            port,
+            cond,
+            body,
+            attributes,
+        }) => ir::Control::While(ir::While {
+            port: port.clone(),
+            cond: cond.clone(),
+            body: Box::new(clone_control(body)),
+            attributes: attributes.clone(),
+        }),
+        ir::Control::Repeat(ir::Repeat {
+            attributes,
+            body,
+            num_repeats,
+        }) => ir::Control::Repeat(ir::Repeat {
+            attributes: attributes.clone(),
+            body: Box::new(clone_control(body)),
+            num_repeats: *num_repeats,
+        }),
+        ir::Control::Invoke(ir::Invoke {
+            comp,
+            inputs,
+            outputs,
+            attributes,
+            comb_group,
+            ref_cells,
+        }) => ir::Control::Invoke(ir::Invoke {
+            comp: comp.clone(),
+            inputs: inputs.clone(),
+            outputs: outputs.clone(),
+            attributes: attributes.clone(),
+            comb_group: comb_group.clone(),
+            ref_cells: ref_cells.clone(),
+        }),
+        ir::Control::Enable(ir::Enable { group, attributes }) => {
+            ir::Control::Enable(ir::Enable {
+                group: group.clone(),
+                attributes: attributes.clone(),
+            })
+        }
+        ir::Control::Empty(ir::Empty { attributes }) => {
+            ir::Control::Empty(ir::Empty {
+                attributes: attributes.clone(),
+            })
+        }
+        ir::Control::Static(control) => {
+            ir::Control::Static(clone_static_control(control))
+        }
+    }
+}
+
+fn clone_static_control(control: &ir::StaticControl) -> ir::StaticControl {
+    match control {
+        ir::StaticControl::Repeat(ir::StaticRepeat {
+            attributes,
+            body,
+            num_repeats,
+            latency,
+        }) => ir::StaticControl::Repeat(ir::StaticRepeat {
+            attributes: attributes.clone(),
+            body: Box::new(clone_static_control(body)),
+            num_repeats: *num_repeats,
+            latency: *latency,
+        }),
+        ir::StaticControl::Enable(ir::StaticEnable { group, attributes }) => {
+            ir::StaticControl::Enable(ir::StaticEnable {
+                group: group.clone(),
+                attributes: attributes.clone(),
+            })
+        }
+        ir::StaticControl::Par(ir::StaticPar {
+            stmts,
+            attributes,
+            latency,
+        }) => ir::StaticControl::Par(ir::StaticPar {
+            stmts: stmts.iter().map(clone_static_control).collect(),
+            attributes: attributes.clone(),
+            latency: *latency,
+        }),
+        ir::StaticControl::Seq(ir::StaticSeq {
+            stmts,
+            attributes,
+            latency,
+        }) => ir::StaticControl::Seq(ir::StaticSeq {
+            stmts: stmts.iter().map(clone_static_control).collect(),
+            attributes: attributes.clone(),
+            latency: *latency,
+        }),
+        ir::StaticControl::If(ir::StaticIf {
+            port,
+            latency,
+            tbranch,
+            fbranch,
+            attributes,
+        }) => ir::StaticControl::If(ir::StaticIf {
+            port: port.clone(),
+            latency: *latency,
+            tbranch: Box::new(clone_static_control(tbranch)),
+            fbranch: Box::new(clone_static_control(fbranch)),
+            attributes: attributes.clone(),
+        }),
+        ir::StaticControl::Empty(ir::Empty { attributes }) => {
+            ir::StaticControl::Empty(ir::Empty {
+                attributes: attributes.clone(),
+            })
+        }
+        ir::StaticControl::Invoke(ir::StaticInvoke {
+            comp,
+            latency,
+            inputs,
+            outputs,
+            attributes,
+            ref_cells,
+        }) => ir::StaticControl::Invoke(ir::StaticInvoke {
+            comp: comp.clone(),
+            latency: *latency,
+            inputs: inputs.clone(),
+            outputs: outputs.clone(),
+            attributes: attributes.clone(),
+            ref_cells: ref_cells.clone(),
+        }),
     }
 }

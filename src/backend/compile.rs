@@ -142,17 +142,13 @@ impl ExpressionBuilder<'_, '_, '_> {
     ) -> Expression {
         let port = match self.bindings.names[&uid] {
             Binding::Argument(_) => {
-                let signature = self.builder.component.signature.borrow();
-
-                signature.get(sym.id)
+                self.builder.component.signature.borrow().get(sym.id)
             }
             Binding::Let(binding) => {
-                let cell = &self.stores[&binding.expr.uid];
-                let port = cell.borrow().get("out");
-
-                port
+                self.stores[&binding.expr.uid].borrow().get("out")
             }
-            _ => unreachable!("pass rejects loops"),
+            Binding::Mut(var) => self.stores[&var.init.uid].borrow().get("out"),
+            Binding::Index(_) => unreachable!("pass rejects `for` expressions"),
         };
 
         Expression::from_constant(port)
@@ -424,7 +420,7 @@ impl ExpressionBuilder<'_, '_, '_> {
         let true_branch = self.compile_expression(true_branch)?;
         let false_branch = self.compile_expression(false_branch)?;
 
-        let params = [u64::from(self.format.width)];
+        let params = [true_branch.out.borrow().width];
 
         match (&true_branch.control, &false_branch.control) {
             (ir::Control::Empty(_), ir::Control::Empty(_)) => {
@@ -551,6 +547,103 @@ impl ExpressionBuilder<'_, '_, '_> {
         Some(Expression { control, ..body })
     }
 
+    fn compile_while(
+        &mut self,
+        cond: &ast::Expression,
+        vars: &[ast::MutableVar],
+        body: &ast::Expression,
+        sequential: bool,
+    ) -> Option<Expression> {
+        let (inits, init_stores): (Vec<_>, Vec<_>) = vars
+            .iter()
+            .map(|var| {
+                let init = self.compile_expression(&var.init)?;
+
+                let params = [init.out.borrow().width];
+                let reg = self.builder.add_primitive("r", "std_reg", &params);
+
+                let invoke = self.builder.invoke_with(
+                    reg.clone(),
+                    vec![(ir::Id::new("in"), init.out)],
+                    "init",
+                    init.assignments,
+                );
+
+                self.stores.insert(var.init.uid, reg);
+
+                Some((init.control, invoke))
+            })
+            .collect::<Option<_>>()?;
+
+        let cond = self.compile_expression(cond)?;
+        let body = self.compile_expression(body)?;
+
+        let (updates, update_stores): (Vec<_>, Vec<_>) = vars
+            .iter()
+            .map(|var| {
+                let update = self.compile_expression(&var.update)?;
+                let reg = self.stores[&var.init.uid].clone();
+
+                let invoke = self.builder.invoke_with(
+                    reg,
+                    vec![(ir::Id::new("in"), update.out)],
+                    "update",
+                    update.assignments,
+                );
+
+                Some((update.control, invoke))
+            })
+            .collect::<Option<_>>()?;
+
+        let group = self.builder.add_comb_group("cond", cond.assignments);
+
+        let control = if sequential {
+            IRBuilder::collapse(
+                itertools::interleave(inits, init_stores).chain([
+                    IRBuilder::clone_control(&cond.control),
+                    ir::Control::while_(
+                        cond.out,
+                        Some(group),
+                        Box::new(IRBuilder::collapse(
+                            itertools::interleave(updates, update_stores)
+                                .chain(iter::once(cond.control)),
+                            ir::Control::seq,
+                        )),
+                    ),
+                    body.control,
+                ]),
+                ir::Control::seq,
+            )
+        } else {
+            IRBuilder::collapse(
+                [
+                    IRBuilder::collapse(inits, ir::Control::par),
+                    IRBuilder::collapse(init_stores, ir::Control::par),
+                    IRBuilder::clone_control(&cond.control),
+                    ir::Control::while_(
+                        cond.out,
+                        Some(group),
+                        Box::new(IRBuilder::collapse(
+                            [
+                                IRBuilder::collapse(updates, ir::Control::par),
+                                IRBuilder::collapse(
+                                    update_stores,
+                                    ir::Control::par,
+                                ),
+                                cond.control,
+                            ],
+                            ir::Control::seq,
+                        )),
+                    ),
+                    body.control,
+                ],
+                ir::Control::seq,
+            )
+        };
+
+        Some(Expression { control, ..body })
+    }
+
     fn compile_expression(
         &mut self,
         expr: &ast::Expression,
@@ -574,6 +667,12 @@ impl ExpressionBuilder<'_, '_, '_> {
                 body,
                 sequential,
             } => self.compile_let(bindings, body, *sequential),
+            ast::ExprKind::While {
+                cond,
+                vars,
+                body,
+                sequential,
+            } => self.compile_while(cond, vars, body, *sequential),
             ast::ExprKind::Annotation { props: _, body } => {
                 self.compile_expression(body)
             }
