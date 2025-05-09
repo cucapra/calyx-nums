@@ -78,18 +78,7 @@ impl Builder<'_, '_> {
             },
             ast::ExprKind::Id(_) => match self.bindings.names[&expr.uid] {
                 Binding::Argument(arg) => {
-                    if !arg.dims.is_empty() {
-                        self.reporter.emit(
-                            &Diagnostic::error()
-                                .with_message("tensor arguments not supported")
-                                .with_primary(
-                                    arg.var.span,
-                                    "unsupported argument type",
-                                ),
-                        );
-
-                        return Err(TypeError);
-                    }
+                    assert!(arg.dims.is_empty());
 
                     Type::Number
                 }
@@ -209,56 +198,87 @@ impl Builder<'_, '_> {
             ast::ExprKind::While {
                 cond, vars, body, ..
             } => {
-                for var in vars {
-                    self.check_expression(&var.init)?;
-                }
-
-                for var in vars {
-                    let init_ty = self.types[&var.init.uid];
-                    let update_ty = self.check_expression(&var.update)?;
-
-                    if init_ty != update_ty {
-                        let init_label =
-                            format!("variable initialized to type `{init_ty}`");
-                        let update_label =
-                            format!("expected {init_ty}, found {update_ty}");
-
-                        self.reporter.emit(
-                            &Diagnostic::error()
-                                .with_message("mismatched types")
-                                .with_secondary(var.init.span, init_label)
-                                .with_primary(var.update.span, update_label),
-                        );
-
-                        return Err(TypeError);
-                    }
-                }
-
+                self.check_mutable_vars(vars)?;
                 self.expect(cond, Type::Boolean)?;
                 self.check_expression(body)?
+            }
+            ast::ExprKind::For {
+                indices,
+                vars,
+                body,
+                ..
+            } => {
+                for var in indices {
+                    self.expect(&var.size, Type::Number)?;
+                }
+
+                self.check_mutable_vars(vars)?;
+                self.check_expression(body)?
+            }
+            ast::ExprKind::Tensor { .. } | ast::ExprKind::TensorStar { .. } => {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("tensor expressions not supported")
+                        .with_primary(expr.span, "unsupported expression"),
+                );
+
+                return Err(TypeError);
             }
             ast::ExprKind::Cast(body) => {
                 self.expect(body, Type::Number)?;
 
                 Type::Number
             }
-            ast::ExprKind::Annotation { body, .. } => {
-                self.check_expression(body)?
-            }
-            _ => {
+            ast::ExprKind::Array(_) => {
                 self.reporter.emit(
                     &Diagnostic::error()
-                        .with_message("unsupported expression")
-                        .with_primary(expr.span, ""),
+                        .with_message("array expressions not supported")
+                        .with_primary(expr.span, "unsupported expression"),
                 );
 
                 return Err(TypeError);
+            }
+            ast::ExprKind::Annotation { body, .. } => {
+                self.check_expression(body)?
             }
         };
 
         self.types.insert(expr.uid, ty);
 
         Ok(ty)
+    }
+
+    fn check_mutable_vars(
+        &mut self,
+        vars: &[ast::MutableVar],
+    ) -> Result<(), TypeError> {
+        for var in vars {
+            self.check_expression(&var.init)?;
+        }
+
+        for var in vars {
+            let init_ty = self.types[&var.init.uid];
+            let update_ty = self.check_expression(&var.update)?;
+
+            if init_ty != update_ty {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("mismatched types")
+                        .with_secondary(
+                            var.init.span,
+                            format!("variable initialized to type `{init_ty}`"),
+                        )
+                        .with_primary(
+                            var.update.span,
+                            format!("expected {init_ty}, found {update_ty}"),
+                        ),
+                );
+
+                return Err(TypeError);
+            }
+        }
+
+        Ok(())
     }
 
     fn expect(

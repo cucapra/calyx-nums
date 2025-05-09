@@ -134,6 +134,19 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
         let mut scope = HashMap::with_capacity(def.args.len());
 
         for arg in &def.args {
+            if !arg.dims.is_empty() {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("tensor arguments not supported")
+                        .with_primary(
+                            arg.var.span,
+                            "unsupported argument type",
+                        ),
+                );
+
+                return Err(ResolutionError);
+            }
+
             scope.insert(arg.var.id, Binding::Argument(arg));
 
             for prop in &arg.props {
@@ -218,7 +231,6 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
 
                 self.scopes.push(scope);
                 self.visit_expression(body)?;
-
                 self.scopes.pop();
 
                 Ok(())
@@ -240,7 +252,6 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
                 }
 
                 self.visit_expression(body)?;
-
                 self.scopes.pop();
 
                 Ok(())
@@ -304,6 +315,101 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
 
                 Ok(())
             }
+            ast::ExprKind::For {
+                indices,
+                vars,
+                body,
+                sequential: false,
+            } => {
+                let mut scope =
+                    HashMap::with_capacity(indices.len() + vars.len());
+
+                for var in indices {
+                    self.visit_expression(&var.size)?;
+
+                    scope.insert(var.var.id, Binding::Index(var));
+                }
+
+                for var in vars {
+                    self.visit_expression(&var.init)?;
+
+                    scope.insert(var.var.id, Binding::Mut(var));
+                }
+
+                self.scopes.push(scope);
+
+                for var in vars {
+                    self.visit_expression(&var.update)?;
+                }
+
+                self.visit_expression(body)?;
+                self.scopes.pop();
+
+                Ok(())
+            }
+            ast::ExprKind::Tensor { indices, body } => {
+                let mut scope = HashMap::with_capacity(indices.len());
+
+                for var in indices {
+                    self.visit_expression(&var.size)?;
+
+                    scope.insert(var.var.id, Binding::Index(var));
+                }
+
+                self.scopes.push(scope);
+                self.visit_expression(body)?;
+                self.scopes.pop();
+
+                Ok(())
+            }
+            ast::ExprKind::For {
+                indices,
+                vars,
+                body,
+                sequential: true,
+            }
+            | ast::ExprKind::TensorStar {
+                indices,
+                vars,
+                body,
+            } => {
+                for var in indices {
+                    self.visit_expression(&var.size)?;
+                }
+
+                let bind_indices = |scope: &mut HashMap<_, _>| {
+                    for var in indices {
+                        scope.insert(var.var.id, Binding::Index(var));
+                    }
+                };
+
+                self.scopes.push(HashMap::new());
+
+                for var in vars {
+                    self.visit_expression(&var.init)?;
+
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert(var.var.id, Binding::Mut(var));
+                }
+
+                bind_indices(self.scopes.last_mut().unwrap());
+
+                for var in vars {
+                    self.visit_expression(&var.update)?;
+
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert(var.var.id, Binding::Mut(var));
+                }
+
+                self.visit_expression(body)?;
+                self.scopes.pop();
+
+                Ok(())
+            }
             ast::ExprKind::Cast(_) => visitor::visit_expression(self, expr),
             ast::ExprKind::Array(_) => visitor::visit_expression(self, expr),
             ast::ExprKind::Annotation { props, body } => {
@@ -315,15 +421,6 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
                 self.parent = old;
 
                 Ok(())
-            }
-            _ => {
-                self.reporter.emit(
-                    &Diagnostic::error()
-                        .with_message("unsupported expression")
-                        .with_primary(expr.span, ""),
-                );
-
-                Err(ResolutionError)
             }
         }
     }
