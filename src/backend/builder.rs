@@ -2,17 +2,17 @@
 
 use calyx_ir as ir;
 
-pub struct IRBuilder<'a> {
+pub struct IrBuilder<'a> {
     pub component: &'a mut ir::Component,
     pub lib: &'a mut ir::LibrarySignatures,
 }
 
-impl<'a> IRBuilder<'a> {
+impl<'a> IrBuilder<'a> {
     pub fn new(
         component: &'a mut ir::Component,
         lib: &'a mut ir::LibrarySignatures,
-    ) -> IRBuilder<'a> {
-        IRBuilder { component, lib }
+    ) -> IrBuilder<'a> {
+        IrBuilder { component, lib }
     }
 
     pub fn add_constant(
@@ -52,7 +52,7 @@ impl<'a> IRBuilder<'a> {
         S: Into<ir::Id>,
     {
         fn inner(
-            builder: &mut IRBuilder,
+            builder: &mut IrBuilder,
             prefix: ir::Id,
             assignments: Vec<ir::Assignment<ir::Nothing>>,
         ) -> ir::RRC<ir::CombGroup> {
@@ -76,7 +76,7 @@ impl<'a> IRBuilder<'a> {
         T: Into<ir::Id>,
     {
         fn inner(
-            builder: &mut IRBuilder,
+            builder: &mut IrBuilder,
             prefix: ir::Id,
             primitive: ir::Id,
             parameters: &[u64],
@@ -115,7 +115,7 @@ impl<'a> IRBuilder<'a> {
         T: Into<ir::Id>,
     {
         fn inner(
-            builder: &mut IRBuilder,
+            builder: &mut IrBuilder,
             prefix: ir::Id,
             component: ir::Id,
             ports: Vec<ir::PortDef<u64>>,

@@ -3,7 +3,7 @@
 use calyx_ir as ir;
 
 use super::{ComponentBuilder, ComponentManager};
-use crate::backend::IRBuilder;
+use crate::backend::IrBuilder;
 use crate::utils::mangling::mangle;
 use crate::utils::{Diagnostic, Format};
 
@@ -43,7 +43,7 @@ impl ComponentBuilder for Cast<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, false, true, None);
-        let mut builder = IRBuilder::new(&mut component, lib);
+        let mut builder = IrBuilder::new(&mut component, lib);
 
         let (msb_in, lsb_in) = self.from.vhdl();
         let (msb_out, lsb_out) = self.to.vhdl();

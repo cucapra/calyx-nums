@@ -4,7 +4,7 @@ use std::{io, iter, mem};
 use calyx_ir as ir;
 use itertools::Itertools;
 
-use super::IRBuilder;
+use super::IrBuilder;
 use super::components::{ComponentManager, Constant};
 use super::libm::{self, Prototype};
 use super::stdlib::{Import, ImportPaths, ImportSet, Importer, Primitive};
@@ -69,7 +69,7 @@ struct ExpressionBuilder<'b, 'ast, 'comp> {
     reporter: &'b mut Reporter<'ast>,
     importer: &'b mut Importer,
     cm: &'b mut ComponentManager,
-    builder: &'b mut IRBuilder<'comp>,
+    builder: &'b mut IrBuilder<'comp>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
 }
 
@@ -172,7 +172,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             })
             .collect::<Option<_>>()?;
 
-        let control = IRBuilder::collapse(control, ir::Control::par);
+        let control = IrBuilder::collapse(control, ir::Control::par);
 
         let mut reduce = |left, right, decl: &Primitive| {
             let cell = self.builder.add_primitive(
@@ -260,7 +260,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             })
             .collect::<Option<_>>()?;
 
-        let control = IRBuilder::collapse(control, ir::Control::par);
+        let control = IrBuilder::collapse(control, ir::Control::par);
         let out = cell.borrow().get(output_port);
 
         let control = if is_comb {
@@ -279,7 +279,7 @@ impl ExpressionBuilder<'_, '_, '_> {
                 mem::take(&mut assignments),
             );
 
-            IRBuilder::collapse([control, invoke], ir::Control::seq)
+            IrBuilder::collapse([control, invoke], ir::Control::seq)
         };
 
         Some(Expression {
@@ -474,17 +474,17 @@ impl ExpressionBuilder<'_, '_, '_> {
                 let conditional = ir::Control::if_(
                     cond.out,
                     Some(group),
-                    Box::new(IRBuilder::collapse(
+                    Box::new(IrBuilder::collapse(
                         [true_branch.control, store_true],
                         ir::Control::seq,
                     )),
-                    Box::new(IRBuilder::collapse(
+                    Box::new(IrBuilder::collapse(
                         [false_branch.control, store_false],
                         ir::Control::seq,
                     )),
                 );
 
-                let control = IRBuilder::collapse(
+                let control = IrBuilder::collapse(
                     [cond.control, conditional],
                     ir::Control::seq,
                 );
@@ -528,16 +528,16 @@ impl ExpressionBuilder<'_, '_, '_> {
         let body = self.compile_expression(body)?;
 
         let control = if sequential {
-            IRBuilder::collapse(
+            IrBuilder::collapse(
                 itertools::interleave(args, stores)
                     .chain(iter::once(body.control)),
                 ir::Control::seq,
             )
         } else {
-            IRBuilder::collapse(
+            IrBuilder::collapse(
                 [
-                    IRBuilder::collapse(args, ir::Control::par),
-                    IRBuilder::collapse(stores, ir::Control::par),
+                    IrBuilder::collapse(args, ir::Control::par),
+                    IrBuilder::collapse(stores, ir::Control::par),
                     body.control,
                 ],
                 ir::Control::seq,
@@ -598,13 +598,13 @@ impl ExpressionBuilder<'_, '_, '_> {
         let group = self.builder.add_comb_group("cond", cond.assignments);
 
         let control = if sequential {
-            IRBuilder::collapse(
+            IrBuilder::collapse(
                 itertools::interleave(inits, init_stores).chain([
-                    IRBuilder::clone_control(&cond.control),
+                    IrBuilder::clone_control(&cond.control),
                     ir::Control::while_(
                         cond.out,
                         Some(group),
-                        Box::new(IRBuilder::collapse(
+                        Box::new(IrBuilder::collapse(
                             itertools::interleave(updates, update_stores)
                                 .chain(iter::once(cond.control)),
                             ir::Control::seq,
@@ -615,18 +615,18 @@ impl ExpressionBuilder<'_, '_, '_> {
                 ir::Control::seq,
             )
         } else {
-            IRBuilder::collapse(
+            IrBuilder::collapse(
                 [
-                    IRBuilder::collapse(inits, ir::Control::par),
-                    IRBuilder::collapse(init_stores, ir::Control::par),
-                    IRBuilder::clone_control(&cond.control),
+                    IrBuilder::collapse(inits, ir::Control::par),
+                    IrBuilder::collapse(init_stores, ir::Control::par),
+                    IrBuilder::clone_control(&cond.control),
                     ir::Control::while_(
                         cond.out,
                         Some(group),
-                        Box::new(IRBuilder::collapse(
+                        Box::new(IrBuilder::collapse(
                             [
-                                IRBuilder::collapse(updates, ir::Control::par),
-                                IRBuilder::collapse(
+                                IrBuilder::collapse(updates, ir::Control::par),
+                                IrBuilder::collapse(
                                     update_stores,
                                     ir::Control::par,
                                 ),
@@ -757,7 +757,7 @@ fn compile_definition(
     };
 
     let mut component = ir::Component::new(name, ports(), false, false, None);
-    let mut builder = IRBuilder::new(&mut component, ctx.lib);
+    let mut builder = IrBuilder::new(&mut component, ctx.lib);
 
     let mut expr_builder = ExpressionBuilder {
         format: ctx.format,

@@ -8,7 +8,7 @@ use malachite::{Natural, Rational};
 
 use super::{ComponentBuilder, ComponentManager, Constant, Rom};
 use crate::approx::AddressSpec;
-use crate::backend::IRBuilder;
+use crate::backend::IrBuilder;
 use crate::fpcore::ast::Span;
 use crate::utils::mangling::{Mangle, mangle};
 use crate::utils::rational::FixedPoint;
@@ -146,7 +146,7 @@ impl ComponentBuilder for LookupTable<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, false, true, None);
-        let mut builder = IRBuilder::new(&mut component, lib);
+        let mut builder = IrBuilder::new(&mut component, lib);
 
         let rom = builder.add_primitive("rom", rom, &[]);
         let global = u64::from(self.format.width);

@@ -6,7 +6,7 @@ use calyx_ir::{self as ir, build_assignments};
 
 use super::{ComponentBuilder, ComponentManager, Horner, LookupTable};
 use crate::approx::Datapath;
-use crate::backend::IRBuilder;
+use crate::backend::IrBuilder;
 use crate::utils::diagnostics::Diagnostic;
 use crate::utils::mangling::mangle;
 
@@ -65,7 +65,7 @@ impl ComponentBuilder for PiecewisePoly<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);
-        let mut builder = IRBuilder::new(&mut component, lib);
+        let mut builder = IrBuilder::new(&mut component, lib);
 
         let lookup = builder.add_component("lookup", lookup, lookup_ports);
         let horner = builder.add_component("horner", horner, horner_ports);

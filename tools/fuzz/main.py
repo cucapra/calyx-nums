@@ -29,7 +29,7 @@ def run(
     sim: Simulator,
 ) -> int:
     with TemporaryDirectory() as tmp:
-        file = Path(tmp, 'data.json')
+        file = Path(tmp, 'data.dat')
 
         with file.open('w') as f:
             print(*(format(val.bits, 'x') for val in vals), file=f)

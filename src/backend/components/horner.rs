@@ -7,7 +7,7 @@ use itertools::{Itertools, Position};
 
 use super::{Cast, ComponentBuilder, ComponentManager};
 use crate::approx::Datapath;
-use crate::backend::IRBuilder;
+use crate::backend::IrBuilder;
 use crate::utils::mangling::mangle;
 use crate::utils::{Diagnostic, Format};
 
@@ -125,7 +125,7 @@ impl ComponentBuilder for Horner<'_> {
         let ports = self.signature();
 
         let mut component = ir::Component::new(name, ports, true, false, None);
-        let mut builder = IRBuilder::new(&mut component, lib);
+        let mut builder = IrBuilder::new(&mut component, lib);
 
         assert!(self.spec.sum_scale <= self.spec.lut_scale);
 
