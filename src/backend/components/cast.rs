@@ -3,7 +3,7 @@
 use calyx_ir as ir;
 
 use super::{ComponentBuilder, ComponentManager};
-use crate::backend::IrBuilder;
+use crate::backend::{Import, IrBuilder};
 use crate::utils::mangling::mangle;
 use crate::utils::{Diagnostic, Format};
 
@@ -37,7 +37,7 @@ impl ComponentBuilder for Cast<'_> {
     fn build(
         &self,
         name: ir::Id,
-        _cm: &mut ComponentManager,
+        cm: &mut ComponentManager,
         lib: &mut ir::LibrarySignatures,
     ) -> Result<ir::Component, Diagnostic> {
         let ports = self.signature();
@@ -55,6 +55,8 @@ impl ComponentBuilder for Cast<'_> {
             let out_width = in_width + msb_out.abs_diff(msb_in);
 
             let (prefix, prim) = if self.from.is_signed {
+                cm.import(Import::BinaryOperators);
+
                 ("ext", "std_signext")
             } else {
                 ("pad", "std_pad")
@@ -78,6 +80,8 @@ impl ComponentBuilder for Cast<'_> {
         };
 
         let (cell, port, width) = if lsb_out < lsb_in {
+            cm.import(Import::Numbers);
+
             let in_width = width;
             let out_width = in_width + lsb_in.abs_diff(lsb_out);
 

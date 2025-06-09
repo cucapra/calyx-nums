@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use calyx_ir as ir;
 
+use crate::backend::stdlib::{Import, Importer};
 use crate::utils::Diagnostic;
 
 pub trait PrimitiveBuilder {
@@ -24,16 +25,22 @@ pub trait ComponentBuilder {
 }
 
 pub struct ComponentManager {
-    components: Vec<ir::Component>,
+    pub importer: Importer,
+    pub components: Vec<ir::Component>,
     generated: HashSet<ir::Id>,
 }
 
 impl ComponentManager {
     pub fn new() -> ComponentManager {
         ComponentManager {
+            importer: Importer::new(),
             components: Vec::new(),
             generated: HashSet::new(),
         }
+    }
+
+    pub fn import(&mut self, file: Import) {
+        self.importer.import(file);
     }
 
     pub fn get_primitive<B: PrimitiveBuilder>(
@@ -64,13 +71,5 @@ impl ComponentManager {
         }
 
         Ok((name, builder.signature()))
-    }
-
-    pub fn add(&mut self, component: ir::Component) {
-        self.components.push(component);
-    }
-
-    pub fn into_components(self) -> Vec<ir::Component> {
-        self.components
     }
 }

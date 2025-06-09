@@ -1,4 +1,4 @@
-use super::primitives::{self, Import, ImportSet, Primitive};
+use super::{Import, ImportSet, Primitive, primitives};
 use crate::utils::Format;
 
 use NumericType::{SFixed, SInt, UFixed, UInt};

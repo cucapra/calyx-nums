@@ -7,7 +7,7 @@ use itertools::{Itertools, Position};
 
 use super::{Cast, ComponentBuilder, ComponentManager};
 use crate::approx::Datapath;
-use crate::backend::IrBuilder;
+use crate::backend::{Import, IrBuilder};
 use crate::utils::mangling::mangle;
 use crate::utils::{Diagnostic, Format};
 
@@ -128,6 +128,8 @@ impl ComponentBuilder for Horner<'_> {
         let mut builder = IrBuilder::new(&mut component, lib);
 
         assert!(self.spec.sum_scale <= self.spec.lut_scale);
+
+        cm.import(Import::Numbers);
 
         structure!(builder;
             let acc = prim std_reg(u64::from(self.spec.sum_width));

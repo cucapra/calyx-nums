@@ -7,7 +7,7 @@ use itertools::Itertools;
 use super::IrBuilder;
 use super::components::{ComponentManager, Constant};
 use super::libm::{self, Prototype};
-use super::stdlib::{Import, ImportPaths, ImportSet, Importer, Primitive};
+use super::stdlib::{ImportPaths, ImportSet, Primitive};
 use crate::analysis::{self as sem, Binding, PassManager};
 use crate::fpcore::ast;
 use crate::opts::Opts;
@@ -67,7 +67,6 @@ struct ExpressionBuilder<'b, 'ast, 'comp> {
     signatures: &'b HashMap<ast::Id, Prototype>,
     math_lib: &'b HashMap<ast::NodeId, Prototype>,
     reporter: &'b mut Reporter<'ast>,
-    importer: &'b mut Importer,
     cm: &'b mut ComponentManager,
     builder: &'b mut IrBuilder<'comp>,
     stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
@@ -196,11 +195,11 @@ impl ExpressionBuilder<'_, '_, '_> {
             | ast::TestOp::Geq
             | ast::TestOp::Eq => {
                 let decl = match op {
-                    ast::TestOp::Lt => self.importer.lt(self.format),
-                    ast::TestOp::Gt => self.importer.gt(self.format),
-                    ast::TestOp::Leq => self.importer.le(self.format),
-                    ast::TestOp::Geq => self.importer.ge(self.format),
-                    ast::TestOp::Eq => self.importer.eq(self.format),
+                    ast::TestOp::Lt => self.cm.importer.lt(self.format),
+                    ast::TestOp::Gt => self.cm.importer.gt(self.format),
+                    ast::TestOp::Leq => self.cm.importer.le(self.format),
+                    ast::TestOp::Geq => self.cm.importer.ge(self.format),
+                    ast::TestOp::Eq => self.cm.importer.eq(self.format),
                     _ => unreachable!(),
                 };
 
@@ -210,7 +209,7 @@ impl ExpressionBuilder<'_, '_, '_> {
                     .collect()
             }
             ast::TestOp::Neq => {
-                let decl = self.importer.neq(self.format);
+                let decl = self.cm.importer.neq(self.format);
 
                 args.into_iter()
                     .tuple_combinations()
@@ -222,9 +221,9 @@ impl ExpressionBuilder<'_, '_, '_> {
         };
 
         let decl = if matches!(op, ast::TestOp::Or) {
-            self.importer.or()
+            self.cm.importer.or()
         } else {
-            self.importer.and()
+            self.cm.importer.and()
         };
 
         let out = args
@@ -347,49 +346,48 @@ impl ExpressionBuilder<'_, '_, '_> {
         args: &[ast::Expression],
     ) -> Option<Expression> {
         if let Some(prototype) = self.math_lib.get(&uid) {
-            self.importer.import(Import::Numbers);
             return self.compile_component_operation(prototype, args);
         }
 
         match op.kind {
             ast::OpKind::Math(ast::MathOp::Add) => {
-                let decl = self.importer.add(self.format);
+                let decl = self.cm.importer.add(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::Sub) => {
-                let decl = self.importer.sub(self.format);
+                let decl = self.cm.importer.sub(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::Mul) => {
-                let decl = self.importer.mul(self.format);
+                let decl = self.cm.importer.mul(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::Div) => {
-                let decl = self.importer.div(self.format);
+                let decl = self.cm.importer.div(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::Neg) => {
-                let decl = self.importer.neg(self.format);
+                let decl = self.cm.importer.neg(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::FAbs) => {
-                let decl = self.importer.abs(self.format);
+                let decl = self.cm.importer.abs(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::Sqrt) => {
-                let decl = self.importer.sqrt(self.format);
+                let decl = self.cm.importer.sqrt(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::FMax) => {
-                let decl = self.importer.max(self.format);
+                let decl = self.cm.importer.max(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Math(ast::MathOp::FMin) => {
-                let decl = self.importer.min(self.format);
+                let decl = self.cm.importer.min(self.format);
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Test(ast::TestOp::Not) => {
-                let decl = self.importer.not();
+                let decl = self.cm.importer.not();
                 self.compile_primitive_operation(decl, args)
             }
             ast::OpKind::Test(op) if op.is_variadic() => {
@@ -723,7 +721,6 @@ struct GlobalContext<'c, 'ast> {
     cm: &'c mut ComponentManager,
     lib: &'c mut ir::LibrarySignatures,
     names: NameGenerator,
-    importer: Importer,
     signatures: HashMap<ast::Id, Prototype>,
 }
 
@@ -765,7 +762,6 @@ fn compile_definition(
         signatures: &ctx.signatures,
         math_lib: ctx.math_lib,
         reporter: ctx.reporter,
-        importer: &mut ctx.importer,
         cm: ctx.cm,
         builder: &mut builder,
         stores: HashMap::new(),
@@ -821,20 +817,19 @@ pub fn compile_fpcore<'ast>(
         cm: &mut cm,
         lib: &mut lib,
         names: NameGenerator::new(),
-        importer: Importer::new(),
         signatures: HashMap::new(),
     };
 
     for def in &call_graph.linearized {
         let component = compile_definition(def, &mut ctx)?;
 
-        ctx.cm.add(component);
+        ctx.cm.components.push(component);
     }
 
     Some(Program {
-        imports: ctx.importer.into_imports(),
+        imports: cm.importer.into_imports(),
         context: ir::Context {
-            components: cm.into_components(),
+            components: cm.components,
             lib,
             bc: Default::default(),
             entrypoint: ir::Id::new("main"),
