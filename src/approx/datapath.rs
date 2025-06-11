@@ -34,7 +34,7 @@ impl Datapath {
         let HornerRanges {
             product_width,
             sum_width,
-        } = HornerRanges::from_table(&approx.table, sum_scale);
+        } = HornerRanges::from_table(&approx.table, sum_scale, scale);
 
         Datapath {
             lut_widths,
@@ -100,7 +100,11 @@ pub struct HornerRanges {
 }
 
 impl HornerRanges {
-    pub fn from_table(table: &[Vec<Rational>], scale: i32) -> HornerRanges {
+    pub fn from_table(
+        table: &[Vec<Rational>],
+        sum_scale: i32,
+        out_scale: i32,
+    ) -> HornerRanges {
         let init = HornerRanges {
             product_width: 1,
             sum_width: 1,
@@ -110,7 +114,7 @@ impl HornerRanges {
             let HornerRanges {
                 product_width,
                 sum_width,
-            } = HornerRanges::from_poly(poly, scale);
+            } = HornerRanges::from_poly(poly, sum_scale, out_scale);
 
             HornerRanges {
                 product_width: cmp::max(max.product_width, product_width),
@@ -120,11 +124,15 @@ impl HornerRanges {
     }
 
     // See `computeHornerMSBs` (de Dinechin, 2015).
-    fn from_poly(poly: &[Rational], scale: i32) -> HornerRanges {
+    fn from_poly(
+        poly: &[Rational],
+        sum_scale: i32,
+        out_scale: i32,
+    ) -> HornerRanges {
         let (last, rest) = poly.split_last().unwrap();
 
         let mut product_width = 0;
-        let mut sum_width = signed_width(last, scale);
+        let mut sum_width = signed_width(last, sum_scale);
 
         let mut sigma = Interval::from(last);
 
@@ -133,19 +141,21 @@ impl HornerRanges {
                 Interval::new(Rational::NEGATIVE_ONE, Rational::ONE) * sigma;
 
             product_width = product_width
-                .max(signed_width(&pi.inf, scale))
-                .max(signed_width(&pi.sup, scale));
+                .max(signed_width(&pi.inf, sum_scale))
+                .max(signed_width(&pi.sup, sum_scale));
 
             sigma = Interval::from(value) + pi;
 
             sum_width = sum_width
-                .max(signed_width(&sigma.inf, scale))
-                .max(signed_width(&sigma.sup, scale));
+                .max(signed_width(&sigma.inf, sum_scale))
+                .max(signed_width(&sigma.sup, sum_scale));
         }
+
+        let sup = sigma.sup + Rational::power_of_2(i64::from(out_scale) - 1);
 
         HornerRanges {
             product_width,
-            sum_width,
+            sum_width: cmp::max(sum_width, signed_width(&sup, sum_scale)),
         }
     }
 }

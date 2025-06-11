@@ -4,6 +4,8 @@ use std::iter;
 
 use calyx_ir::{self as ir, build_assignments, structure};
 use itertools::{Itertools, Position};
+use malachite::Natural;
+use malachite::num::basic::traits::One;
 
 use super::{Cast, ComponentBuilder, ComponentManager};
 use crate::approx::Datapath;
@@ -127,9 +129,9 @@ impl ComponentBuilder for Horner<'_> {
         let mut component = ir::Component::new(name, ports, true, false, None);
         let mut builder = IrBuilder::new(&mut component, lib);
 
-        assert!(self.spec.sum_scale <= self.spec.lut_scale);
-
         cm.import(Import::Numbers);
+
+        assert!(self.spec.sum_scale <= self.spec.lut_scale);
 
         structure!(builder;
             let acc = prim std_reg(u64::from(self.spec.sum_width));
@@ -146,6 +148,13 @@ impl ComponentBuilder for Horner<'_> {
                 0u64,
                 u64::from(self.spec.sum_width)
             );
+            let round = prim std_add(u64::from(self.spec.sum_width));
+        );
+
+        let bias = builder.big_constant(
+            &(Natural::ONE << (self.format.scale - self.spec.sum_scale - 1)),
+            u64::from(self.spec.sum_width),
+            cm,
         );
 
         let lut_width: u32 = self.spec.lut_widths.iter().sum();
@@ -208,17 +217,29 @@ impl ComponentBuilder for Horner<'_> {
 
         let sums: Vec<_> = addends
             .iter()
-            .map(|addend| {
-                let assigns = build_assignments!(builder;
+            .with_position()
+            .map(|(pos, addend)| {
+                let mut assigns = Vec::from(build_assignments!(builder;
                     add[left] = ? addend[out];
                     add[right] = ? mul[out];
-                );
+                ));
+
+                let cell = if matches!(pos, Position::Last | Position::Only) {
+                    assigns.extend(build_assignments!(builder;
+                        round[left] = ? add[out];
+                        round[right] = ? bias[out];
+                    ));
+
+                    &round
+                } else {
+                    &add
+                };
 
                 builder.invoke_with(
                     acc.clone(),
-                    vec![(in_, add.borrow().get(out))],
+                    vec![(in_, cell.borrow().get(out))],
                     "addend",
-                    assigns.to_vec(),
+                    assigns,
                 )
             })
             .collect();
