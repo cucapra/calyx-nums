@@ -6,7 +6,7 @@ use calyx_ir::{self as ir, build_assignments, structure};
 use malachite::num::basic::traits::Zero;
 use malachite::{Natural, Rational};
 
-use super::{ComponentBuilder, ComponentManager, Constant, Rom};
+use super::{ComponentBuilder, ComponentManager, Rom};
 use crate::approx::AddressSpec;
 use crate::backend::IrBuilder;
 use crate::fpcore::ast::Span;
@@ -87,19 +87,6 @@ impl LookupTable<'_> {
 
         cm.get_primitive(&rom, lib)
     }
-
-    fn build_subtrahend(
-        &self,
-        cm: &mut ComponentManager,
-        lib: &mut ir::LibrarySignatures,
-    ) -> Result<ir::Id, Diagnostic> {
-        let constant = Constant {
-            width: u64::from(self.format.width),
-            value: &self.spec.subtrahend,
-        };
-
-        cm.get_primitive(&constant, lib)
-    }
 }
 
 impl ComponentBuilder for LookupTable<'_> {
@@ -148,15 +135,10 @@ impl ComponentBuilder for LookupTable<'_> {
         let mut component = ir::Component::new(name, ports, false, true, None);
         let mut builder = IrBuilder::new(&mut component, lib);
 
-        let rom = builder.add_primitive("rom", rom, &[]);
         let global = u64::from(self.format.width);
 
-        let left = if let Ok(value) = u64::try_from(&self.spec.subtrahend) {
-            builder.add_constant(value, global)
-        } else {
-            let primitive = self.build_subtrahend(cm, builder.lib)?;
-            builder.add_primitive("c", primitive, &[])
-        };
+        let rom = builder.add_primitive("rom", rom, &[]);
+        let left = builder.big_constant(&self.spec.subtrahend, global, cm);
 
         structure!(builder;
             let sub = prim std_sub(global);

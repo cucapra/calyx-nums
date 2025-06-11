@@ -1,6 +1,9 @@
 //! IR builder based on [`calyx_ir::Builder`].
 
 use calyx_ir as ir;
+use malachite::Natural;
+
+use super::components::{ComponentManager, Constant};
 
 pub struct IrBuilder<'a> {
     pub component: &'a mut ir::Component,
@@ -162,6 +165,24 @@ impl<'a> IrBuilder<'a> {
             src,
             guard: Box::new(guard),
             attributes: Default::default(),
+        }
+    }
+
+    pub fn big_constant(
+        &mut self,
+        value: &Natural,
+        width: u64,
+        cm: &mut ComponentManager,
+    ) -> ir::RRC<ir::Cell> {
+        if let Ok(value) = u64::try_from(value) {
+            self.add_constant(value, width)
+        } else {
+            let primitive = cm
+                .get_primitive(&Constant { width, value }, self.lib)
+                .ok()
+                .unwrap();
+
+            self.add_primitive("c", primitive, &[])
         }
     }
 

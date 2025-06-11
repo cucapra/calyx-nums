@@ -5,7 +5,7 @@ use calyx_ir as ir;
 use itertools::Itertools;
 
 use super::IrBuilder;
-use super::components::{ComponentManager, Constant};
+use super::components::ComponentManager;
 use super::libm::{self, Prototype};
 use super::stdlib::{ImportPaths, ImportSet, Primitive};
 use crate::analysis::{self as sem, Binding, PassManager};
@@ -52,7 +52,7 @@ struct Expression {
 }
 
 impl Expression {
-    fn from_constant(port: ir::RRC<ir::Port>) -> Expression {
+    fn from_port(port: ir::RRC<ir::Port>) -> Expression {
         Expression {
             control: ir::Control::empty(),
             assignments: Vec::new(),
@@ -88,26 +88,10 @@ impl ExpressionBuilder<'_, '_, '_> {
 
         let width = u64::from(self.format.width);
 
-        let cell = if let Ok(value) = u64::try_from(&value) {
-            self.builder.add_constant(value, width)
-        } else {
-            let constant = Constant {
-                width,
-                value: &value,
-            };
-
-            let constant = self
-                .cm
-                .get_primitive(&constant, self.builder.lib)
-                .inspect_err(|err| self.reporter.emit(err))
-                .ok()?;
-
-            self.builder.add_primitive("c", constant, &[])
-        };
-
+        let cell = self.builder.big_constant(&value, width, self.cm);
         let port = cell.borrow().get("out");
 
-        Some(Expression::from_constant(port))
+        Some(Expression::from_port(port))
     }
 
     fn compile_constant(
@@ -131,7 +115,7 @@ impl ExpressionBuilder<'_, '_, '_> {
         let cell = self.builder.add_primitive("c", "std_const", &params);
         let port = cell.borrow().get("out");
 
-        Some(Expression::from_constant(port))
+        Some(Expression::from_port(port))
     }
 
     fn compile_symbol(
@@ -150,7 +134,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             Binding::Index(_) => unreachable!("pass rejects `for` expressions"),
         };
 
-        Expression::from_constant(port)
+        Expression::from_port(port)
     }
 
     fn compile_variadic_operation(
