@@ -15,8 +15,8 @@ from qformat import QFormat, RoundingMode
 
 
 class Simulator(Enum):
-    IVERILOG = 'icarus-verilog'
-    VERILATOR = 'verilog'
+    IVERILOG = 'fpcore-icarus'
+    VERILATOR = 'fpcore-verilator'
 
     def __str__(self) -> str:
         return self.value
@@ -35,12 +35,13 @@ def run(
             print(*(format(val.bits, 'x') for val in vals), file=f)
 
         cmd = [
-            'fud', 'exec',
+            'fud2',
             '--from', 'fpcore',
             '--through', sim.value,
-            '--to', 'nums-dat',
-            '-s', 'calyx-nums.flags', f'--format {fmt}',
-            '-s', 'verilog.data', file,
+            '--to', 'fpcore-dat',
+            '-s', f'calyx-nums.args=--format {fmt}',
+            '-s', f'sim.data={file}',
+            '--quiet',
         ]  # fmt: skip
 
         proc = subprocess.run(

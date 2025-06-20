@@ -2,6 +2,8 @@ import "calyx" as c;
 
 export const fpcore_state = state("fpcore", ["fpcore"]);
 
+export const calyx_nums_setup = calyx_nums_setup;
+
 fn calyx_nums_setup(e) {
     e.config_var("calyx-nums-base", "calyx-nums.base");
     e.config_var_or(
