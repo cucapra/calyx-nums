@@ -411,7 +411,7 @@ impl FPCoreParser {
         ))
     }
 
-    fn precision_shorthand(input: Node) -> ParseResult<&str> {
+    fn precision_shorthand(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
@@ -428,11 +428,11 @@ impl FPCoreParser {
         ))
     }
 
-    fn rounding(input: Node) -> ParseResult<&str> {
+    fn rounding(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
-    fn overflow(input: Node) -> ParseResult<&str> {
+    fn overflow(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
@@ -463,15 +463,15 @@ impl FPCoreParser {
         Ok(())
     }
 
-    fn dec_digits(input: Node) -> ParseResult<&str> {
+    fn dec_digits(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
-    fn hex_digits(input: Node) -> ParseResult<&str> {
+    fn hex_digits(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
-    fn nonzero(input: Node) -> ParseResult<&str> {
+    fn nonzero(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
@@ -486,7 +486,7 @@ impl FPCoreParser {
         ))
     }
 
-    fn dec_mantissa(input: Node) -> ParseResult<(&str, &str)> {
+    fn dec_mantissa(input: Node<'_>) -> ParseResult<(&str, &str)> {
         Ok(match_nodes!(input.into_children();
             [dec_digits(integer)] => (integer, "0"),
             [dec_digits(integer), dot(_), dec_digits(fraction)] => {
@@ -496,7 +496,7 @@ impl FPCoreParser {
         ))
     }
 
-    fn hex_mantissa(input: Node) -> ParseResult<(&str, &str)> {
+    fn hex_mantissa(input: Node<'_>) -> ParseResult<(&str, &str)> {
         Ok(match_nodes!(input.into_children();
             [hex_digits(integer)] => (integer, "0"),
             [hex_digits(integer), dot(_), hex_digits(fraction)] => {
@@ -506,13 +506,13 @@ impl FPCoreParser {
         ))
     }
 
-    fn mantissa(input: Node) -> ParseResult<(bool, &str)> {
+    fn mantissa(input: Node<'_>) -> ParseResult<(bool, &str)> {
         Ok(match_nodes!(input.into_children();
             [pm_opt(sign), dec_digits(digits)] => (sign, digits),
         ))
     }
 
-    fn exponent(input: Node) -> ParseResult<&str> {
+    fn exponent(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
@@ -557,7 +557,7 @@ impl FPCoreParser {
         })
     }
 
-    fn printable(input: Node) -> ParseResult<&str> {
+    fn printable(input: Node<'_>) -> ParseResult<&str> {
         Ok(match input.as_str() {
             "\\\\" => "\\",
             "\\\"" => "\"",
@@ -571,15 +571,15 @@ impl FPCoreParser {
         ))
     }
 
-    fn mathematical_op(input: Node) -> ParseResult<&str> {
+    fn mathematical_op(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
-    fn testing_op(input: Node) -> ParseResult<&str> {
+    fn testing_op(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
-    fn tensor_op(input: Node) -> ParseResult<&str> {
+    fn tensor_op(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
@@ -595,11 +595,11 @@ impl FPCoreParser {
         Ok(ast::Operation { kind, span })
     }
 
-    fn mathematical_const(input: Node) -> ParseResult<&str> {
+    fn mathematical_const(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 
-    fn boolean_const(input: Node) -> ParseResult<&str> {
+    fn boolean_const(input: Node<'_>) -> ParseResult<&str> {
         Ok(input.as_str())
     }
 

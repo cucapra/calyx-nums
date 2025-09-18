@@ -90,26 +90,26 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
         &mut self,
         expr: &'ast ast::Expression,
     ) -> Result<(), CycleError> {
-        if let ast::ExprKind::Op(op, _) = &expr.kind {
-            if let ast::OpKind::FPCore(id) = op.kind {
-                match self.color.get(&id) {
-                    None => {
-                        self.stack.push(id);
-                    }
-                    Some(Color::Gray) => {
-                        self.reporter.emit(
-                            &Diagnostic::error()
-                                .with_message("cyclic definition")
-                                .with_primary(
-                                    op.span,
-                                    "cycle introduced by this call",
-                                ),
-                        );
-
-                        return Err(CycleError);
-                    }
-                    Some(Color::Black) => {}
+        if let ast::ExprKind::Op(op, _) = &expr.kind
+            && let ast::OpKind::FPCore(id) = op.kind
+        {
+            match self.color.get(&id) {
+                None => {
+                    self.stack.push(id);
                 }
+                Some(Color::Gray) => {
+                    self.reporter.emit(
+                        &Diagnostic::error()
+                            .with_message("cyclic definition")
+                            .with_primary(
+                                op.span,
+                                "cycle introduced by this call",
+                            ),
+                    );
+
+                    return Err(CycleError);
+                }
+                Some(Color::Black) => {}
             }
         }
 

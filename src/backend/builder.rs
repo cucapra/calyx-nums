@@ -209,7 +209,7 @@ impl<'a> IrBuilder<'a> {
         })
     }
 
-    fn ir_builder(&mut self) -> ir::Builder {
+    fn ir_builder(&mut self) -> ir::Builder<'_> {
         ir::Builder::new(self.component, self.lib).not_generated()
     }
 

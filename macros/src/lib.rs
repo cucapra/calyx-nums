@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, quote_spanned};
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Index};
+use syn::{Data, DeriveInput, Fields, Ident, Index, parse_macro_input};
 
 #[proc_macro_derive(Mangle)]
 pub fn derive_mangle(input: TokenStream) -> TokenStream {

@@ -199,18 +199,16 @@ impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
                 }
             }
             ast::ExprKind::Op(op, _) => {
-                if let ast::OpKind::FPCore(id) = op.kind {
-                    if !self.result.defs.contains_key(&id) {
-                        self.reporter.emit(
-                            &Diagnostic::error()
-                                .with_message(format!(
-                                    "undefined operator `{id}`",
-                                ))
-                                .with_primary(op.span, "undefined operator"),
-                        );
+                if let ast::OpKind::FPCore(id) = op.kind
+                    && !self.result.defs.contains_key(&id)
+                {
+                    self.reporter.emit(
+                        &Diagnostic::error()
+                            .with_message(format!("undefined operator `{id}`"))
+                            .with_primary(op.span, "undefined operator"),
+                    );
 
-                        return Err(ResolutionError);
-                    }
+                    return Err(ResolutionError);
                 }
 
                 visitor::visit_expression(self, expr)
