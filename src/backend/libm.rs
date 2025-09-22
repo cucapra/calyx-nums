@@ -4,10 +4,10 @@ use std::slice;
 use calyx_ir as ir;
 
 use super::components::{self as comp, ComponentManager};
-use crate::analysis::RangeAnalysis;
 use crate::approx::{AddressSpec, Datapath, TableDomain, faithful, remez};
 use crate::hir::{self, Metadata, Pool, Visitor};
 use crate::opts::{Opts, RangeAnalysis as AnalysisMode};
+use crate::passes::analysis::RangeAnalysis;
 use crate::utils::sollya::SollyaFunction;
 use crate::utils::{Diagnostic, Format, Mangle, Reporter};
 

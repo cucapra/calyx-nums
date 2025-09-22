@@ -24,7 +24,7 @@ impl Format {
     /// # Examples
     ///
     /// ```
-    /// # use calyx_nums::format::Format;
+    /// # use calyx_nums::utils::Format;
     /// #
     /// let format = Format { scale: -1, width: 4, is_signed: false };
     ///
@@ -53,7 +53,7 @@ impl Format {
     /// # Examples
     ///
     /// ```
-    /// # use calyx_nums::format::Format;
+    /// # use calyx_nums::utils::Format;
     /// #
     /// let format = Format { scale: -1, width: 4, is_signed: false };
     ///
