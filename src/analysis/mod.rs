@@ -7,7 +7,7 @@ mod passes;
 mod ranges;
 mod type_check;
 
-pub use bindings::{Binding, Context, NameResolution};
+pub use bindings::{Binding, NameResolution};
 pub use call_graph::CallGraph;
 pub use domain::Precondition;
 pub use ranges::RangeAnalysis;

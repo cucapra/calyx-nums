@@ -36,7 +36,7 @@ impl FPCoreParser {
 
     fn fpcore(input: Node) -> ParseResult<ast::FPCore> {
         Ok(match_nodes!(input.into_children();
-            [fpcore_kwd(_), symbol_opt(name), argument_list(args), property(props).., expr(body)] => {
+            [fpcore_kw(_), symbol_opt(name), argument_list(args), property(props).., expr(body)] => {
                 ast::FPCore {
                     name,
                     args,
@@ -94,21 +94,32 @@ impl FPCoreParser {
 
     fn binding(input: Node) -> ParseResult<ast::Binding> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(expr)] => ast::Binding { var, expr },
+            [symbol(var), expr(expr)] => ast::Binding {
+                var,
+                expr,
+                uid: ast::NodeId::new(),
+            },
         ))
     }
 
     fn mut_var(input: Node) -> ParseResult<ast::MutableVar> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(init), expr(update)] => {
-                ast::MutableVar { var, init, update }
+            [symbol(var), expr(init), expr(update)] => ast::MutableVar {
+                var,
+                init,
+                update,
+                uid: ast::NodeId::new(),
             },
         ))
     }
 
     fn index_var(input: Node) -> ParseResult<ast::InductionVar> {
         Ok(match_nodes!(input.into_children();
-            [symbol(var), expr(size)] => ast::InductionVar { var, size },
+            [symbol(var), expr(size)] => ast::InductionVar {
+                var,
+                size,
+                uid: ast::NodeId::new(),
+            },
         ))
     }
 
@@ -124,47 +135,47 @@ impl FPCoreParser {
         ))
     }
 
-    fn fpcore_kwd(_input: Node) -> ParseResult<()> {
+    fn fpcore_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn if_kwd(_input: Node) -> ParseResult<()> {
+    fn if_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn let_kwd(input: Node) -> ParseResult<bool> {
+    fn let_kw(input: Node) -> ParseResult<bool> {
         Ok(input.as_str().ends_with('*'))
     }
 
-    fn while_kwd(input: Node) -> ParseResult<bool> {
+    fn while_kw(input: Node) -> ParseResult<bool> {
         Ok(input.as_str().ends_with('*'))
     }
 
-    fn for_kwd(input: Node) -> ParseResult<bool> {
+    fn for_kw(input: Node) -> ParseResult<bool> {
         Ok(input.as_str().ends_with('*'))
     }
 
-    fn tensor_kwd(_input: Node) -> ParseResult<()> {
+    fn tensor_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn tensor_star_kwd(_input: Node) -> ParseResult<()> {
+    fn tensor_star_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn cast_kwd(_input: Node) -> ParseResult<()> {
+    fn cast_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn array_kwd(_input: Node) -> ParseResult<()> {
+    fn array_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn bang_kwd(_input: Node) -> ParseResult<()> {
+    fn bang_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn digits_kwd(_input: Node) -> ParseResult<()> {
+    fn digits_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
@@ -190,21 +201,21 @@ impl FPCoreParser {
 
                 ast::ExprKind::Op(op, args)
             },
-            [if_kwd(_), expr(cond), expr(true_branch), expr(false_branch)] => {
+            [if_kw(_), expr(cond), expr(true_branch), expr(false_branch)] => {
                 ast::ExprKind::If {
                     cond: Box::new(cond),
                     true_branch: Box::new(true_branch),
                     false_branch: Box::new(false_branch),
                 }
             },
-            [let_kwd(sequential), binding(bindings).., expr(body)] => {
+            [let_kw(sequential), binding(bindings).., expr(body)] => {
                 ast::ExprKind::Let {
                     bindings: bindings.collect(),
                     body: Box::new(body),
                     sequential,
                 }
             },
-            [while_kwd(sequential), expr(cond), mut_vars(vars), expr(body)] => {
+            [while_kw(sequential), expr(cond), mut_vars(vars), expr(body)] => {
                 ast::ExprKind::While {
                     cond: Box::new(cond),
                     vars,
@@ -212,7 +223,7 @@ impl FPCoreParser {
                     sequential,
                 }
             },
-            [for_kwd(sequential), index_vars(indices), mut_vars(vars), expr(body)] => {
+            [for_kw(sequential), index_vars(indices), mut_vars(vars), expr(body)] => {
                 ast::ExprKind::For {
                     indices,
                     vars,
@@ -220,21 +231,21 @@ impl FPCoreParser {
                     sequential,
                 }
             },
-            [tensor_kwd(_), index_vars(indices), expr(body)] => {
+            [tensor_kw(_), index_vars(indices), expr(body)] => {
                 ast::ExprKind::Tensor {
                     indices,
                     body: Box::new(body),
                 }
             },
-            [tensor_star_kwd(_), index_vars(indices), mut_vars(vars), expr(body)] => {
+            [tensor_star_kw(_), index_vars(indices), mut_vars(vars), expr(body)] => {
                 ast::ExprKind::TensorStar {
                     indices,
                     vars,
                     body: Box::new(body),
                 }
             },
-            [cast_kwd(_), expr(body)] => ast::ExprKind::Cast(Box::new(body)),
-            [array_kwd(_), expr(elems)..] => {
+            [cast_kw(_), expr(body)] => ast::ExprKind::Cast(Box::new(body)),
+            [array_kw(_), expr(elems)..] => {
                 ast::ExprKind::Array(elems.collect())
             },
             [annotation(props), expr(body)] => ast::ExprKind::Annotation {
@@ -257,7 +268,7 @@ impl FPCoreParser {
             [rational(value)] => value,
             [decnum(value)] => value,
             [hexnum(value)] => value,
-            [digits_kwd(_), mantissa((sign, mantissa)), exponent(exponent), dec_digits(base)] => {
+            [digits_kw(_), mantissa((sign, mantissa)), exponent(exponent), dec_digits(base)] => {
                 literals::rational_from_digits(sign, mantissa, exponent, base)
                     .unwrap()
             },
@@ -268,7 +279,7 @@ impl FPCoreParser {
 
     fn annotation(input: Node) -> ParseResult<Vec<ast::Property>> {
         Ok(match_nodes!(input.into_children();
-            [bang_kwd(_), property(props)..] => props.collect(),
+            [bang_kw(_), property(props)..] => props.collect(),
         ))
     }
 
@@ -282,55 +293,55 @@ impl FPCoreParser {
         ))
     }
 
-    fn name_kwd(_input: Node) -> ParseResult<()> {
+    fn name_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn description_kwd(_input: Node) -> ParseResult<()> {
+    fn description_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn cite_kwd(_input: Node) -> ParseResult<()> {
+    fn cite_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn precision_kwd(_input: Node) -> ParseResult<()> {
+    fn precision_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn round_kwd(_input: Node) -> ParseResult<()> {
+    fn round_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn overflow_kwd(_input: Node) -> ParseResult<()> {
+    fn overflow_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn pre_kwd(_input: Node) -> ParseResult<()> {
+    fn pre_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn spec_kwd(_input: Node) -> ParseResult<()> {
+    fn spec_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn alt_kwd(_input: Node) -> ParseResult<()> {
+    fn alt_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn math_lib_kwd(_input: Node) -> ParseResult<()> {
+    fn math_lib_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn example_kwd(_input: Node) -> ParseResult<()> {
+    fn example_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn domain_kwd(_input: Node) -> ParseResult<()> {
+    fn domain_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
-    fn impl_kwd(_input: Node) -> ParseResult<()> {
+    fn impl_kw(_input: Node) -> ParseResult<()> {
         Ok(())
     }
 
@@ -344,36 +355,36 @@ impl FPCoreParser {
         let span = ast::Span::from_node(&input);
 
         let kind = match_nodes!(input.into_children();
-            [name_kwd(_), string(name)] => ast::PropKind::Name(name),
-            [description_kwd(_), string(description)] => {
+            [name_kw(_), string(name)] => ast::PropKind::Name(name),
+            [description_kw(_), string(description)] => {
                 ast::PropKind::Description(description)
             },
-            [cite_kwd(_), symbol(symbols)..] => {
+            [cite_kw(_), symbol(symbols)..] => {
                 ast::PropKind::Cite(symbols.collect())
             },
-            [precision_kwd(_), precision(precision)] => {
+            [precision_kw(_), precision(precision)] => {
                 ast::PropKind::Precision(precision)
             },
-            [round_kwd(_), rounding(round)] => {
+            [round_kw(_), rounding(round)] => {
                 ast::PropKind::Round(round.parse().unwrap())
             },
-            [overflow_kwd(_), overflow(overflow)] => {
+            [overflow_kw(_), overflow(overflow)] => {
                 ast::PropKind::Overflow(overflow.parse().unwrap())
             },
-            [pre_kwd(_), expr(pre)] => ast::PropKind::Pre(pre),
-            [spec_kwd(_), expr(spec)] => ast::PropKind::Spec(spec),
-            [alt_kwd(_), expr(alt)] => ast::PropKind::Alt(alt),
-            [math_lib_kwd(_), symbol(lib)] => ast::PropKind::MathLib(lib),
-            [example_kwd(_), binding(bindings)..] => {
+            [pre_kw(_), expr(pre)] => ast::PropKind::Pre(pre),
+            [spec_kw(_), expr(spec)] => ast::PropKind::Spec(spec),
+            [alt_kw(_), expr(alt)] => ast::PropKind::Alt(alt),
+            [math_lib_kw(_), symbol(lib)] => ast::PropKind::MathLib(lib),
+            [example_kw(_), binding(bindings)..] => {
                 ast::PropKind::Example(bindings.collect())
             },
-            [domain_kwd(_), number(left), number(right)] => {
+            [domain_kw(_), number(left), number(right)] => {
                 ast::PropKind::CalyxDomain(metadata::CalyxDomain {
                     left,
                     right,
                 })
             },
-            [impl_kwd(_), strategy(strategy)] => {
+            [impl_kw(_), strategy(strategy)] => {
                 ast::PropKind::CalyxImpl(strategy)
             },
             [property_name(name), data(data)] => {

@@ -130,12 +130,11 @@ pub fn visit_expression<'ast, V: Visitor<'ast> + ?Sized>(
             body,
             sequential: _,
         } => {
-            v.visit_expression(cond)?;
-
             for var in vars {
                 v.visit_mutable_var(var)?;
             }
 
+            v.visit_expression(cond)?;
             v.visit_expression(body)
         }
         ast::ExprKind::For {

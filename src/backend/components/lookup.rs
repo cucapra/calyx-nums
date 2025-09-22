@@ -9,7 +9,7 @@ use malachite::{Natural, Rational};
 use super::{ComponentBuilder, ComponentManager, Rom};
 use crate::approx::AddressSpec;
 use crate::backend::IrBuilder;
-use crate::fpcore::ast::Span;
+use crate::hir::Span;
 use crate::utils::mangling::{Mangle, mangle};
 use crate::utils::rational::FixedPoint;
 use crate::utils::{Diagnostic, Format};

@@ -42,6 +42,7 @@ pub struct Argument {
 pub struct Binding {
     pub var: Symbol,
     pub expr: Expression,
+    pub uid: NodeId,
 }
 
 #[derive(Debug)]
@@ -52,6 +53,8 @@ pub struct MutableVar {
     pub init: Expression,
     /// Expression producing an updated value.
     pub update: Expression,
+    /// Node identifier.
+    pub uid: NodeId,
 }
 
 #[derive(Debug)]
@@ -60,6 +63,8 @@ pub struct InductionVar {
     pub var: Symbol,
     /// Number of iterations.
     pub size: Expression,
+    /// Node identifier.
+    pub uid: NodeId,
 }
 
 #[derive(Debug)]
@@ -115,13 +120,13 @@ pub struct Expression {
 }
 
 /// A numeric literal.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Number {
     pub value: Rational,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Symbol {
     pub id: Id,
     pub span: Span,
@@ -135,7 +140,7 @@ pub enum OpKind {
     FPCore(Id),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Operation {
     pub kind: OpKind,
     pub span: Span,
@@ -155,7 +160,7 @@ pub struct Property {
 
 /// Uniquely identifies an AST node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct NodeId(pub(crate) u32);
+pub struct NodeId(u32);
 
 impl NodeId {
     /// Creates a new identifier that is distinct from all previously created

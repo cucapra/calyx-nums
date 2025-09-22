@@ -3,12 +3,11 @@ use std::slice;
 
 use calyx_ir as ir;
 
-use super::components::{self, ComponentManager};
-use crate::analysis::{self as sem, Context, PassManager};
+use super::components::{self as comp, ComponentManager};
+use crate::analysis::RangeAnalysis;
 use crate::approx::{AddressSpec, Datapath, TableDomain, faithful, remez};
-use crate::fpcore::metadata::{CalyxDomain, CalyxImpl};
-use crate::fpcore::{Visitor, ast, visitor};
-use crate::opts::RangeAnalysis as AnalysisMode;
+use crate::hir::{self, Metadata, Pool, Visitor};
+use crate::opts::{Opts, RangeAnalysis as AnalysisMode};
 use crate::utils::sollya::SollyaFunction;
 use crate::utils::{Diagnostic, Format, Mangle, Reporter};
 
@@ -20,28 +19,30 @@ pub struct Prototype {
 }
 
 pub fn compile_math_library(
-    pm: &PassManager,
+    ctx: &hir::Context,
+    opts: &Opts,
+    reporter: &mut Reporter,
     cm: &mut ComponentManager,
     lib: &mut ir::LibrarySignatures,
-) -> Option<HashMap<ast::NodeId, Prototype>> {
-    let opts = pm.opts();
-
+) -> Option<HashMap<hir::ExprIdx, Prototype>> {
     let ranges = match opts.range_analysis {
-        AnalysisMode::Interval => Some(pm.get_analysis()?),
+        AnalysisMode::Interval => {
+            Some(RangeAnalysis::new(ctx, opts, reporter)?)
+        }
         AnalysisMode::None => None,
     };
 
     let mut builder = Builder {
+        ctx,
+        ranges: ranges.as_ref(),
         format: &opts.format,
-        bindings: pm.get_analysis()?,
-        ranges,
-        reporter: &mut pm.rpt(),
+        reporter,
         cm,
         lib,
         prototypes: HashMap::new(),
     };
 
-    builder.visit_definitions(pm.ast()).ok()?;
+    builder.visit_definitions(ctx).ok()?;
 
     Some(builder.prototypes)
 }
@@ -49,72 +50,84 @@ pub fn compile_math_library(
 #[derive(Debug)]
 pub struct LibraryError;
 
-struct Builder<'b, 'ast> {
-    format: &'b Format,
-    bindings: &'b sem::NameResolution<'ast>,
-    ranges: Option<&'b sem::RangeAnalysis>,
-    reporter: &'b mut Reporter<'ast>,
-    cm: &'b mut ComponentManager,
-    lib: &'b mut ir::LibrarySignatures,
-    prototypes: HashMap<ast::NodeId, Prototype>,
+struct Builder<'a, 'src> {
+    ctx: &'a hir::Context,
+    ranges: Option<&'a RangeAnalysis>,
+    format: &'a Format,
+
+    reporter: &'a mut Reporter<'src>,
+    cm: &'a mut ComponentManager,
+    lib: &'a mut ir::LibrarySignatures,
+
+    prototypes: HashMap<hir::ExprIdx, Prototype>,
 }
 
-impl Visitor<'_> for Builder<'_, '_> {
+impl Visitor for Builder<'_, '_> {
     type Error = LibraryError;
 
-    fn visit_expression(
+    fn visit_operation(
         &mut self,
-        expr: &ast::Expression,
+        idx: hir::ExprIdx,
+        op: &hir::Operation,
+        args: hir::EntityList<hir::ExprIdx>,
+        ctx: &hir::Context,
     ) -> Result<(), LibraryError> {
-        match &expr.kind {
-            ast::ExprKind::Op(
-                ast::Operation {
-                    kind: ast::OpKind::Math(op),
-                    span,
-                },
-                args,
-            ) if !op.is_primitive() => {
-                let Ok(kind) = SollyaFunction::try_from(*op) else {
-                    self.reporter.emit(
-                        &Diagnostic::error()
-                            .with_message("unsupported operation")
-                            .with_primary(*span, "unsupported operator"),
-                    );
+        if let hir::Operation {
+            kind: hir::OpKind::Math(op),
+            span,
+        } = op
+            && !op.is_primitive()
+        {
+            let Ok(kind) = SollyaFunction::try_from(*op) else {
+                self.reporter.emit(
+                    &Diagnostic::error()
+                        .with_message("unsupported operation")
+                        .with_primary(*span, "unsupported operator"),
+                );
 
-                    return Err(LibraryError);
-                };
+                return Err(LibraryError);
+            };
 
-                let op = Operator { kind, span: *span };
-                let context = self.bindings.props[&expr.uid];
+            let op = Operator { kind, span: *span };
 
-                let prototype =
-                    self.build(&op, args, &context).map_err(|err| {
-                        self.reporter.emit(&err);
+            let prototype =
+                self.build(&self.ctx[idx], &op, args).map_err(|err| {
+                    self.reporter.emit(&err);
 
-                        LibraryError
-                    })?;
+                    LibraryError
+                })?;
 
-                self.prototypes.insert(expr.uid, prototype);
-
-                visitor::visit_expression(self, expr)
-            }
-            _ => visitor::visit_expression(self, expr),
+            self.prototypes.insert(idx, prototype);
         }
+
+        hir::visitor::visit_operation(self, idx, op, args, ctx)
     }
 }
 
-impl<'b> Builder<'b, '_> {
+impl<'a> Builder<'a, '_> {
     fn build(
         &mut self,
+        expr: &hir::Expression,
         op: &Operator,
-        args: &[ast::Expression],
-        context: &Context,
+        args: hir::EntityList<hir::ExprIdx>,
     ) -> Result<Prototype, Diagnostic> {
-        let domain = self.choose_domain(op, args, context.domain)?;
+        let domain = expr.props(self.ctx).find_map(|prop| match prop {
+            hir::Property::Domain(domain) => Some(domain),
+            _ => None,
+        });
 
-        match context.strategy {
-            Some(CalyxImpl::Lut { size }) => self.build_lut(op, &domain, *size),
-            Some(CalyxImpl::Poly { degree }) => {
+        let strategy = expr.props(self.ctx).find_map(|prop| match prop {
+            hir::Property::Impl(strategy) => Some(strategy),
+            _ => None,
+        });
+
+        let domain = self.choose_domain(op, args, domain)?;
+
+        match strategy {
+            Some(hir::Strategy::Lut { size }) => {
+                self.build_lut(op, &domain, *size)
+            }
+            Some(hir::Strategy::Poly { degree }) => {
                 self.build_poly(op, &domain, *degree)
             }
             None => Err(Diagnostic::error()
@@ -127,14 +140,17 @@ impl<'b> Builder<'b, '_> {
     fn choose_domain(
         &self,
         op: &Operator,
-        args: &[ast::Expression],
-        hint: Option<&'b CalyxDomain>,
-    ) -> Result<DomainHint<'b>, Diagnostic> {
+        args: hir::EntityList<hir::ExprIdx>,
+        hint: Option<&hir::Domain>,
+    ) -> Result<DomainHint<'a>, Diagnostic> {
         let (left, right) = hint
-            .map(|domain| (&domain.left.value, &domain.right.value))
+            .map(|domain| {
+                (&self.ctx[domain.left].value, &self.ctx[domain.right].value)
+            })
             .or_else(|| {
                 self.ranges.map(|ranges| {
-                    let [left, right] = &ranges[args[0].uid];
+                    let [left, right] =
+                        &ranges[args.first(self.ctx.pool()).unwrap()];
 
                     (left, right)
                 })
@@ -163,7 +179,7 @@ impl<'b> Builder<'b, '_> {
         let values = &remez::build_table(op.kind, degree, domain, size, scale)
             .map_err(|err| Diagnostic::from_sollya_and_span(err, op.span))?;
 
-        let data = components::TableData {
+        let data = comp::TableData {
             values,
             formats: slice::from_ref(self.format),
             spec: &TableSpec {
@@ -175,7 +191,7 @@ impl<'b> Builder<'b, '_> {
             },
         };
 
-        let builder = components::LookupTable {
+        let builder = comp::LookupTable {
             data,
             format: self.format,
             spec,
@@ -218,7 +234,7 @@ impl<'b> Builder<'b, '_> {
         let datapath = Datapath::from_approx(&approx, degree, scale);
         let formats = &datapath.lut_formats();
 
-        let data = components::TableData {
+        let data = comp::TableData {
             values: &approx.table,
             formats,
             spec: &TableSpec {
@@ -230,8 +246,8 @@ impl<'b> Builder<'b, '_> {
             },
         };
 
-        let builder = components::PiecewisePoly {
-            table: components::LookupTable {
+        let builder = comp::PiecewisePoly {
+            table: comp::LookupTable {
                 data,
                 format: self.format,
                 spec,
@@ -261,8 +277,8 @@ struct TableSpec<'a> {
 }
 
 struct DomainHint<'a> {
-    left: &'a ast::Rational,
-    right: &'a ast::Rational,
+    left: &'a hir::Rational,
+    right: &'a hir::Rational,
 }
 
 impl DomainHint<'_> {
@@ -284,22 +300,22 @@ impl DomainHint<'_> {
 
 struct Operator {
     kind: SollyaFunction,
-    span: ast::Span,
+    span: hir::Span,
 }
 
-impl ast::MathOp {
+impl hir::MathOp {
     fn is_primitive(self) -> bool {
         matches!(
             self,
-            ast::MathOp::Add
-                | ast::MathOp::Sub
-                | ast::MathOp::Mul
-                | ast::MathOp::Div
-                | ast::MathOp::Neg
-                | ast::MathOp::FAbs
-                | ast::MathOp::Sqrt
-                | ast::MathOp::FMax
-                | ast::MathOp::FMin
+            hir::MathOp::Add
+                | hir::MathOp::Sub
+                | hir::MathOp::Mul
+                | hir::MathOp::Div
+                | hir::MathOp::Neg
+                | hir::MathOp::FAbs
+                | hir::MathOp::Sqrt
+                | hir::MathOp::FMax
+                | hir::MathOp::FMin
         )
     }
 }

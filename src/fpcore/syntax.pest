@@ -8,7 +8,7 @@ file = { SOI ~ fpcore* ~ EOI }
 
 fpcore = {
       open
-    ~ fpcore_kwd
+    ~ fpcore_kw
     ~ symbol_opt
     ~ argument_list
     ~ property*
@@ -34,17 +34,17 @@ index_var   = { "[" ~ symbol ~ expr ~ "]" }
 mut_vars    = { mut_var* }
 index_vars  = { index_var* }
 
-fpcore_kwd      = @{ "FPCore"       ~ !symbol_continue }
-if_kwd          = @{ "if"           ~ !symbol_continue }
-let_kwd         = @{ "let" ~ "*"?   ~ !symbol_continue }
-while_kwd       = @{ "while" ~ "*"? ~ !symbol_continue }
-for_kwd         = @{ "for" ~ "*"?   ~ !symbol_continue }
-tensor_kwd      = @{ "tensor"       ~ !symbol_continue }
-tensor_star_kwd = @{ "tensor*"      ~ !symbol_continue }
-cast_kwd        = @{ "cast"         ~ !symbol_continue }
-array_kwd       = @{ "array"        ~ !symbol_continue }
-bang_kwd        = @{ "!"            ~ !symbol_continue }
-digits_kwd      = @{ "digits"       ~ !symbol_continue }
+fpcore_kw       = @{ "FPCore"       ~ !symbol_continue }
+if_kw           = @{ "if"           ~ !symbol_continue }
+let_kw          = @{ "let" ~ "*"?   ~ !symbol_continue }
+while_kw        = @{ "while" ~ "*"? ~ !symbol_continue }
+for_kw          = @{ "for" ~ "*"?   ~ !symbol_continue }
+tensor_kw       = @{ "tensor"       ~ !symbol_continue }
+tensor_star_kw  = @{ "tensor*"      ~ !symbol_continue }
+cast_kw         = @{ "cast"         ~ !symbol_continue }
+array_kw        = @{ "array"        ~ !symbol_continue }
+bang_kw         = @{ "!"            ~ !symbol_continue }
+digits_kw       = @{ "digits"       ~ !symbol_continue }
 
 reserved_op = _{
       "tensor*" | "digits" | "tensor" | "while*" | "array" | "while" | "cast"
@@ -55,16 +55,16 @@ expr = {
       constant
     | number
     | symbol
-    | (open ~ if_kwd ~ expr ~ expr ~ expr ~ close)
-    | (open ~ let_kwd ~ open ~ binding* ~ close ~ expr ~ close)
-    | (open ~ while_kwd ~ expr ~ open ~ mut_vars ~ close ~ expr ~ close)
-    | (open ~ for_kwd ~ open ~ index_vars ~ close
+    | (open ~ if_kw ~ expr ~ expr ~ expr ~ close)
+    | (open ~ let_kw ~ open ~ binding* ~ close ~ expr ~ close)
+    | (open ~ while_kw ~ expr ~ open ~ mut_vars ~ close ~ expr ~ close)
+    | (open ~ for_kw ~ open ~ index_vars ~ close
         ~ open ~ mut_vars ~ close ~ expr ~ close)
-    | (open ~ tensor_star_kwd ~ open ~ index_vars ~ close
+    | (open ~ tensor_star_kw ~ open ~ index_vars ~ close
         ~ open ~ mut_vars ~ close ~ expr ~ close)
-    | (open ~ tensor_kwd ~ open ~ index_vars ~ close ~ expr ~ close)
-    | (open ~ cast_kwd ~ expr ~ close)
-    | (open ~ array_kwd ~ expr* ~ close)
+    | (open ~ tensor_kw ~ open ~ index_vars ~ close ~ expr ~ close)
+    | (open ~ cast_kw ~ expr ~ close)
+    | (open ~ array_kw ~ expr* ~ close)
     | (open ~ annotation ~ expr ~ close)
     | (open ~ operation ~ expr+ ~ close)
 }
@@ -73,25 +73,25 @@ number = {
       rational
     | hexnum
     | decnum
-    | (open ~ digits_kwd ~ mantissa ~ exponent ~ dec_digits ~ close)
+    | (open ~ digits_kw ~ mantissa ~ exponent ~ dec_digits ~ close)
 }
 
-annotation  = { bang_kwd ~ property* }
+annotation  = { bang_kw ~ property* }
 operation   = ${ operator | !(reserved_op ~ !symbol_continue) ~ symbol }
 
-name_kwd        = @{ ":name"            ~ !symbol_continue }
-description_kwd = @{ ":description"     ~ !symbol_continue }
-cite_kwd        = @{ ":cite"            ~ !symbol_continue }
-precision_kwd   = @{ ":precision"       ~ !symbol_continue }
-round_kwd       = @{ ":round"           ~ !symbol_continue }
-overflow_kwd    = @{ ":overflow"        ~ !symbol_continue }
-pre_kwd         = @{ ":pre"             ~ !symbol_continue }
-spec_kwd        = @{ ":spec"            ~ !symbol_continue }
-alt_kwd         = @{ ":alt"             ~ !symbol_continue }
-math_lib_kwd    = @{ ":math-library"    ~ !symbol_continue }
-example_kwd     = @{ ":example"         ~ !symbol_continue }
-domain_kwd      = @{ ":calyx-domain"    ~ !symbol_continue }
-impl_kwd        = @{ ":calyx-impl"      ~ !symbol_continue }
+name_kw         = @{ ":name"            ~ !symbol_continue }
+description_kw  = @{ ":description"     ~ !symbol_continue }
+cite_kw         = @{ ":cite"            ~ !symbol_continue }
+precision_kw    = @{ ":precision"       ~ !symbol_continue }
+round_kw        = @{ ":round"           ~ !symbol_continue }
+overflow_kw     = @{ ":overflow"        ~ !symbol_continue }
+pre_kw          = @{ ":pre"             ~ !symbol_continue }
+spec_kw         = @{ ":spec"            ~ !symbol_continue }
+alt_kw          = @{ ":alt"             ~ !symbol_continue }
+math_lib_kw     = @{ ":math-library"    ~ !symbol_continue }
+example_kw      = @{ ":example"         ~ !symbol_continue }
+domain_kw       = @{ ":calyx-domain"    ~ !symbol_continue }
+impl_kw         = @{ ":calyx-impl"      ~ !symbol_continue }
 
 reserved_prop = _{
       "calyx-domain" | "math-library" | "description" | "calyx-impl"
@@ -103,19 +103,19 @@ reserved_prop = _{
 property_name = ${ ":" ~ !(reserved_prop ~ !symbol_continue) ~ symbol }
 
 property = {
-      (name_kwd ~ string)
-    | (description_kwd ~ string)
-    | (cite_kwd ~ open ~ symbol* ~ close)
-    | (precision_kwd ~ precision)
-    | (round_kwd ~ rounding)
-    | (overflow_kwd ~ overflow)
-    | (pre_kwd ~ expr)
-    | (spec_kwd ~ expr)
-    | (alt_kwd ~ expr)
-    | (math_lib_kwd ~ symbol)
-    | (example_kwd ~ open ~ binding* ~ close)
-    | (domain_kwd ~ open ~ number ~ number ~ close)
-    | (impl_kwd ~ strategy)
+      (name_kw ~ string)
+    | (description_kw ~ string)
+    | (cite_kw ~ open ~ symbol* ~ close)
+    | (precision_kw ~ precision)
+    | (round_kw ~ rounding)
+    | (overflow_kw ~ overflow)
+    | (pre_kw ~ expr)
+    | (spec_kw ~ expr)
+    | (alt_kw ~ expr)
+    | (math_lib_kw ~ symbol)
+    | (example_kw ~ open ~ binding* ~ close)
+    | (domain_kw ~ open ~ number ~ number ~ close)
+    | (impl_kw ~ strategy)
     | (property_name ~ data)
 }
 

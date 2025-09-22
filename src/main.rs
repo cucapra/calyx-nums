@@ -6,23 +6,21 @@ use std::{io, iter};
 
 use calyx_nums::backend::{self, ImportPaths, Program};
 use calyx_nums::fpcore::{FPCoreParser, ast::Span};
+use calyx_nums::hir;
 use calyx_nums::opts::Opts;
 use calyx_nums::utils::{Diagnostic, Reporter};
 
 fn read_input(file: &Option<PathBuf>) -> io::Result<(Cow<'_, str>, String)> {
-    match file {
-        Some(file) => {
-            let filename = file.to_string_lossy();
-            let src = fs::read_to_string(file)?;
+    if let Some(file) = file {
+        let filename = file.to_string_lossy();
+        let src = fs::read_to_string(file)?;
 
-            Ok((filename, src))
-        }
-        None => {
-            let filename = Cow::from("<stdin>");
-            let src = io::read_to_string(io::stdin())?;
+        Ok((filename, src))
+    } else {
+        let filename = Cow::from("<stdin>");
+        let src = io::read_to_string(io::stdin())?;
 
-            Ok((filename, src))
-        }
+        Ok((filename, src))
     }
 }
 
@@ -90,8 +88,11 @@ fn main() -> ExitCode {
         }
     };
 
-    let Some(program) =
-        backend::compile_fpcore(&defs, &opts, &mut reporter, lib)
+    let Some(ctx) = hir::lower_ast(defs, &opts, &mut reporter) else {
+        return ExitCode::FAILURE;
+    };
+
+    let Some(program) = backend::compile_hir(&ctx, &opts, &mut reporter, lib)
     else {
         return ExitCode::FAILURE;
     };

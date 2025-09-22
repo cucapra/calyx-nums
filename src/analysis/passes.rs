@@ -32,29 +32,28 @@ register_passes!(Cache<'ast> {
     bindings: super::NameResolution<'ast>,
     types: super::TypeCheck,
     call_graph: super::CallGraph<'ast>,
-    ranges: super::RangeAnalysis,
 });
 
 pub trait Pass<'ast>
 where
     Self: Sized,
 {
-    fn run(pm: &PassManager<'_, 'ast>) -> Option<Self>;
+    fn run(pm: &PassManager<'_, 'ast, '_>) -> Option<Self>;
 }
 
-pub struct PassManager<'pm, 'ast> {
+pub struct PassManager<'pm, 'ast, 'src> {
     opts: &'pm Opts,
     defs: &'ast [ast::FPCore],
-    rpt: RefCell<&'pm mut Reporter<'ast>>,
+    rpt: RefCell<&'pm mut Reporter<'src>>,
     cache: Cache<'ast>,
 }
 
-impl<'pm, 'ast> PassManager<'pm, 'ast> {
+impl<'pm, 'ast, 'src> PassManager<'pm, 'ast, 'src> {
     pub fn new(
         opts: &'pm Opts,
         defs: &'ast [ast::FPCore],
-        rpt: &'pm mut Reporter<'ast>,
-    ) -> PassManager<'pm, 'ast> {
+        rpt: &'pm mut Reporter<'src>,
+    ) -> PassManager<'pm, 'ast, 'src> {
         PassManager {
             opts,
             defs,
@@ -71,7 +70,7 @@ impl<'pm, 'ast> PassManager<'pm, 'ast> {
         self.defs
     }
 
-    pub fn rpt(&self) -> RefMut<'_, &'pm mut Reporter<'ast>> {
+    pub fn rpt(&self) -> RefMut<'_, &'pm mut Reporter<'src>> {
         self.rpt.borrow_mut()
     }
 

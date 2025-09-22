@@ -10,7 +10,7 @@ pub struct CallGraph<'ast> {
 }
 
 impl<'ast> Pass<'ast> for CallGraph<'ast> {
-    fn run(pm: &PassManager<'_, 'ast>) -> Option<Self> {
+    fn run(pm: &PassManager<'_, 'ast, '_>) -> Option<Self> {
         let bindings = pm.get_analysis()?;
 
         let mut builder = Builder {
@@ -32,15 +32,15 @@ impl<'ast> Pass<'ast> for CallGraph<'ast> {
 #[derive(Debug)]
 struct CycleError;
 
-struct Builder<'p, 'ast> {
-    bindings: &'p NameResolution<'ast>,
-    reporter: &'p mut Reporter<'ast>,
+struct Builder<'pm, 'ast, 'src> {
+    bindings: &'pm NameResolution<'ast>,
+    reporter: &'pm mut Reporter<'src>,
     linearized: Vec<&'ast ast::FPCore>,
     stack: Vec<ast::Id>,
     color: HashMap<ast::Id, Color>,
 }
 
-impl Builder<'_, '_> {
+impl Builder<'_, '_, '_> {
     fn dfs(&mut self) -> Result<(), CycleError> {
         while let Some(&v) = self.stack.last() {
             match self.color.entry(v) {
@@ -65,7 +65,7 @@ impl Builder<'_, '_> {
     }
 }
 
-impl<'ast> Visitor<'ast> for Builder<'_, 'ast> {
+impl<'ast> Visitor<'ast> for Builder<'_, 'ast, '_> {
     type Error = CycleError;
 
     fn visit_definitions<I>(&mut self, defs: I) -> Result<(), CycleError>

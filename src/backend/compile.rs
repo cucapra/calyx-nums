@@ -1,15 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{io, iter, mem};
 
 use calyx_ir as ir;
 use itertools::Itertools;
 
-use super::IrBuilder;
-use super::components::ComponentManager;
 use super::libm::{self, Prototype};
 use super::stdlib::{ImportPaths, ImportSet, Primitive};
-use crate::analysis::{self as sem, Binding, PassManager};
-use crate::fpcore::ast;
+use super::{ComponentManager, IrBuilder};
+use crate::hir;
 use crate::opts::Opts;
 use crate::utils::rational::{FixedPoint, RoundBinary};
 use crate::utils::{Diagnostic, Format, Reporter};
@@ -41,19 +39,17 @@ impl Program {
     }
 }
 
-/// A compiled expression.
-///
-/// The output port is valid after executing the control program, as long as
-/// the assignments are active.
-struct Expression {
+struct CompiledExpr {
     control: ir::Control,
     assignments: Vec<ir::Assignment<ir::Nothing>>,
+    /// Valid after executing the control program, as long as the assignments
+    /// are active.
     out: ir::RRC<ir::Port>,
 }
 
-impl Expression {
-    fn from_port(port: ir::RRC<ir::Port>) -> Expression {
-        Expression {
+impl CompiledExpr {
+    fn from_port(port: ir::RRC<ir::Port>) -> CompiledExpr {
+        CompiledExpr {
             control: ir::Control::empty(),
             assignments: Vec::new(),
             out: port,
@@ -61,19 +57,22 @@ impl Expression {
     }
 }
 
-struct ExpressionBuilder<'b, 'ast, 'comp> {
-    format: &'b Format,
-    bindings: &'b sem::NameResolution<'ast>,
-    signatures: &'b HashMap<ast::Id, Prototype>,
-    math_lib: &'b HashMap<ast::NodeId, Prototype>,
-    reporter: &'b mut Reporter<'ast>,
-    cm: &'b mut ComponentManager,
-    builder: &'b mut IrBuilder<'comp>,
-    stores: HashMap<ast::NodeId, ir::RRC<ir::Cell>>,
+struct Builder<'a, 'comp, 'src> {
+    ctx: &'a hir::Context,
+    signatures: &'a HashMap<hir::DefIdx, Prototype>,
+    math_lib: &'a HashMap<hir::ExprIdx, Prototype>,
+    format: &'a Format,
+
+    cm: &'a mut ComponentManager,
+    reporter: &'a mut Reporter<'src>,
+    builder: &'a mut IrBuilder<'comp>,
+
+    stores: HashMap<hir::VarIdx, ir::RRC<ir::Cell>>,
 }
 
-impl ExpressionBuilder<'_, '_, '_> {
-    fn compile_number(&mut self, num: &ast::Number) -> Option<Expression> {
+impl Builder<'_, '_, '_> {
+    fn compile_number(&mut self, num: hir::NumIdx) -> Option<CompiledExpr> {
+        let num = &self.ctx[num];
         let rounded = (&num.value).round_convergent(self.format.lsb());
 
         let Some(value) = rounded.to_fixed_point(self.format) else {
@@ -91,16 +90,16 @@ impl ExpressionBuilder<'_, '_, '_> {
         let cell = self.builder.big_constant(&value, width, self.cm);
         let port = cell.borrow().get("out");
 
-        Some(Expression::from_port(port))
+        Some(CompiledExpr::from_port(port))
     }
 
     fn compile_constant(
         &mut self,
-        constant: ast::Constant,
-        span: ast::Span,
-    ) -> Option<Expression> {
+        constant: hir::Constant,
+        span: hir::Span,
+    ) -> Option<CompiledExpr> {
         let params = match constant {
-            ast::Constant::Math(_) => {
+            hir::Constant::Math(_) => {
                 self.reporter.emit(
                     &Diagnostic::error()
                         .with_message("unsupported numeric constant")
@@ -109,44 +108,25 @@ impl ExpressionBuilder<'_, '_, '_> {
 
                 return None;
             }
-            ast::Constant::Bool(val) => [1, u64::from(val)],
+            hir::Constant::Bool(val) => [1, u64::from(val)],
         };
 
         let cell = self.builder.add_primitive("c", "std_const", &params);
         let port = cell.borrow().get("out");
 
-        Some(Expression::from_port(port))
-    }
-
-    fn compile_symbol(
-        &self,
-        sym: &ast::Symbol,
-        uid: ast::NodeId,
-    ) -> Expression {
-        let port = match self.bindings.names[&uid] {
-            Binding::Argument(_) => {
-                self.builder.component.signature.borrow().get(sym.id)
-            }
-            Binding::Let(binding) => {
-                self.stores[&binding.expr.uid].borrow().get("out")
-            }
-            Binding::Mut(var) => self.stores[&var.init.uid].borrow().get("out"),
-            Binding::Index(_) => unreachable!("pass rejects `for` expressions"),
-        };
-
-        Expression::from_port(port)
+        Some(CompiledExpr::from_port(port))
     }
 
     fn compile_variadic_operation(
         &mut self,
-        op: ast::TestOp,
-        args: &[ast::Expression],
-    ) -> Option<Expression> {
+        op: hir::TestOp,
+        args: hir::EntityList<hir::ExprIdx>,
+    ) -> Option<CompiledExpr> {
         let mut assignments = Vec::new();
 
-        let (control, args): (Vec<_>, Vec<_>) = args
+        let (control, args): (Vec<_>, Vec<_>) = self.ctx[args]
             .iter()
-            .map(|arg| {
+            .map(|&arg| {
                 let expr = self.compile_expression(arg)?;
 
                 assignments.extend(expr.assignments);
@@ -173,17 +153,17 @@ impl ExpressionBuilder<'_, '_, '_> {
         };
 
         let args = match op {
-            ast::TestOp::Lt
-            | ast::TestOp::Gt
-            | ast::TestOp::Leq
-            | ast::TestOp::Geq
-            | ast::TestOp::Eq => {
+            hir::TestOp::Lt
+            | hir::TestOp::Gt
+            | hir::TestOp::Leq
+            | hir::TestOp::Geq
+            | hir::TestOp::Eq => {
                 let decl = match op {
-                    ast::TestOp::Lt => self.cm.importer.lt(self.format),
-                    ast::TestOp::Gt => self.cm.importer.gt(self.format),
-                    ast::TestOp::Leq => self.cm.importer.le(self.format),
-                    ast::TestOp::Geq => self.cm.importer.ge(self.format),
-                    ast::TestOp::Eq => self.cm.importer.eq(self.format),
+                    hir::TestOp::Lt => self.cm.importer.lt(self.format),
+                    hir::TestOp::Gt => self.cm.importer.gt(self.format),
+                    hir::TestOp::Leq => self.cm.importer.le(self.format),
+                    hir::TestOp::Geq => self.cm.importer.ge(self.format),
+                    hir::TestOp::Eq => self.cm.importer.eq(self.format),
                     _ => unreachable!(),
                 };
 
@@ -192,7 +172,7 @@ impl ExpressionBuilder<'_, '_, '_> {
                     .map(|(left, right)| reduce(left, right, decl))
                     .collect()
             }
-            ast::TestOp::Neq => {
+            hir::TestOp::Neq => {
                 let decl = self.cm.importer.neq(self.format);
 
                 args.into_iter()
@@ -200,11 +180,11 @@ impl ExpressionBuilder<'_, '_, '_> {
                     .map(|(left, right)| reduce(left, right, decl))
                     .collect()
             }
-            ast::TestOp::And | ast::TestOp::Or => args,
+            hir::TestOp::And | hir::TestOp::Or => args,
             _ => unreachable!(),
         };
 
-        let decl = if matches!(op, ast::TestOp::Or) {
+        let decl = if matches!(op, hir::TestOp::Or) {
             self.cm.importer.or()
         } else {
             self.cm.importer.and()
@@ -215,7 +195,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             .tree_fold1(|left, right| reduce(left, right, decl))
             .unwrap();
 
-        Some(Expression {
+        Some(CompiledExpr {
             control,
             assignments,
             out,
@@ -228,13 +208,13 @@ impl ExpressionBuilder<'_, '_, '_> {
         input_ports: &[ir::Id],
         output_port: ir::Id,
         is_comb: bool,
-        args: &[ast::Expression],
-    ) -> Option<Expression> {
+        args: hir::EntityList<hir::ExprIdx>,
+    ) -> Option<CompiledExpr> {
         let mut assignments = Vec::new();
 
-        let (control, args): (Vec<_>, Vec<_>) = args
+        let (control, args): (Vec<_>, Vec<_>) = self.ctx[args]
             .iter()
-            .map(|arg| {
+            .map(|&arg| {
                 let expr = self.compile_expression(arg)?;
 
                 assignments.extend(expr.assignments);
@@ -265,7 +245,7 @@ impl ExpressionBuilder<'_, '_, '_> {
             IrBuilder::collapse([control, invoke], ir::Control::seq)
         };
 
-        Some(Expression {
+        Some(CompiledExpr {
             control,
             assignments,
             out,
@@ -275,8 +255,8 @@ impl ExpressionBuilder<'_, '_, '_> {
     fn compile_primitive_operation(
         &mut self,
         primitive: &Primitive,
-        args: &[ast::Expression],
-    ) -> Option<Expression> {
+        args: hir::EntityList<hir::ExprIdx>,
+    ) -> Option<CompiledExpr> {
         let cell = self.builder.add_primitive(
             primitive.prefix_hint,
             primitive.name,
@@ -298,8 +278,8 @@ impl ExpressionBuilder<'_, '_, '_> {
     fn compile_component_operation(
         &mut self,
         prototype: &Prototype,
-        args: &[ast::Expression],
-    ) -> Option<Expression> {
+        args: hir::EntityList<hir::ExprIdx>,
+    ) -> Option<CompiledExpr> {
         let cell = self.builder.add_component(
             prototype.prefix_hint,
             prototype.name,
@@ -325,60 +305,60 @@ impl ExpressionBuilder<'_, '_, '_> {
 
     fn compile_operation(
         &mut self,
-        op: &ast::Operation,
-        uid: ast::NodeId,
-        args: &[ast::Expression],
-    ) -> Option<Expression> {
-        if let Some(prototype) = self.math_lib.get(&uid) {
+        idx: hir::ExprIdx,
+        op: &hir::Operation,
+        args: hir::EntityList<hir::ExprIdx>,
+    ) -> Option<CompiledExpr> {
+        if let Some(prototype) = self.math_lib.get(&idx) {
             return self.compile_component_operation(prototype, args);
         }
 
         match op.kind {
-            ast::OpKind::Math(ast::MathOp::Add) => {
+            hir::OpKind::Math(hir::MathOp::Add) => {
                 let decl = self.cm.importer.add(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::Sub) => {
+            hir::OpKind::Math(hir::MathOp::Sub) => {
                 let decl = self.cm.importer.sub(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::Mul) => {
+            hir::OpKind::Math(hir::MathOp::Mul) => {
                 let decl = self.cm.importer.mul(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::Div) => {
+            hir::OpKind::Math(hir::MathOp::Div) => {
                 let decl = self.cm.importer.div(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::Neg) => {
+            hir::OpKind::Math(hir::MathOp::Neg) => {
                 let decl = self.cm.importer.neg(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::FAbs) => {
+            hir::OpKind::Math(hir::MathOp::FAbs) => {
                 let decl = self.cm.importer.abs(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::Sqrt) => {
+            hir::OpKind::Math(hir::MathOp::Sqrt) => {
                 let decl = self.cm.importer.sqrt(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::FMax) => {
+            hir::OpKind::Math(hir::MathOp::FMax) => {
                 let decl = self.cm.importer.max(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Math(ast::MathOp::FMin) => {
+            hir::OpKind::Math(hir::MathOp::FMin) => {
                 let decl = self.cm.importer.min(self.format);
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Test(ast::TestOp::Not) => {
+            hir::OpKind::Test(hir::TestOp::Not) => {
                 let decl = self.cm.importer.not();
                 self.compile_primitive_operation(decl, args)
             }
-            ast::OpKind::Test(op) if op.is_variadic() => {
+            hir::OpKind::Test(op) if op.is_variadic() => {
                 self.compile_variadic_operation(op, args)
             }
-            ast::OpKind::FPCore(id) => {
-                self.compile_component_operation(&self.signatures[&id], args)
+            hir::OpKind::Def(def) => {
+                self.compile_component_operation(&self.signatures[&def], args)
             }
             _ => {
                 self.reporter.emit(
@@ -392,15 +372,10 @@ impl ExpressionBuilder<'_, '_, '_> {
         }
     }
 
-    fn compile_if(
-        &mut self,
-        cond: &ast::Expression,
-        true_branch: &ast::Expression,
-        false_branch: &ast::Expression,
-    ) -> Option<Expression> {
-        let cond = self.compile_expression(cond)?;
-        let true_branch = self.compile_expression(true_branch)?;
-        let false_branch = self.compile_expression(false_branch)?;
+    fn compile_if(&mut self, expr: &hir::If) -> Option<CompiledExpr> {
+        let cond = self.compile_expression(expr.cond)?;
+        let true_branch = self.compile_expression(expr.if_true)?;
+        let false_branch = self.compile_expression(expr.if_false)?;
 
         let params = [true_branch.out.borrow().width];
 
@@ -426,7 +401,7 @@ impl ExpressionBuilder<'_, '_, '_> {
                 assignments.extend(true_branch.assignments);
                 assignments.extend(false_branch.assignments);
 
-                Some(Expression {
+                Some(CompiledExpr {
                     control: cond.control,
                     assignments,
                     out,
@@ -471,7 +446,7 @@ impl ExpressionBuilder<'_, '_, '_> {
                     ir::Control::seq,
                 );
 
-                Some(Expression {
+                Some(CompiledExpr {
                     control,
                     assignments: Vec::new(),
                     out,
@@ -480,16 +455,12 @@ impl ExpressionBuilder<'_, '_, '_> {
         }
     }
 
-    fn compile_let(
-        &mut self,
-        bindings: &[ast::Binding],
-        body: &ast::Expression,
-        sequential: bool,
-    ) -> Option<Expression> {
-        let (args, stores): (Vec<_>, Vec<_>) = bindings
+    fn compile_let(&mut self, expr: &hir::Let) -> Option<CompiledExpr> {
+        let (args, stores): (Vec<_>, Vec<_>) = self.ctx[expr.writes]
             .iter()
-            .map(|binding| {
-                let expr = self.compile_expression(&binding.expr)?;
+            .map(|&write| {
+                let write = &self.ctx[write];
+                let expr = self.compile_expression(write.val)?;
 
                 let params = [expr.out.borrow().width];
                 let reg = self.builder.add_primitive("r", "std_reg", &params);
@@ -501,15 +472,15 @@ impl ExpressionBuilder<'_, '_, '_> {
                     expr.assignments,
                 );
 
-                self.stores.insert(binding.expr.uid, reg);
+                self.stores.insert(write.var, reg);
 
                 Some((expr.control, invoke))
             })
             .collect::<Option<_>>()?;
 
-        let body = self.compile_expression(body)?;
+        let body = self.compile_expression(expr.body)?;
 
-        let control = if sequential {
+        let control = if expr.sequential {
             IrBuilder::collapse(
                 itertools::interleave(args, stores)
                     .chain(iter::once(body.control)),
@@ -526,20 +497,15 @@ impl ExpressionBuilder<'_, '_, '_> {
             )
         };
 
-        Some(Expression { control, ..body })
+        Some(CompiledExpr { control, ..body })
     }
 
-    fn compile_while(
-        &mut self,
-        cond: &ast::Expression,
-        vars: &[ast::MutableVar],
-        body: &ast::Expression,
-        sequential: bool,
-    ) -> Option<Expression> {
-        let (inits, init_stores): (Vec<_>, Vec<_>) = vars
+    fn compile_while(&mut self, expr: &hir::While) -> Option<CompiledExpr> {
+        let (inits, init_stores): (Vec<_>, Vec<_>) = self.ctx[expr.inits]
             .iter()
-            .map(|var| {
-                let init = self.compile_expression(&var.init)?;
+            .map(|&write| {
+                let write = &self.ctx[write];
+                let init = self.compile_expression(write.val)?;
 
                 let params = [init.out.borrow().width];
                 let reg = self.builder.add_primitive("r", "std_reg", &params);
@@ -551,20 +517,21 @@ impl ExpressionBuilder<'_, '_, '_> {
                     init.assignments,
                 );
 
-                self.stores.insert(var.init.uid, reg);
+                self.stores.insert(write.var, reg);
 
                 Some((init.control, invoke))
             })
             .collect::<Option<_>>()?;
 
-        let cond = self.compile_expression(cond)?;
-        let body = self.compile_expression(body)?;
+        let cond = self.compile_expression(expr.cond)?;
+        let body = self.compile_expression(expr.body)?;
 
-        let (updates, update_stores): (Vec<_>, Vec<_>) = vars
+        let (updates, update_stores): (Vec<_>, Vec<_>) = self.ctx[expr.updates]
             .iter()
-            .map(|var| {
-                let update = self.compile_expression(&var.update)?;
-                let reg = self.stores[&var.init.uid].clone();
+            .map(|&write| {
+                let write = &self.ctx[write];
+                let update = self.compile_expression(write.val)?;
+                let reg = self.stores[&write.var].clone();
 
                 let invoke = self.builder.invoke_with(
                     reg,
@@ -579,7 +546,7 @@ impl ExpressionBuilder<'_, '_, '_> {
 
         let group = self.builder.add_comb_group("cond", cond.assignments);
 
-        let control = if sequential {
+        let control = if expr.sequential {
             IrBuilder::collapse(
                 itertools::interleave(inits, init_stores).chain([
                     IrBuilder::clone_control(&cond.control),
@@ -623,64 +590,52 @@ impl ExpressionBuilder<'_, '_, '_> {
             )
         };
 
-        Some(Expression { control, ..body })
+        Some(CompiledExpr { control, ..body })
     }
 
     fn compile_expression(
         &mut self,
-        expr: &ast::Expression,
-    ) -> Option<Expression> {
+        idx: hir::ExprIdx,
+    ) -> Option<CompiledExpr> {
+        let expr = &self.ctx[idx];
+
         match &expr.kind {
-            ast::ExprKind::Num(num) => self.compile_number(num),
-            ast::ExprKind::Const(constant) => {
+            hir::ExprKind::Num(num) => self.compile_number(*num),
+            hir::ExprKind::Const(constant) => {
                 self.compile_constant(*constant, expr.span)
             }
-            ast::ExprKind::Id(sym) => Some(self.compile_symbol(sym, expr.uid)),
-            ast::ExprKind::Op(op, args) => {
-                self.compile_operation(op, expr.uid, args)
-            }
-            ast::ExprKind::If {
-                cond,
-                true_branch,
-                false_branch,
-            } => self.compile_if(cond, true_branch, false_branch),
-            ast::ExprKind::Let {
-                bindings,
-                body,
-                sequential,
-            } => self.compile_let(bindings, body, *sequential),
-            ast::ExprKind::While {
-                cond,
-                vars,
-                body,
-                sequential,
-            } => self.compile_while(cond, vars, body, *sequential),
-            ast::ExprKind::Annotation { props: _, body } => {
-                self.compile_expression(body)
-            }
-            _ => {
-                self.reporter.emit(
-                    &Diagnostic::error()
-                        .with_message("unsupported expression")
-                        .with_primary(expr.span, ""),
-                );
+            hir::ExprKind::Var(_, hir::VarKind::Arg(arg)) => {
+                let id = self.ctx[*arg].var.id;
+                let port = self.builder.component.signature.borrow().get(id);
 
-                None
+                Some(CompiledExpr::from_port(port))
             }
+            hir::ExprKind::Var(var, _) => {
+                let port = self.stores[var].borrow().get("out");
+
+                Some(CompiledExpr::from_port(port))
+            }
+            hir::ExprKind::Op(op, args) => {
+                self.compile_operation(idx, op, *args)
+            }
+            hir::ExprKind::If(expr) => self.compile_if(expr),
+            hir::ExprKind::Let(expr) => self.compile_let(expr),
+            hir::ExprKind::While(expr) => self.compile_while(expr),
         }
     }
 }
 
 struct NameGenerator {
     generated: usize,
+    used: HashSet<ir::Id>,
 }
 
 impl NameGenerator {
-    fn new() -> NameGenerator {
-        NameGenerator { generated: 0 }
+    fn new(used: HashSet<ir::Id>) -> NameGenerator {
+        NameGenerator { generated: 0, used }
     }
 
-    fn next(&mut self, bindings: &sem::NameResolution) -> ir::Id {
+    fn next(&mut self) -> ir::Id {
         loop {
             let name = if self.generated == 0 {
                 ir::Id::new("main")
@@ -690,47 +645,50 @@ impl NameGenerator {
 
             self.generated += 1;
 
-            if !bindings.defs.contains_key(&name) {
+            if !self.used.contains(&name) {
                 break name;
             }
         }
     }
 }
 
-struct GlobalContext<'c, 'ast> {
-    format: &'c Format,
-    bindings: &'c sem::NameResolution<'ast>,
-    math_lib: &'c HashMap<ast::NodeId, Prototype>,
-    reporter: &'c mut Reporter<'ast>,
-    cm: &'c mut ComponentManager,
-    lib: &'c mut ir::LibrarySignatures,
+struct CompileContext<'a, 'src> {
+    ctx: &'a hir::Context,
+    math_lib: &'a HashMap<hir::ExprIdx, Prototype>,
+    format: &'a Format,
+
+    cm: &'a mut ComponentManager,
+    lib: &'a mut ir::LibrarySignatures,
+    reporter: &'a mut Reporter<'src>,
+
     names: NameGenerator,
-    signatures: HashMap<ast::Id, Prototype>,
+    signatures: HashMap<hir::DefIdx, Prototype>,
 }
 
 fn compile_definition(
-    def: &ast::FPCore,
-    ctx: &mut GlobalContext,
+    idx: hir::DefIdx,
+    def: &hir::Definition,
+    cc: &mut CompileContext,
 ) -> Option<ir::Component> {
     let name = def
         .name
         .as_ref()
-        .map_or_else(|| ctx.names.next(ctx.bindings), |sym| sym.id);
+        .map_or_else(|| cc.names.next(), |sym| sym.id);
 
     let ports = || {
         def.args
-            .iter()
+            .into_iter()
             .map(|arg| {
                 ir::PortDef::new(
-                    arg.var.id,
-                    u64::from(ctx.format.width),
+                    cc.ctx[arg].var.id,
+                    u64::from(cc.format.width),
                     ir::Direction::Input,
                     Default::default(),
                 )
             })
             .chain(iter::once(ir::PortDef::new(
                 "out",
-                u64::from(ctx.format.width),
+                u64::from(cc.format.width),
                 ir::Direction::Output,
                 Default::default(),
             )))
@@ -738,20 +696,20 @@ fn compile_definition(
     };
 
     let mut component = ir::Component::new(name, ports(), false, false, None);
-    let mut builder = IrBuilder::new(&mut component, ctx.lib);
+    let mut builder = IrBuilder::new(&mut component, cc.lib);
 
-    let mut expr_builder = ExpressionBuilder {
-        format: ctx.format,
-        bindings: ctx.bindings,
-        signatures: &ctx.signatures,
-        math_lib: ctx.math_lib,
-        reporter: ctx.reporter,
-        cm: ctx.cm,
+    let mut compiler = Builder {
+        ctx: cc.ctx,
+        signatures: &cc.signatures,
+        math_lib: cc.math_lib,
+        format: cc.format,
+        cm: cc.cm,
+        reporter: cc.reporter,
         builder: &mut builder,
         stores: HashMap::new(),
     };
 
-    let body = expr_builder.compile_expression(&def.body)?;
+    let body = compiler.compile_expression(def.body)?;
 
     let assign = ir::Assignment::new(
         builder.component.signature.borrow().get("out"),
@@ -773,41 +731,44 @@ fn compile_definition(
             is_comb: component.is_comb,
         };
 
-        ctx.signatures.insert(sym.id, prototype);
+        cc.signatures.insert(idx, prototype);
     }
 
     Some(component)
 }
 
-pub fn compile_fpcore<'ast>(
-    defs: &'ast [ast::FPCore],
+pub fn compile_hir(
+    ctx: &hir::Context,
     opts: &Opts,
-    rpt: &mut Reporter<'ast>,
+    reporter: &mut Reporter,
     mut lib: ir::LibrarySignatures,
 ) -> Option<Program> {
-    let pm = PassManager::new(opts, defs, rpt);
-
-    let _: &sem::TypeCheck = pm.get_analysis()?;
-    let call_graph: &sem::CallGraph = pm.get_analysis()?;
-
     let mut cm = ComponentManager::new();
-    let math_lib = libm::compile_math_library(&pm, &mut cm, &mut lib)?;
 
-    let mut ctx = GlobalContext {
-        format: &opts.format,
-        bindings: pm.get_analysis()?,
+    let math_lib =
+        libm::compile_math_library(ctx, opts, reporter, &mut cm, &mut lib)?;
+
+    let names = ctx
+        .defs
+        .values()
+        .filter_map(|def| def.name.as_ref().map(|sym| sym.id))
+        .collect();
+
+    let mut cc = CompileContext {
+        ctx,
         math_lib: &math_lib,
-        reporter: &mut pm.rpt(),
+        format: &opts.format,
         cm: &mut cm,
         lib: &mut lib,
-        names: NameGenerator::new(),
+        reporter,
+        names: NameGenerator::new(names),
         signatures: HashMap::new(),
     };
 
-    for def in &call_graph.linearized {
-        let component = compile_definition(def, &mut ctx)?;
+    for (idx, def) in &ctx.defs {
+        let component = compile_definition(idx, def, &mut cc)?;
 
-        ctx.cm.components.push(component);
+        cc.cm.components.push(component);
     }
 
     Some(Program {

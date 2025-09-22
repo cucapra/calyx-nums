@@ -2,11 +2,12 @@
 
 use std::ffi::OsStr;
 use std::io::{self, Write};
+use std::ops::Range;
 use std::process::{Command, Stdio};
 use std::string::FromUtf8Error;
 use std::{fmt, thread};
 
-use crate::fpcore::ast;
+use crate::hir;
 use crate::utils::{Diagnostic, Mangle};
 
 /// Invokes Sollya with the given command.
@@ -179,32 +180,32 @@ impl fmt::Display for SollyaFunction {
     }
 }
 
-impl TryFrom<ast::MathOp> for SollyaFunction {
+impl TryFrom<hir::MathOp> for SollyaFunction {
     type Error = ();
 
-    fn try_from(value: ast::MathOp) -> Result<Self, Self::Error> {
+    fn try_from(value: hir::MathOp) -> Result<Self, Self::Error> {
         match value {
-            ast::MathOp::Sin => Ok(SollyaFunction::Sin),
-            ast::MathOp::Cos => Ok(SollyaFunction::Cos),
-            ast::MathOp::Tan => Ok(SollyaFunction::Tan),
-            ast::MathOp::Sinh => Ok(SollyaFunction::Sinh),
-            ast::MathOp::Cosh => Ok(SollyaFunction::Cosh),
-            ast::MathOp::Tanh => Ok(SollyaFunction::Tanh),
-            ast::MathOp::ASin => Ok(SollyaFunction::ASin),
-            ast::MathOp::ACos => Ok(SollyaFunction::ACos),
-            ast::MathOp::ATan => Ok(SollyaFunction::ATan),
-            ast::MathOp::ASinh => Ok(SollyaFunction::ASinh),
-            ast::MathOp::ACosh => Ok(SollyaFunction::ACosh),
-            ast::MathOp::ATanh => Ok(SollyaFunction::ATanh),
-            ast::MathOp::Exp => Ok(SollyaFunction::Exp),
-            ast::MathOp::ExpM1 => Ok(SollyaFunction::ExpM1),
-            ast::MathOp::Log => Ok(SollyaFunction::Log),
-            ast::MathOp::Log2 => Ok(SollyaFunction::Log2),
-            ast::MathOp::Log10 => Ok(SollyaFunction::Log10),
-            ast::MathOp::Log1P => Ok(SollyaFunction::Log1P),
-            ast::MathOp::Sqrt => Ok(SollyaFunction::Sqrt),
-            ast::MathOp::Erf => Ok(SollyaFunction::Erf),
-            ast::MathOp::ErfC => Ok(SollyaFunction::ErfC),
+            hir::MathOp::Sin => Ok(SollyaFunction::Sin),
+            hir::MathOp::Cos => Ok(SollyaFunction::Cos),
+            hir::MathOp::Tan => Ok(SollyaFunction::Tan),
+            hir::MathOp::Sinh => Ok(SollyaFunction::Sinh),
+            hir::MathOp::Cosh => Ok(SollyaFunction::Cosh),
+            hir::MathOp::Tanh => Ok(SollyaFunction::Tanh),
+            hir::MathOp::ASin => Ok(SollyaFunction::ASin),
+            hir::MathOp::ACos => Ok(SollyaFunction::ACos),
+            hir::MathOp::ATan => Ok(SollyaFunction::ATan),
+            hir::MathOp::ASinh => Ok(SollyaFunction::ASinh),
+            hir::MathOp::ACosh => Ok(SollyaFunction::ACosh),
+            hir::MathOp::ATanh => Ok(SollyaFunction::ATanh),
+            hir::MathOp::Exp => Ok(SollyaFunction::Exp),
+            hir::MathOp::ExpM1 => Ok(SollyaFunction::ExpM1),
+            hir::MathOp::Log => Ok(SollyaFunction::Log),
+            hir::MathOp::Log2 => Ok(SollyaFunction::Log2),
+            hir::MathOp::Log10 => Ok(SollyaFunction::Log10),
+            hir::MathOp::Log1P => Ok(SollyaFunction::Log1P),
+            hir::MathOp::Sqrt => Ok(SollyaFunction::Sqrt),
+            hir::MathOp::Erf => Ok(SollyaFunction::Erf),
+            hir::MathOp::ErfC => Ok(SollyaFunction::ErfC),
             _ => Err(()),
         }
     }
@@ -247,9 +248,9 @@ impl Diagnostic {
 
     /// Formats a [`ScriptError`] arising during compilation of the operator
     /// located at `span`.
-    pub fn from_sollya_and_span(
+    pub fn from_sollya_and_span<S: Into<Range<usize>>>(
         err: ScriptError,
-        span: ast::Span,
+        span: S,
     ) -> Diagnostic {
         Diagnostic::from_sollya(err)
             .with_secondary(span, "while compiling this operator")

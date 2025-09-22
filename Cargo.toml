@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 argh = "0.1"
 codespan-reporting = "0.11"
+cranelift-entity = "0.123"
 itertools = "0.11"
 malachite = "0.4"
 pest = "2"

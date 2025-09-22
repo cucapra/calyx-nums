@@ -49,20 +49,15 @@ impl Index<ast::NodeId> for TypeCheck {
 #[derive(Debug)]
 struct TypeError;
 
-struct Builder<'p, 'ast> {
-    bindings: &'p NameResolution<'ast>,
-    reporter: &'p mut Reporter<'ast>,
+struct Builder<'pm, 'ast, 'src> {
+    bindings: &'pm NameResolution<'ast>,
+    reporter: &'pm mut Reporter<'src>,
     types: HashMap<ast::NodeId, Type>,
 }
 
-impl Builder<'_, '_> {
+impl Builder<'_, '_, '_> {
     fn check_definition(&mut self, def: &ast::FPCore) -> Result<(), TypeError> {
-        for prop in &def.props {
-            if let ast::PropKind::Pre(expr) = &prop.kind {
-                self.expect(expr, Type::Boolean)?;
-            }
-        }
-
+        self.check_properties(&def.props)?;
         self.expect(&def.body, Type::Number)
     }
 
@@ -238,7 +233,8 @@ impl Builder<'_, '_> {
 
                 return Err(TypeError);
             }
-            ast::ExprKind::Annotation { body, .. } => {
+            ast::ExprKind::Annotation { props, body } => {
+                self.check_properties(props)?;
                 self.check_expression(body)?
             }
         };
@@ -275,6 +271,19 @@ impl Builder<'_, '_> {
                 );
 
                 return Err(TypeError);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn check_properties(
+        &mut self,
+        props: &[ast::Property],
+    ) -> Result<(), TypeError> {
+        for prop in props {
+            if let ast::PropKind::Pre(expr) = &prop.kind {
+                self.expect(expr, Type::Boolean)?;
             }
         }
 

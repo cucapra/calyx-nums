@@ -3,29 +3,30 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
-use super::{Binding, NameResolution};
-use crate::fpcore::ast;
+use crate::hir;
 use crate::utils::{Diagnostic, Reporter};
 
 #[derive(Debug)]
 pub struct UnsupportedPredicateError;
 
 #[derive(Default)]
-pub struct Precondition<'ast> {
-    pub domains: HashMap<ast::NodeId, Interval<'ast>>,
+pub struct Precondition<'ctx> {
+    pub domains: HashMap<hir::ArgIdx, Interval<'ctx>>,
 }
 
-impl<'ast> Precondition<'ast> {
-    pub fn new() -> Precondition<'ast> {
+impl<'ctx> Precondition<'ctx> {
+    pub fn new() -> Precondition<'ctx> {
         Default::default()
     }
 
     pub fn add_constraint(
         &mut self,
-        pred: &'ast ast::Expression,
-        bindings: &NameResolution,
+        pred: hir::ExprIdx,
+        ctx: &'ctx hir::Context,
         reporter: &mut Reporter,
     ) -> Result<(), UnsupportedPredicateError> {
+        let pred = &ctx[pred];
+
         let mut unsupported = || {
             reporter.emit(
                 &Diagnostic::error()
@@ -36,74 +37,82 @@ impl<'ast> Precondition<'ast> {
             Err(UnsupportedPredicateError)
         };
 
-        let ast::ExprKind::Op(op, args) = &pred.kind else {
+        let hir::ExprKind::Op(op, args) = &pred.kind else {
             return unsupported();
         };
 
-        let ast::OpKind::Test(op) = op.kind else {
+        let hir::OpKind::Test(op) = op.kind else {
             return unsupported();
         };
+
+        let args = &ctx[*args];
 
         match op {
-            ast::TestOp::And => {
-                for arg in args {
-                    self.add_constraint(arg, bindings, reporter)?;
+            hir::TestOp::And => {
+                for &arg in args {
+                    self.add_constraint(arg, ctx, reporter)?;
                 }
             }
-            ast::TestOp::Or => {
+            hir::TestOp::Or => {
                 let mut disjunction = Precondition::new();
 
-                disjunction.add_constraint(&args[0], bindings, reporter)?;
+                disjunction.add_constraint(args[0], ctx, reporter)?;
 
-                for arg in &args[1..] {
+                for &arg in &args[1..] {
                     let mut disjunct = Precondition::new();
 
-                    disjunct.add_constraint(arg, bindings, reporter)?;
+                    disjunct.add_constraint(arg, ctx, reporter)?;
                     disjunction.union(disjunct);
                 }
 
                 self.intersect(disjunction);
             }
-            ast::TestOp::Lt
-            | ast::TestOp::Gt
-            | ast::TestOp::Leq
-            | ast::TestOp::Geq => {
-                for (a, b) in args.iter().tuple_windows() {
+            hir::TestOp::Lt
+            | hir::TestOp::Gt
+            | hir::TestOp::Leq
+            | hir::TestOp::Geq => {
+                for (a, b) in args.iter().copied().tuple_windows() {
                     let (a, b) =
-                        if matches!(op, ast::TestOp::Lt | ast::TestOp::Leq) {
+                        if matches!(op, hir::TestOp::Lt | hir::TestOp::Leq) {
                             (a, b)
                         } else {
                             (b, a)
                         };
 
-                    let (var, domain) = match (&a.kind, &b.kind) {
-                        (ast::ExprKind::Id(_), ast::ExprKind::Num(num)) => {
+                    let (var, domain) = match (&ctx[a].kind, &ctx[b].kind) {
+                        (
+                            hir::ExprKind::Var(_, var),
+                            hir::ExprKind::Num(num),
+                        ) => {
                             let domain = Interval::new(
                                 Endpoint::Infinite,
-                                Endpoint::Finite(&num.value),
+                                Endpoint::Finite(&ctx[*num].value),
                             );
 
-                            (a.uid, domain)
+                            (*var, domain)
                         }
-                        (ast::ExprKind::Num(num), ast::ExprKind::Id(_)) => {
+                        (
+                            hir::ExprKind::Num(num),
+                            hir::ExprKind::Var(_, var),
+                        ) => {
                             let domain = Interval::new(
-                                Endpoint::Finite(&num.value),
+                                Endpoint::Finite(&ctx[*num].value),
                                 Endpoint::Infinite,
                             );
 
-                            (b.uid, domain)
+                            (*var, domain)
                         }
                         _ => {
                             return unsupported();
                         }
                     };
 
-                    let Binding::Argument(arg) = bindings.names[&var] else {
+                    let hir::VarKind::Arg(arg) = var else {
                         unreachable!("`:pre` only checked at top level");
                     };
 
                     self.domains
-                        .entry(arg.uid)
+                        .entry(arg)
                         .and_modify(|old| *old = old.intersection(&domain))
                         .or_insert(domain);
                 }
@@ -116,23 +125,23 @@ impl<'ast> Precondition<'ast> {
         Ok(())
     }
 
-    fn union(&mut self, other: Precondition<'ast>) {
+    fn union(&mut self, other: Precondition<'ctx>) {
         self.domains = self
             .domains
             .iter()
-            .filter_map(|(uid, left)| {
+            .filter_map(|(arg, left)| {
                 other
                     .domains
-                    .get(uid)
-                    .map(|right| (*uid, left.union(right)))
+                    .get(arg)
+                    .map(|right| (*arg, left.union(right)))
             })
             .collect();
     }
 
-    fn intersect(&mut self, other: Precondition<'ast>) {
-        for (uid, right) in other.domains {
+    fn intersect(&mut self, other: Precondition<'ctx>) {
+        for (arg, right) in other.domains {
             self.domains
-                .entry(uid)
+                .entry(arg)
                 .and_modify(|left| *left = left.intersection(&right))
                 .or_insert(right);
         }
@@ -166,7 +175,7 @@ impl<'a> Interval<'a> {
         }
     }
 
-    pub fn bounds(&self) -> Option<(&'a ast::Rational, &'a ast::Rational)> {
+    pub fn bounds(&self) -> Option<(&'a hir::Rational, &'a hir::Rational)> {
         match (self.left.0, self.right.0) {
             (Endpoint::Finite(left), Endpoint::Finite(right)) => {
                 Some((left, right))
@@ -179,7 +188,7 @@ impl<'a> Interval<'a> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Endpoint<'a> {
     Infinite,
-    Finite(&'a ast::Rational),
+    Finite(&'a hir::Rational),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
