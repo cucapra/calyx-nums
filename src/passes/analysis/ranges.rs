@@ -47,10 +47,7 @@ impl RangeAnalysis {
 
         let ranges = run_script(&builder.script, &opts.format)
             .map_err(|err| {
-                builder.reporter.emit(
-                    &Diagnostic::from_sollya(err)
-                        .with_note("range analysis failed"),
-                );
+                builder.reporter.emit(&err.into_diagnostic(ctx));
             })
             .ok()?;
 
@@ -61,28 +58,43 @@ impl RangeAnalysis {
 fn run_script(
     script: &str,
     format: &Format,
-) -> Result<SecondaryMap<hir::ExprIdx, [hir::Rational; 2]>, ScriptError> {
+) -> Result<SecondaryMap<hir::ExprIdx, [hir::Rational; 2]>, AnalysisError> {
     let cmd = script.as_bytes();
     let arg = [format.scale.to_string()];
 
     let result = sollya::sollya(cmd, &arg)?;
 
-    result
-        .lines()
-        .map(|line| parse_response_line(line).ok_or(ScriptError::BadResponse))
-        .collect()
+    result.lines().map(parse_response_line).collect()
 }
 
 fn parse_response_line(
     line: &str,
-) -> Option<(hir::ExprIdx, [hir::Rational; 2])> {
-    let (idx, left, right) = line.split(' ').collect_tuple()?;
+) -> Result<(hir::ExprIdx, [hir::Rational; 2]), AnalysisError> {
+    let (idx, left, right) = line
+        .split(' ')
+        .collect_tuple()
+        .ok_or(ScriptError::BadResponse)?;
 
-    let idx = hir::ExprIdx::from_u32(idx.parse().ok()?);
-    let left = hir::Rational::from_dyadic(left)?;
-    let right = hir::Rational::from_dyadic(right)?;
+    let idx = idx
+        .parse()
+        .map(hir::ExprIdx::from_u32)
+        .map_err(|_| ScriptError::BadResponse)?;
 
-    Some((idx, [left, right]))
+    let left = parse_dyadic(left, idx)?;
+    let right = parse_dyadic(right, idx)?;
+
+    Ok((idx, [left, right]))
+}
+
+fn parse_dyadic(
+    s: &str,
+    idx: hir::ExprIdx,
+) -> Result<hir::Rational, AnalysisError> {
+    match s {
+        "-infty" | "infty" => Err(AnalysisError::Unbounded(idx)),
+        "NaN" => Err(AnalysisError::Undefined(idx)),
+        _ => hir::Rational::from_dyadic(s).ok_or(AnalysisError::BAD_RESPONSE),
+    }
 }
 
 impl Index<hir::ExprIdx> for RangeAnalysis {
@@ -93,8 +105,37 @@ impl Index<hir::ExprIdx> for RangeAnalysis {
     }
 }
 
+enum AnalysisError {
+    Script(ScriptError),
+    Unbounded(hir::ExprIdx),
+    Undefined(hir::ExprIdx),
+}
+
+impl AnalysisError {
+    const BAD_RESPONSE: AnalysisError =
+        AnalysisError::Script(ScriptError::BadResponse);
+
+    fn into_diagnostic(self, ctx: &hir::Context) -> Diagnostic {
+        match self {
+            AnalysisError::Script(err) => Diagnostic::from_sollya(err),
+            AnalysisError::Unbounded(idx) => Diagnostic::error()
+                .with_message("couldn't bound ranges")
+                .with_primary(ctx[idx].span, "expression has unbounded range"),
+            AnalysisError::Undefined(idx) => Diagnostic::error()
+                .with_message("couldn't bound ranges")
+                .with_primary(ctx[idx].span, "expression not total"),
+        }
+    }
+}
+
+impl<T: Into<ScriptError>> From<T> for AnalysisError {
+    fn from(err: T) -> Self {
+        AnalysisError::Script(err.into())
+    }
+}
+
 #[derive(Debug)]
-struct RangeAnalysisError;
+struct BuilderError;
 
 struct Builder<'a, 'src> {
     reporter: &'a mut Reporter<'src>,
@@ -190,14 +231,14 @@ impl Builder<'_, '_> {
 }
 
 impl Visitor for Builder<'_, '_> {
-    type Error = RangeAnalysisError;
+    type Error = BuilderError;
 
     fn visit_definition(
         &mut self,
         _: hir::DefIdx,
         def: &hir::Definition,
         ctx: &hir::Context,
-    ) -> Result<(), RangeAnalysisError> {
+    ) -> Result<(), BuilderError> {
         let mut pre = Precondition::new();
 
         let preconditions = def.props(ctx).filter_map(|prop| match prop {
@@ -207,7 +248,7 @@ impl Visitor for Builder<'_, '_> {
 
         for expr in preconditions {
             pre.add_constraint(expr, ctx, self.reporter)
-                .map_err(|_| RangeAnalysisError)?;
+                .map_err(|_| BuilderError)?;
         }
 
         for arg in def.args {
@@ -225,7 +266,7 @@ impl Visitor for Builder<'_, '_> {
                             ),
                     );
 
-                    RangeAnalysisError
+                    BuilderError
                 })?;
 
             self.script_interval(arg, left, right);
@@ -238,7 +279,7 @@ impl Visitor for Builder<'_, '_> {
         &mut self,
         idx: hir::ExprIdx,
         ctx: &hir::Context,
-    ) -> Result<(), RangeAnalysisError> {
+    ) -> Result<(), BuilderError> {
         let expr = &ctx[idx];
 
         match &expr.kind {
@@ -252,7 +293,7 @@ impl Visitor for Builder<'_, '_> {
                         .with_primary(expr.span, "unsupported constant"),
                 );
 
-                return Err(RangeAnalysisError);
+                return Err(BuilderError);
             }
             hir::ExprKind::Const(hir::Constant::Bool(_)) => {
                 self.script_bool(idx);
@@ -296,7 +337,7 @@ impl Visitor for Builder<'_, '_> {
                                         ),
                                 );
 
-                                RangeAnalysisError
+                                BuilderError
                             })?
                             .as_str(),
                         false,
@@ -357,7 +398,7 @@ impl Visitor for Builder<'_, '_> {
                         .with_primary(expr.span, "unsupported expression"),
                 );
 
-                return Err(RangeAnalysisError);
+                return Err(BuilderError);
             }
         };
 
