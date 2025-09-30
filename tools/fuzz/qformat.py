@@ -26,7 +26,7 @@ class QFormat:
 
             return cls(int(m), int(n), u is None)
         else:
-            raise RuntimeError('Invalid format')
+            raise ValueError('invalid format')
 
     @property
     def width(self) -> int:

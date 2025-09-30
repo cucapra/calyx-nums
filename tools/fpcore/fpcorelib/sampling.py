@@ -1,5 +1,6 @@
 import math
 import random
+from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum
 from typing import Generic, Protocol, SupportsFloat, TypeVar
@@ -44,14 +45,14 @@ class Interval(Generic[Num]):
     left: Num
     right: Num
 
-    def intersect(self, rel: Rel, rhs: Num):
+    def constrain(self, rel: Rel, rhs: Num):
         if rel.strict() == Rel.LT:
             self.right = min(self.right, rhs)
         else:
             self.left = max(self.left, rhs)
 
 
-def domain(pre: Data[Num], min: Num, max: Num):
+def parse_precondition(pre: Data[Num], min: Num, max: Num):
     intervals: dict[str, Interval[Num]] = {}
 
     def walk(expr: Data[Num]):
@@ -74,11 +75,23 @@ def domain(pre: Data[Num], min: Num, max: Num):
                 if left.id not in intervals:
                     intervals[left.id] = Interval(min, max)
 
-                intervals[left.id].intersect(rel, right.val)
+                intervals[left.id].constrain(rel, right.val)
 
     walk(pre)
 
     return intervals
+
+
+def parse_domain(
+    fpcore: FPCore[Num], min: Num, max: Num
+) -> list[Interval[Num]]:
+    for prop in fpcore.props:
+        if prop.name == ':pre':
+            domains = parse_precondition(prop.data, min, max)
+
+            return [domains[arg.var] for arg in fpcore.args]
+
+    raise RuntimeError('missing precondition')
 
 
 def sample(domain: Interval[float]) -> float:
@@ -89,13 +102,7 @@ def sample(domain: Interval[float]) -> float:
             return value
 
 
-def sample_args(bench: FPCore[float], n: int) -> list[list[float]]:
-    for prop in bench.props:
-        if prop.name == ':pre':
-            domains = domain(prop.data, -math.inf, math.inf)
+def sample_domain(fpcore: FPCore[float], n: int) -> Generator[list[float]]:
+    domain = parse_domain(fpcore, -math.inf, math.inf)
 
-            break
-    else:
-        raise RuntimeError('No domain specified')
-
-    return [[sample(domains[arg.var]) for arg in bench.args] for _ in range(n)]
+    return (list(map(sample, domain)) for _ in range(n))
