@@ -1,0 +1,11 @@
+(FPCore (x y)
+ :name "inversek2j1"
+ :cite (yaz-etal:axbench)
+ :pre (and (<= -0.7071 x 0.7071) (<= -0.7071 y 0.7071))
+ (let ([l1 0.5] [l2 0.5])
+   (let* ([theta2 (acos (/ (- (- (+ (* x x) (* y y)) (* l1 l1)) (* l2 l2))
+                           (* (* 2 l1) l2)))]
+          [theta1 (asin (/ (- (* y (+ l1 (* l2 (cos theta2))))
+                              (* (* x l2) (sin theta2)))
+                           (+ (* x x) (* y y))))])
+     theta1)))

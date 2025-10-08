@@ -1,0 +1,14 @@
+(FPCore (cosTi n)
+ :name "FresnelR"
+ :description "Fresnel reflectance term"
+ :cite (povray)
+ :pre (and (<= -1.0 cosTi 1.0) (<= 0.25 n 4.0))
+ (let ([sqrg (- (+ (* n n) (* cosTi cosTi)) 1.0)])
+   (if (<= sqrg 0.0)
+       1.0
+       (let* ([g (sqrt sqrg)]
+              [quot1 (/ (- g cosTi) (+ g cosTi))]
+              [quot2 (/ (- (* cosTi (+ g cosTi)) 1.0)
+                        (+ (* cosTi (- g cosTi)) 1.0))]
+              [f (* (* 0.5 (* quot1 quot1)) (+ 1.0 (* quot2 quot2)))])
+         (fmin 1.0 (fmax 0.0 f))))))

@@ -1,0 +1,64 @@
+(FPCore CNDF (InputX)
+ :pre (< -87 InputX 110)
+ (let* ([inv_sqrt_2xPI 0.39894228040143270286]
+        [sign (< InputX 0.0)]
+        [InputX (if sign (- InputX) InputX)]
+        [xInput InputX]
+        [expValues (exp (* (* -0.5 InputX) InputX))]
+        [xNPrimeofX expValues]
+        [xNPrimeofX (* xNPrimeofX inv_sqrt_2xPI)]
+        [xK2 (* 0.2316419 xInput)]
+        [xK2 (+ 1.0 xK2)]
+        [xK2 (/ 1.0 xK2)]
+        [xK2_2 (* xK2 xK2)]
+        [xK2_3 (* xK2_2 xK2)]
+        [xK2_4 (* xK2_3 xK2)]
+        [xK2_5 (* xK2_4 xK2)]
+        [xLocal_1 (* xK2 0.319381530)]
+        [xLocal_2 (* xK2_2 -0.356563782)]
+        [xLocal_3 (* xK2_3 1.781477937)]
+        [xLocal_2 (+ xLocal_2 xLocal_3)]
+        [xLocal_3 (* xK2_4 -1.821255978)]
+        [xLocal_2 (+ xLocal_2 xLocal_3)]
+        [xLocal_3 (* xK2_5 1.330274429)]
+        [xLocal_2 (+ xLocal_2 xLocal_3)]
+        [xLocal_1 (+ xLocal_2 xLocal_1)]
+        [xLocal (* xLocal_1 xNPrimeofX)]
+        [xLocal (- 1.0 xLocal)]
+        [OutputX (if sign (- 1.0 xLocal) xLocal)])
+   OutputX))
+
+(FPCore (sptprice strike rate volatility time otype)
+ :name "blackscholes"
+ :cite (bie-etal:parsec)
+ :pre (and (<= 7/20 sptprice 5/6) (<= 1/3 strike 11/12)
+           (<= 0.0275 rate 0.1) (<= 0.05 volatility 0.65) (<= 0.05 time 1.0)
+           (or (== otype 0) (== otype 1)))
+ (let* ([xStockPrice sptprice]
+        [xStrikePrice strike]
+        [xRiskFreeRate rate]
+        [xVolatility volatility]
+        [xTime time]
+        [xSqrtTime (sqrt xTime)]
+        [logValues (log (/ sptprice strike))]
+        [xLogTerm logValues]
+        [xPowerTerm (* xVolatility xVolatility)]
+        [xPowerTerm (* xPowerTerm 0.5)]
+        [xD1 (+ xRiskFreeRate xPowerTerm)]
+        [xD1 (* xD1 xTime)]
+        [xD1 (+ xD1 xLogTerm)]
+        [xDen (* xVolatility xSqrtTime)]
+        [xD1 (/ xD1 xDen)]
+        [xD2 (- xD1 xDen)]
+        [d1 xD1]
+        [d2 xD2]
+        [NofXd1 (CNDF d1)]
+        [NofXd2 (CNDF d2)]
+        [FutureValueX (* strike (exp (* (- rate) time)))]
+        [OptionPrice (if (== otype 0)
+                         (- (* sptprice NofXd1) (* FutureValueX NofXd2))
+                         (let ([NegNofXd1 (- 1.0 NofXd1)]
+                               [NegNofXd2 (- 1.0 NofXd2)])
+                           (- (* FutureValueX NegNofXd2)
+                              (* sptprice NegNofXd1))))])
+   OptionPrice))

@@ -1,0 +1,40 @@
+(FPCore (latitude longitude elevation)
+ :name "WGS84toNad27Latitude"
+ :cite (wwj)
+ :pre (and (<= -1.5707963268 latitude 1.5707963268)
+           (<= -3.1415926536 longitude 3.1415926536)
+           (<= -11000 elevation 8500))
+ (let ([fromEquatorialRadius 6378137.0]
+       [fromPolarRadius 6356752.3]
+       [fromEccentricitySquared 0.00669437999013]
+       [toEquatorialRadius 6378206.4]
+       [toPolarRadius 6356583.8]
+       [toEccentricitySquared 0.00676865799729]
+       [dx 8.0]
+       [dy -160]
+       [dz -176])
+   (let* ([sinLat (sin latitude)]
+          [cosLat (cos latitude)]
+          [sinLon (sin longitude)]
+          [cosLon (cos longitude)]
+          [fromF (/ (- fromEquatorialRadius fromPolarRadius)
+                    fromEquatorialRadius)]
+          [toF (/ (- toEquatorialRadius toPolarRadius) toEquatorialRadius)]
+          [sinLatsquared (* sinLat sinLat)]
+          [dF (- toF fromF)]
+          [adb (/ 1.0 (- 1.0 fromF))]
+          [dEquatorialRadius (- toEquatorialRadius fromEquatorialRadius)]
+          [rn (/ fromEquatorialRadius
+                 (sqrt (- 1.0 (* fromEccentricitySquared sinLatsquared))))]
+          [rm (/ (* fromEquatorialRadius (- 1.0 fromEccentricitySquared))
+                 (pow (- 1.0 (* fromEccentricitySquared sinLatsquared)) 1.5))]
+          [dLat
+            (/ (+ (+ (+ (- (* (* (- dx) sinLat) cosLon)
+                           (* (* dy sinLat) sinLon))
+                        (* dz cosLat))
+                     (* dEquatorialRadius
+                        (/ (* (* (* rn fromEccentricitySquared) sinLat) cosLat)
+                           fromEquatorialRadius)))
+                  (* (* (* dF (+ (* rm adb) (/ rn adb))) sinLat) cosLat))
+               (+ rm elevation))])
+     (+ latitude dLat))))

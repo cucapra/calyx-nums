@@ -1,0 +1,17 @@
+(FPCore (latitude longitude)
+ :name "geographicToCartesianX"
+ :cite (wwj)
+ :pre (and (<= 0.0 latitude 1.5707963268)
+           (<= -3.1415926536 longitude 3.1415926536))
+ (let ([equatorialRadius 6378137.0]
+       [eccentricitySquared 0.00669437999013])
+   (let* ([k0 0.994]
+          [ecc (sqrt eccentricitySquared)]
+          [sp (sin latitude)]
+          [t (sqrt (* (/ (- 1 sp) (+ 1 sp))
+                      (pow (/ (+ 1 (* ecc sp)) (- 1 (* ecc sp))) ecc)))]
+          [s (sqrt (* (pow (+ 1 ecc) (+ 1 ecc)) (pow (- 1 ecc) (- 1 ecc))))]
+          [r (/ (* (* (* 2 equatorialRadius) k0) t) s)]
+          [x (* r (sin longitude))]
+          [y (* (- r) (cos longitude))])
+     x)))
