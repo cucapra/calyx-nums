@@ -7,7 +7,7 @@ use std::hash::{DefaultHasher, Hasher};
 use malachite::num::arithmetic::traits::Sign;
 use malachite::{Natural, Rational};
 
-pub use calyx_nums_macros::Mangle;
+pub use calyx_libm_macros::Mangle;
 
 /// Encodes context information into an identifier. The resulting identifier is
 /// a valid name in the IA-64 C++ ABI's name mangling scheme.

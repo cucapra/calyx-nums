@@ -1,5 +1,5 @@
 [package]
-name = "calyx-nums"
+name = "calyx-libm"
 version = "0.1.0"
 edition = "2024"
 
@@ -21,4 +21,4 @@ calyx-frontend = "0.6.0"
 calyx-ir = "0.6.0"
 calyx-utils = "0.6.0"
 
-calyx-nums-macros = { path = "macros" }
+calyx-libm-macros = { path = "macros" }

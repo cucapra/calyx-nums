@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::{io, iter};
 
-use calyx_nums::backend::{self, ImportPaths, Program};
-use calyx_nums::fpcore::{FPCoreParser, ast::Span};
-use calyx_nums::hir;
-use calyx_nums::opts::Opts;
-use calyx_nums::utils::{Diagnostic, Reporter};
+use calyx_libm::backend::{self, ImportPaths, Program};
+use calyx_libm::fpcore::{FPCoreParser, ast::Span};
+use calyx_libm::hir;
+use calyx_libm::opts::Opts;
+use calyx_libm::utils::{Diagnostic, Reporter};
 
 fn read_input(file: &Option<PathBuf>) -> io::Result<(Cow<'_, str>, String)> {
     if let Some(file) = file {

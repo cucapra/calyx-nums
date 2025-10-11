@@ -39,7 +39,7 @@ def run(
             '--from', 'fpcore',
             '--through', sim.value,
             '--to', 'fpcore-dat',
-            '-s', f'calyx-nums.args=--format {fmt}',
+            '-s', f'calyx-libm.args=--format {fmt}',
             '-s', f'sim.data={file}',
             '--quiet',
         ]  # fmt: skip

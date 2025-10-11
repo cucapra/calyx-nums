@@ -119,13 +119,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "calyx-nums"
+name = "calyx-libm"
 version = "0.1.0"
 dependencies = [
  "argh",
  "calyx-frontend",
  "calyx-ir",
- "calyx-nums-macros",
+ "calyx-libm-macros",
  "calyx-utils",
  "codespan-reporting",
  "cranelift-entity",
@@ -141,7 +141,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "calyx-nums-macros"
+name = "calyx-libm-macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",

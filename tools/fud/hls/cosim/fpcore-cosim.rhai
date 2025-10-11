@@ -4,8 +4,8 @@ import "hls" as hls;
 export const cosim_dat = state("cosim-dat", ["dat"]);
 
 private fn cosim_setup(e) {
-    e.var_("bench", "$calyx-nums-base/tools/fud/hls/cosim/bench.cpp");
-    e.var_("cosim", "$calyx-nums-base/tools/fud/hls/cosim/cosim.tcl");
+    e.var_("bench", "$calyx-libm-base/tools/fud/hls/cosim/bench.cpp");
+    e.var_("cosim", "$calyx-libm-base/tools/fud/hls/cosim/cosim.tcl");
 
     e.var_("cosim-header", e.external_path(e.config_val("cosim.header")));
     e.var_("cosim-data", e.external_path(e.config_val("cosim.data")));
@@ -31,7 +31,7 @@ private fn cosim_setup(e) {
 
 op(
     "vitis-cosim",
-    [fp::calyx_nums_setup, cosim_setup],
+    [fp::calyx_libm_setup, cosim_setup],
     hls::cpp_state,
     cosim_dat,
     |e, input, output| {

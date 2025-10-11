@@ -19,7 +19,7 @@ To make the compiler accessible from `fud2`, add it to the plugins list in your
 ```toml
 plugins = ["<repository root>/tools/fud/fpcore.rhai"]
 
-[calyx-nums]
+[calyx-libm]
 base = "<repository root>"
 ```
 

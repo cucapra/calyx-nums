@@ -8,8 +8,8 @@ from fud.stages import SourceType, Stage
 from fud.utils import TmpDir, shell
 
 
-class CalyxNumbersStage(Stage):
-    name = 'calyx-nums'
+class CalyxLibmStage(Stage):
+    name = 'calyx-libm'
 
     def __init__(self):
         super().__init__(
@@ -27,7 +27,7 @@ class CalyxNumbersStage(Stage):
     @staticmethod
     def defaults():
         root = Path(__file__).parent.parent
-        exe = root / 'target' / 'debug' / 'calyx-nums'
+        exe = root / 'target' / 'debug' / 'calyx-libm'
 
         return {'exec': str(exe.resolve()), 'file_extensions': ['.fpcore']}
 
@@ -41,10 +41,10 @@ class CalyxNumbersStage(Stage):
         cmd = ' '.join([exe, '-l', config['global', fud.config.ROOT], flags])
 
         @builder.step(description=cmd)
-        def run_calyx_nums(stream: SourceType.Stream) -> SourceType.Stream:
+        def run_calyx_libm(stream: SourceType.Stream) -> SourceType.Stream:
             return shell(cmd, stdin=stream)
 
-        return run_calyx_nums(input)
+        return run_calyx_libm(input)
 
 
 class SimulationBaseStage(Stage):
@@ -56,7 +56,7 @@ class SimulationBaseStage(Stage):
     ):
         super().__init__(
             src_state=source,
-            target_state='nums-dat',
+            target_state='libm-dat',
             input_type=SourceType.Path,
             output_type=SourceType.Stream,
             description=description,
@@ -228,8 +228,8 @@ class TestBenchMacros:
         return f'main dut ({connections}, .*);'
 
 
-class CalyxNumbersVerilatorStage(SimulationBaseStage):
-    name = 'nums-verilog'
+class CalyxLibmVerilatorStage(SimulationBaseStage):
+    name = 'libm-verilog'
 
     def __init__(self):
         super().__init__(
@@ -251,8 +251,8 @@ class CalyxNumbersVerilatorStage(SimulationBaseStage):
         ]
 
 
-class CalyxNumbersIcarusStage(SimulationBaseStage):
-    name = 'nums-icarus-verilog'
+class CalyxLibmIcarusStage(SimulationBaseStage):
+    name = 'libm-icarus-verilog'
 
     def __init__(self):
         super().__init__(
@@ -269,7 +269,7 @@ class CalyxNumbersIcarusStage(SimulationBaseStage):
 
 
 __STAGES__ = [
-    CalyxNumbersStage,
-    CalyxNumbersVerilatorStage,
-    CalyxNumbersIcarusStage,
+    CalyxLibmStage,
+    CalyxLibmVerilatorStage,
+    CalyxLibmIcarusStage,
 ]

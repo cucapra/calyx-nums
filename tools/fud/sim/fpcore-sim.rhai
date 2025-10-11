@@ -9,8 +9,8 @@ private fn data_setup(e) {
 }
 
 private fn tb_setup(e) {
-    e.var_("tb", "$calyx-nums-base/tools/fud/sim/tb.sv");
-    e.var_("macros", "$calyx-nums-base/tools/fud/sim/macros.py");
+    e.var_("tb", "$calyx-libm-base/tools/fud/sim/tb.sv");
+    e.var_("macros", "$calyx-libm-base/tools/fud/sim/macros.py");
 
     e.rule("tb-macros", "python3 $macros $in $out");
 }
@@ -33,7 +33,7 @@ private fn verilator_setup(e) {
 
 op(
     "fpcore-verilator",
-    [fp::calyx_nums_setup, data_setup, tb_setup, verilator_setup],
+    [fp::calyx_libm_setup, data_setup, tb_setup, verilator_setup],
     c::verilog_state,
     fpcore_sim,
     |e, input, output| {
@@ -57,7 +57,7 @@ private fn icarus_setup(e) {
 
 op(
     "fpcore-icarus",
-    [fp::calyx_nums_setup, data_setup, tb_setup, icarus_setup],
+    [fp::calyx_libm_setup, data_setup, tb_setup, icarus_setup],
     c::verilog_noverify,
     fpcore_sim,
     |e, input, output| {
@@ -73,7 +73,7 @@ op(
 );
 
 private fn sim_setup(e) {
-    e.var_("extract", "$calyx-nums-base/tools/fud/sim/extract.py");
+    e.var_("extract", "$calyx-libm-base/tools/fud/sim/extract.py");
 
     e.rule(
         "run-fpcore-sim",
@@ -85,7 +85,7 @@ private fn sim_setup(e) {
 
 op(
     "fpcore-simulate",
-    [fp::calyx_nums_setup, data_setup, sim_setup],
+    [fp::calyx_libm_setup, data_setup, sim_setup],
     fpcore_sim,
     fpcore_dat,
     |e, input, output| {
