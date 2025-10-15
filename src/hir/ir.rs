@@ -2,8 +2,9 @@ use super::arena::{EntityList, PackedOption};
 use super::index as idx;
 use crate::fpcore::metadata as meta;
 
+pub use super::sollya::{SollyaBinOp, SollyaExpr, SollyaFn};
 pub use crate::fpcore::ast::{
-    Constant, Id, MathConst, MathOp, Number, Rational, Span, Symbol, TestOp,
+    Constant, Id, MathConst, Number, Rational, Span, Symbol, TestOp,
 };
 
 pub struct Definition {
@@ -41,10 +42,25 @@ pub enum VarKind {
     Mut,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ArithOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Neg,
+    Pow,
+    Sqrt,
+    Abs,
+    Max,
+    Min,
+}
+
 #[derive(Clone, Copy)]
 pub enum OpKind {
-    Math(MathOp),
+    Arith(ArithOp),
     Test(TestOp),
+    Sollya(idx::SollyaIdx),
     Def(idx::DefIdx),
 }
 

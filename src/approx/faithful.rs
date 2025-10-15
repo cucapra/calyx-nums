@@ -5,7 +5,7 @@ use malachite::Rational;
 
 use super::TableDomain;
 use crate::utils::rational::{Dyadic, RoundBinary};
-use crate::utils::sollya::{self, ScriptError, SollyaFunction};
+use crate::utils::sollya::{self, ScriptError};
 
 /// Guesses the minimum number of subintervals needed to approximate `f` by
 /// polynomials of the given degree with an error less than 0.25 ulp.
@@ -13,7 +13,7 @@ use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 /// Uniform segmentation is assumed. For each candidate division, the actual
 /// domain is chosen as if by [`TableDomain::from_hint`].
 pub fn segment_domain(
-    f: SollyaFunction,
+    f: &str,
     degree: u32,
     left: &Rational,
     right: &Rational,
@@ -25,12 +25,12 @@ pub fn segment_domain(
     let cmd = include_bytes!("scripts/segment.sollya");
 
     let args = [
-        format!("{}", f.expr()),
-        format!("{degree}"),
-        format!("{a}"),
-        format!("{b}"),
-        format!("{}", TableDomain::center(a, b)),
-        format!("{scale}"),
+        f,
+        &format!("{degree}"),
+        &format!("{a}"),
+        &format!("{b}"),
+        &format!("{}", TableDomain::center(a, b)),
+        &format!("{scale}"),
     ];
 
     let result = sollya::sollya(cmd, &args)?;
@@ -54,7 +54,7 @@ pub struct PolynomialApprox {
 /// Uniform segmentation is assumed, with `size` denoting the number of
 /// subintervals. The actual error achieved is reported along with the table.
 pub fn build_table(
-    f: SollyaFunction,
+    f: &str,
     degree: u32,
     domain: &TableDomain,
     size: u32,
@@ -63,12 +63,12 @@ pub fn build_table(
     let cmd = include_bytes!("scripts/faithful.sollya");
 
     let args = [
-        format!("{}", f.expr()),
-        format!("{degree}"),
-        format!("{}", domain.left.dyadic()),
-        format!("{}", domain.right.dyadic()),
-        format!("{size}"),
-        format!("{scale}"),
+        f,
+        &format!("{degree}"),
+        &format!("{}", domain.left.dyadic()),
+        &format!("{}", domain.right.dyadic()),
+        &format!("{size}"),
+        &format!("{scale}"),
     ];
 
     let result = sollya::sollya(cmd, &args)?;

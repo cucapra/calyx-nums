@@ -2,6 +2,7 @@ mod context;
 mod index;
 mod ir;
 mod lowering;
+mod sollya;
 pub mod visitor;
 
 pub mod arena {

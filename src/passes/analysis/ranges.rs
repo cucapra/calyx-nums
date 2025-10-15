@@ -7,7 +7,7 @@ use super::Precondition;
 use crate::hir::{self, Metadata, Visitor, arena::SecondaryMap};
 use crate::opts::Opts;
 use crate::utils::rational::Dyadic;
-use crate::utils::sollya::{self, ScriptError, SollyaFunction};
+use crate::utils::sollya::{self, ScriptError};
 use crate::utils::{Diagnostic, Format, Reporter};
 
 const PROLOGUE: &str = "\
@@ -21,6 +21,14 @@ procedure rnd(x) {
         floor(inf(x) / 2^s) * 2^s;
         ceil(sup(x) / 2^s) * 2^s
     ];
+};
+
+procedure fmax(x, y) {
+    return [max(inf(x), inf(y)); max(sup(x), sup(y))];
+};
+
+procedure fmin(x, y) {
+    return [min(inf(x), inf(y)); min(sup(x), sup(y))];
 };
 ";
 
@@ -59,10 +67,8 @@ fn run_script(
     script: &str,
     format: &Format,
 ) -> Result<SecondaryMap<hir::ExprIdx, [hir::Rational; 2]>, AnalysisError> {
-    let cmd = script.as_bytes();
-    let arg = [format.scale.to_string()];
-
-    let result = sollya::sollya(cmd, &arg)?;
+    let result =
+        sollya::sollya(script.as_bytes(), &[&format.scale.to_string()])?;
 
     result.lines().map(parse_response_line).collect()
 }
@@ -164,21 +170,37 @@ impl Builder<'_, '_> {
             .unwrap();
     }
 
-    fn script_unary<D, S>(&mut self, dst: D, function: &str, src: S)
+    fn script_unary<D, S>(&mut self, dst: D, f: &str, src: S)
     where
         D: SollyaVar,
         S: SollyaVar,
     {
         writeln!(
             self.script,
-            "{} = rnd({function}({}));",
+            "{} = rnd({f}({}));",
             dst.sollya_var(),
             src.sollya_var(),
         )
         .unwrap();
     }
 
-    fn script_binary<D, L, R>(&mut self, dst: D, left: L, op: &str, right: R)
+    fn script_binary<D, A, B>(&mut self, dst: D, f: &str, a: A, b: B)
+    where
+        D: SollyaVar,
+        A: SollyaVar,
+        B: SollyaVar,
+    {
+        writeln!(
+            self.script,
+            "{} = rnd({f}({}, {}));",
+            dst.sollya_var(),
+            a.sollya_var(),
+            b.sollya_var(),
+        )
+        .unwrap();
+    }
+
+    fn script_infix<D, L, R>(&mut self, dst: D, left: L, op: &str, right: R)
     where
         D: SollyaVar,
         L: SollyaVar,
@@ -307,8 +329,8 @@ impl Visitor for Builder<'_, '_> {
             hir::ExprKind::Var(_, hir::VarKind::Mut) => unreachable!(),
             hir::ExprKind::Op(
                 hir::Operation {
-                    kind: hir::OpKind::Math(op),
-                    span,
+                    kind: hir::OpKind::Arith(op),
+                    ..
                 },
                 args,
             ) => {
@@ -318,36 +340,35 @@ impl Visitor for Builder<'_, '_> {
                     self.visit_expression(arg, ctx)?;
                 }
 
-                let (op, is_binary) = match op {
-                    hir::MathOp::Add => ("+", true),
-                    hir::MathOp::Sub => ("-", true),
-                    hir::MathOp::Mul => ("*", true),
-                    hir::MathOp::Div => ("/", true),
-                    hir::MathOp::Neg => ("-", false),
-                    hir::MathOp::FAbs => ("abs", false),
-                    _ => (
-                        SollyaFunction::try_from(*op)
-                            .map_err(|_| {
-                                self.reporter.emit(
-                                    &Diagnostic::error()
-                                        .with_message("unsupported operation")
-                                        .with_primary(
-                                            *span,
-                                            "unsupported operator",
-                                        ),
-                                );
+                enum Kind {
+                    Unary,
+                    Binary,
+                    Infix,
+                }
 
-                                BuilderError
-                            })?
-                            .as_str(),
-                        false,
-                    ),
+                let (op, kind) = match op {
+                    hir::ArithOp::Add => ("+", Kind::Infix),
+                    hir::ArithOp::Sub => ("-", Kind::Infix),
+                    hir::ArithOp::Mul => ("*", Kind::Infix),
+                    hir::ArithOp::Div => ("/", Kind::Infix),
+                    hir::ArithOp::Neg => ("-", Kind::Unary),
+                    hir::ArithOp::Pow => ("^", Kind::Infix),
+                    hir::ArithOp::Sqrt => ("sqrt", Kind::Unary),
+                    hir::ArithOp::Abs => ("abs", Kind::Unary),
+                    hir::ArithOp::Max => ("fmax", Kind::Binary),
+                    hir::ArithOp::Min => ("fmin", Kind::Binary),
                 };
 
-                if is_binary {
-                    self.script_binary(idx, args[0], op, args[1]);
-                } else {
-                    self.script_unary(idx, op, args[0]);
+                match kind {
+                    Kind::Unary => {
+                        self.script_unary(idx, op, args[0]);
+                    }
+                    Kind::Binary => {
+                        self.script_binary(idx, op, args[0], args[1]);
+                    }
+                    Kind::Infix => {
+                        self.script_infix(idx, args[0], op, args[1]);
+                    }
                 }
             }
             hir::ExprKind::Op(
@@ -362,6 +383,19 @@ impl Visitor for Builder<'_, '_> {
                 }
 
                 self.script_bool(idx);
+            }
+            hir::ExprKind::Op(
+                hir::Operation {
+                    kind: hir::OpKind::Sollya(op),
+                    ..
+                },
+                args,
+            ) => {
+                let arg = ctx[*args][0];
+                let op = format!("({})", op.sollya(ctx));
+
+                self.visit_expression(arg, ctx)?;
+                self.script_unary(idx, &op, arg);
             }
             hir::ExprKind::Op(
                 hir::Operation {

@@ -4,7 +4,7 @@ use malachite::Rational;
 
 use super::TableDomain;
 use crate::utils::rational::Dyadic;
-use crate::utils::sollya::{self, ScriptError, SollyaFunction};
+use crate::utils::sollya::{self, ScriptError};
 
 /// Constructs a table of polynomials approximating `f` piecewise over the given
 /// domain.
@@ -13,7 +13,7 @@ use crate::utils::sollya::{self, ScriptError, SollyaFunction};
 /// subintervals given by `size`. Each polynomial is computed so as to minimize
 /// the maximum absolute error over the corresponding subinterval.
 pub fn build_table(
-    f: SollyaFunction,
+    f: &str,
     degree: u32,
     domain: &TableDomain,
     size: u32,
@@ -22,12 +22,12 @@ pub fn build_table(
     let cmd = include_bytes!("scripts/remez.sollya");
 
     let args = [
-        format!("{}", f.expr()),
-        format!("{degree}"),
-        format!("{}", domain.left.dyadic()),
-        format!("{}", domain.right.dyadic()),
-        format!("{size}"),
-        format!("{scale}"),
+        f,
+        &format!("{degree}"),
+        &format!("{}", domain.left.dyadic()),
+        &format!("{}", domain.right.dyadic()),
+        &format!("{size}"),
+        &format!("{scale}"),
     ];
 
     let result = sollya::sollya(cmd, &args)?;

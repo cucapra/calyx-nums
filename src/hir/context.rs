@@ -12,6 +12,7 @@ pub struct Context {
     pub numbers: PrimaryMap<idx::NumIdx, ir::Number>,
     pub vars: PrimaryMap<idx::VarIdx, ()>,
     pub writes: PrimaryMap<idx::WriteIdx, ir::Write>,
+    pub ops: PrimaryMap<idx::SollyaIdx, ir::SollyaExpr>,
     pub scopes: PrimaryMap<idx::ScopeIdx, ir::Scope>,
 
     pub expr_lists: ListPool<idx::ExprIdx>,
@@ -47,6 +48,7 @@ index_impl!(args, idx::ArgIdx, ir::Argument);
 index_impl!(exprs, idx::ExprIdx, ir::Expression);
 index_impl!(numbers, idx::NumIdx, ir::Number);
 index_impl!(writes, idx::WriteIdx, ir::Write);
+index_impl!(ops, idx::SollyaIdx, ir::SollyaExpr);
 
 impl Index<EntityList<idx::ExprIdx>> for Context {
     type Output = [idx::ExprIdx];

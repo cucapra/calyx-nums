@@ -18,7 +18,7 @@ pub trait Dyadic: Sized {
     ///
     /// This method is infallible. However, attempting to format a non-dyadic
     /// number with the returned adapter will result in a panic.
-    fn dyadic(&self) -> impl fmt::Display + '_;
+    fn dyadic(&self) -> impl fmt::Display;
 }
 
 impl Dyadic for Rational {
@@ -35,7 +35,7 @@ impl Dyadic for Rational {
         }
     }
 
-    fn dyadic(&self) -> impl fmt::Display + '_ {
+    fn dyadic(&self) -> impl fmt::Display {
         struct Dyadic<'a>(&'a Rational);
 
         impl fmt::Display for Dyadic<'_> {

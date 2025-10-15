@@ -27,6 +27,10 @@ pub struct WriteIdx(u32);
 entity_impl!(WriteIdx);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SollyaIdx(u32);
+entity_impl!(SollyaIdx);
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeIdx(u32);
 entity_impl!(ScopeIdx);
 

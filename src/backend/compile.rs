@@ -71,23 +71,30 @@ struct Builder<'a, 'comp, 'src> {
 }
 
 impl Builder<'_, '_, '_> {
-    fn compile_number(&mut self, num: hir::NumIdx) -> Option<CompiledExpr> {
-        let num = &self.ctx[num];
-        let rounded = (&num.value).round_convergent(self.format.lsb());
+    fn compile_number(&mut self, number: &hir::Number) -> Option<CompiledExpr> {
+        let width = u64::from(self.format.width);
+        let rounded = (&number.value).round_convergent(self.format.lsb());
 
         let Some(value) = rounded.to_fixed_point(self.format) else {
             self.reporter.emit(
                 &Diagnostic::error()
                     .with_message("overflow")
-                    .with_primary(num.span, "constant overflows target format"),
+                    .with_primary(number.span, "value overflows target format"),
             );
 
             return None;
         };
 
-        let width = u64::from(self.format.width);
-
         let cell = self.builder.big_constant(&value, width, self.cm);
+        let port = cell.borrow().get("out");
+
+        Some(CompiledExpr::from_port(port))
+    }
+
+    fn compile_boolean(&mut self, value: bool) -> Option<CompiledExpr> {
+        let params = [1, u64::from(value)];
+
+        let cell = self.builder.add_primitive("c", "std_const", &params);
         let port = cell.borrow().get("out");
 
         Some(CompiledExpr::from_port(port))
@@ -98,7 +105,7 @@ impl Builder<'_, '_, '_> {
         constant: hir::Constant,
         span: hir::Span,
     ) -> Option<CompiledExpr> {
-        let params = match constant {
+        match constant {
             hir::Constant::Math(_) => {
                 self.reporter.emit(
                     &Diagnostic::error()
@@ -106,15 +113,10 @@ impl Builder<'_, '_, '_> {
                         .with_primary(span, "unsupported constant"),
                 );
 
-                return None;
+                None
             }
-            hir::Constant::Bool(val) => [1, u64::from(val)],
-        };
-
-        let cell = self.builder.add_primitive("c", "std_const", &params);
-        let port = cell.borrow().get("out");
-
-        Some(CompiledExpr::from_port(port))
+            hir::Constant::Bool(value) => self.compile_boolean(value),
+        }
     }
 
     fn compile_variadic_operation(
@@ -309,65 +311,53 @@ impl Builder<'_, '_, '_> {
         op: &hir::Operation,
         args: hir::EntityList<hir::ExprIdx>,
     ) -> Option<CompiledExpr> {
-        if let Some(prototype) = self.math_lib.get(&idx) {
-            return self.compile_component_operation(prototype, args);
-        }
+        let mut unsupported = || {
+            self.reporter.emit(
+                &Diagnostic::error()
+                    .with_message("unsupported operation")
+                    .with_primary(op.span, "unsupported operator"),
+            )
+        };
 
         match op.kind {
-            hir::OpKind::Math(hir::MathOp::Add) => {
-                let decl = self.cm.importer.add(self.format);
+            hir::OpKind::Arith(op) => {
+                let decl = match op {
+                    hir::ArithOp::Add => self.cm.importer.add(self.format),
+                    hir::ArithOp::Sub => self.cm.importer.sub(self.format),
+                    hir::ArithOp::Mul => self.cm.importer.mul(self.format),
+                    hir::ArithOp::Div => self.cm.importer.div(self.format),
+                    hir::ArithOp::Neg => self.cm.importer.neg(self.format),
+                    hir::ArithOp::Sqrt => self.cm.importer.sqrt(self.format),
+                    hir::ArithOp::Abs => self.cm.importer.abs(self.format),
+                    hir::ArithOp::Max => self.cm.importer.max(self.format),
+                    hir::ArithOp::Min => self.cm.importer.min(self.format),
+                    hir::ArithOp::Pow => {
+                        unsupported();
+
+                        return None;
+                    }
+                };
+
                 self.compile_primitive_operation(decl, args)
             }
-            hir::OpKind::Math(hir::MathOp::Sub) => {
-                let decl = self.cm.importer.sub(self.format);
-                self.compile_primitive_operation(decl, args)
+            hir::OpKind::Test(op) => {
+                if matches!(op, hir::TestOp::Not) {
+                    let decl = self.cm.importer.not();
+
+                    self.compile_primitive_operation(decl, args)
+                } else if op.is_variadic() {
+                    self.compile_variadic_operation(op, args)
+                } else {
+                    unsupported();
+
+                    None
+                }
             }
-            hir::OpKind::Math(hir::MathOp::Mul) => {
-                let decl = self.cm.importer.mul(self.format);
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Math(hir::MathOp::Div) => {
-                let decl = self.cm.importer.div(self.format);
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Math(hir::MathOp::Neg) => {
-                let decl = self.cm.importer.neg(self.format);
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Math(hir::MathOp::FAbs) => {
-                let decl = self.cm.importer.abs(self.format);
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Math(hir::MathOp::Sqrt) => {
-                let decl = self.cm.importer.sqrt(self.format);
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Math(hir::MathOp::FMax) => {
-                let decl = self.cm.importer.max(self.format);
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Math(hir::MathOp::FMin) => {
-                let decl = self.cm.importer.min(self.format);
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Test(hir::TestOp::Not) => {
-                let decl = self.cm.importer.not();
-                self.compile_primitive_operation(decl, args)
-            }
-            hir::OpKind::Test(op) if op.is_variadic() => {
-                self.compile_variadic_operation(op, args)
+            hir::OpKind::Sollya(_) => {
+                self.compile_component_operation(&self.math_lib[&idx], args)
             }
             hir::OpKind::Def(def) => {
                 self.compile_component_operation(&self.signatures[&def], args)
-            }
-            _ => {
-                self.reporter.emit(
-                    &Diagnostic::error()
-                        .with_message("unsupported operation")
-                        .with_primary(op.span, "unsupported operator"),
-                );
-
-                None
             }
         }
     }
@@ -600,7 +590,7 @@ impl Builder<'_, '_, '_> {
         let expr = &self.ctx[idx];
 
         match &expr.kind {
-            hir::ExprKind::Num(num) => self.compile_number(*num),
+            hir::ExprKind::Num(idx) => self.compile_number(&self.ctx[*idx]),
             hir::ExprKind::Const(constant) => {
                 self.compile_constant(*constant, expr.span)
             }

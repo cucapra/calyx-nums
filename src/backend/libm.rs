@@ -8,7 +8,6 @@ use crate::approx::{AddressSpec, Datapath, TableDomain, faithful, remez};
 use crate::hir::{self, Metadata, Pool, Visitor};
 use crate::opts::{Opts, RangeAnalysis as AnalysisMode};
 use crate::passes::analysis::RangeAnalysis;
-use crate::utils::sollya::SollyaFunction;
 use crate::utils::{Diagnostic, Format, Mangle, Reporter};
 
 pub struct Prototype {
@@ -72,23 +71,8 @@ impl Visitor for Builder<'_, '_> {
         args: hir::EntityList<hir::ExprIdx>,
         ctx: &hir::Context,
     ) -> Result<(), LibraryError> {
-        if let hir::Operation {
-            kind: hir::OpKind::Math(op),
-            span,
-        } = op
-            && !op.is_primitive()
-        {
-            let Ok(kind) = SollyaFunction::try_from(*op) else {
-                self.reporter.emit(
-                    &Diagnostic::error()
-                        .with_message("unsupported operation")
-                        .with_primary(*span, "unsupported operator"),
-                );
-
-                return Err(LibraryError);
-            };
-
-            let op = Operator { kind, span: *span };
+        if let hir::OpKind::Sollya(sollya) = op.kind {
+            let op = Operator::new(op, sollya, self.ctx);
 
             let prototype =
                 self.build(&self.ctx[idx], &op, args).map_err(|err| {
@@ -171,30 +155,35 @@ impl<'a> Builder<'a, '_> {
         domain: &DomainHint,
         size: u32,
     ) -> Result<Prototype, Diagnostic> {
-        let (spec, domain) = &domain.widen(op, self.format, size)?;
+        let (addr_spec, domain) = &domain.widen(op, self.format, size)?;
 
         let degree = 0;
         let scale = self.format.scale;
 
-        let values = &remez::build_table(op.kind, degree, domain, size, scale)
-            .map_err(|err| Diagnostic::from_sollya_and_span(err, op.span))?;
+        let values =
+            &remez::build_table(&op.sollya, degree, domain, size, scale)
+                .map_err(|err| {
+                    Diagnostic::from_sollya_and_span(err, op.span)
+                })?;
+
+        let table_spec = TableSpec {
+            op: op.id(),
+            degree,
+            domain,
+            size,
+            scale,
+        };
 
         let data = comp::TableData {
             values,
             formats: slice::from_ref(self.format),
-            spec: &TableSpec {
-                function: op.kind,
-                degree,
-                domain,
-                size,
-                scale,
-            },
+            spec: &table_spec,
         };
 
         let builder = comp::LookupTable {
             data,
             format: self.format,
-            spec,
+            spec: addr_spec,
             span: op.span,
         };
 
@@ -202,7 +191,7 @@ impl<'a> Builder<'a, '_> {
 
         Ok(Prototype {
             name,
-            prefix_hint: ir::Id::new(op.kind),
+            prefix_hint: op.prefix_hint(self.ctx),
             signature,
             is_comb: true,
         })
@@ -214,43 +203,44 @@ impl<'a> Builder<'a, '_> {
         domain: &DomainHint,
         degree: u32,
     ) -> Result<Prototype, Diagnostic> {
-        let scale = self.format.scale;
         let DomainHint { left, right } = domain;
+        let scale = self.format.scale;
 
         let size =
-            faithful::segment_domain(op.kind, degree, left, right, scale)
+            faithful::segment_domain(&op.sollya, degree, left, right, scale)
                 .map_err(|err| {
                     Diagnostic::from_sollya_and_span(err, op.span)
                 })?;
 
-        let (spec, domain) = &domain.widen(op, self.format, size)?;
+        let (addr_spec, domain) = &domain.widen(op, self.format, size)?;
 
         let approx =
-            faithful::build_table(op.kind, degree, domain, size, scale)
+            faithful::build_table(&op.sollya, degree, domain, size, scale)
                 .map_err(|err| {
                     Diagnostic::from_sollya_and_span(err, op.span)
                 })?;
 
         let datapath = Datapath::from_approx(&approx, degree, scale);
-        let formats = &datapath.lut_formats();
+
+        let table_spec = TableSpec {
+            op: op.id(),
+            degree,
+            domain,
+            size,
+            scale: datapath.lut_scale,
+        };
 
         let data = comp::TableData {
             values: &approx.table,
-            formats,
-            spec: &TableSpec {
-                function: op.kind,
-                degree,
-                domain,
-                size,
-                scale: datapath.lut_scale,
-            },
+            formats: &datapath.lut_formats(),
+            spec: &table_spec,
         };
 
         let builder = comp::PiecewisePoly {
             table: comp::LookupTable {
                 data,
                 format: self.format,
-                spec,
+                spec: addr_spec,
                 span: op.span,
             },
             spec: datapath,
@@ -260,16 +250,19 @@ impl<'a> Builder<'a, '_> {
 
         Ok(Prototype {
             name,
-            prefix_hint: ir::Id::new(op.kind),
+            prefix_hint: op.prefix_hint(self.ctx),
             signature,
             is_comb: false,
         })
     }
 }
 
+#[derive(Clone, Copy, Mangle)]
+struct OperatorId(u32);
+
 #[derive(Mangle)]
 struct TableSpec<'a> {
-    function: SollyaFunction,
+    op: OperatorId,
     degree: u32,
     domain: &'a TableDomain,
     size: u32,
@@ -299,23 +292,29 @@ impl DomainHint<'_> {
 }
 
 struct Operator {
-    kind: SollyaFunction,
+    sollya: String,
+    idx: hir::SollyaIdx,
     span: hir::Span,
 }
 
-impl hir::MathOp {
-    fn is_primitive(self) -> bool {
-        matches!(
-            self,
-            hir::MathOp::Add
-                | hir::MathOp::Sub
-                | hir::MathOp::Mul
-                | hir::MathOp::Div
-                | hir::MathOp::Neg
-                | hir::MathOp::FAbs
-                | hir::MathOp::Sqrt
-                | hir::MathOp::FMax
-                | hir::MathOp::FMin
-        )
+impl Operator {
+    fn new(
+        op: &hir::Operation,
+        idx: hir::SollyaIdx,
+        ctx: &hir::Context,
+    ) -> Operator {
+        Operator {
+            sollya: idx.sollya(ctx).to_string(),
+            idx,
+            span: op.span,
+        }
+    }
+
+    fn id(&self) -> OperatorId {
+        OperatorId(self.idx.as_u32())
+    }
+
+    fn prefix_hint(&self, ctx: &hir::Context) -> ir::Id {
+        self.idx.name(ctx).unwrap_or("f").into()
     }
 }

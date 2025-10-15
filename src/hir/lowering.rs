@@ -141,8 +141,10 @@ impl<'ast> Builder<'_, 'ast, '_> {
             }
             ast::ExprKind::Op(op, args) => {
                 let kind = match op.kind {
-                    ast::OpKind::Math(op) => hir::OpKind::Math(op),
-                    ast::OpKind::Test(op) => hir::OpKind::Test(op),
+                    ast::OpKind::Math(math) => {
+                        self.lower_math_operation(op, math)?
+                    }
+                    ast::OpKind::Test(test) => hir::OpKind::Test(test),
                     ast::OpKind::Tensor(_) => unreachable!(),
                     ast::OpKind::FPCore(id) => hir::OpKind::Def(self.defs[&id]),
                 };
@@ -301,6 +303,29 @@ impl<'ast> Builder<'_, 'ast, '_> {
         Ok(list)
     }
 
+    fn lower_math_operation(
+        &mut self,
+        op: &ast::Operation,
+        kind: ast::MathOp,
+    ) -> Result<hir::OpKind, LoweringError> {
+        if let Ok(op) = hir::ArithOp::try_from(kind) {
+            Ok(hir::OpKind::Arith(op))
+        } else if let Ok(f) = hir::SollyaFn::try_from(kind) {
+            let var = self.ctx.ops.push(hir::SollyaExpr::Variable);
+            let idx = self.ctx.ops.push(hir::SollyaExpr::Call(f, var));
+
+            Ok(hir::OpKind::Sollya(idx))
+        } else {
+            self.reporter.emit(
+                &Diagnostic::error()
+                    .with_message("unsupported operation")
+                    .with_primary(op.span, "unsupported operator"),
+            );
+
+            Err(LoweringError)
+        }
+    }
+
     fn lower_property(
         &mut self,
         prop: &'ast ast::PropKind,
@@ -334,5 +359,56 @@ impl<'ast> Builder<'_, 'ast, '_> {
         props.iter().try_fold(self.parent, |parent, prop| {
             self.lower_property(&prop.kind, parent)
         })
+    }
+}
+
+impl TryFrom<ast::MathOp> for hir::ArithOp {
+    type Error = ();
+
+    fn try_from(value: ast::MathOp) -> Result<Self, Self::Error> {
+        match value {
+            ast::MathOp::Add => Ok(hir::ArithOp::Add),
+            ast::MathOp::Sub => Ok(hir::ArithOp::Sub),
+            ast::MathOp::Mul => Ok(hir::ArithOp::Mul),
+            ast::MathOp::Div => Ok(hir::ArithOp::Div),
+            ast::MathOp::Neg => Ok(hir::ArithOp::Neg),
+            ast::MathOp::Pow => Ok(hir::ArithOp::Pow),
+            ast::MathOp::Sqrt => Ok(hir::ArithOp::Sqrt),
+            ast::MathOp::FAbs => Ok(hir::ArithOp::Abs),
+            ast::MathOp::FMax => Ok(hir::ArithOp::Max),
+            ast::MathOp::FMin => Ok(hir::ArithOp::Min),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<ast::MathOp> for hir::SollyaFn {
+    type Error = ();
+
+    fn try_from(value: ast::MathOp) -> Result<Self, Self::Error> {
+        match value {
+            ast::MathOp::Sin => Ok(hir::SollyaFn::Sin),
+            ast::MathOp::Cos => Ok(hir::SollyaFn::Cos),
+            ast::MathOp::Tan => Ok(hir::SollyaFn::Tan),
+            ast::MathOp::Sinh => Ok(hir::SollyaFn::Sinh),
+            ast::MathOp::Cosh => Ok(hir::SollyaFn::Cosh),
+            ast::MathOp::Tanh => Ok(hir::SollyaFn::Tanh),
+            ast::MathOp::ASin => Ok(hir::SollyaFn::ASin),
+            ast::MathOp::ACos => Ok(hir::SollyaFn::ACos),
+            ast::MathOp::ATan => Ok(hir::SollyaFn::ATan),
+            ast::MathOp::ASinh => Ok(hir::SollyaFn::ASinh),
+            ast::MathOp::ACosh => Ok(hir::SollyaFn::ACosh),
+            ast::MathOp::ATanh => Ok(hir::SollyaFn::ATanh),
+            ast::MathOp::Exp => Ok(hir::SollyaFn::Exp),
+            ast::MathOp::ExpM1 => Ok(hir::SollyaFn::ExpM1),
+            ast::MathOp::Log => Ok(hir::SollyaFn::Log),
+            ast::MathOp::Log2 => Ok(hir::SollyaFn::Log2),
+            ast::MathOp::Log10 => Ok(hir::SollyaFn::Log10),
+            ast::MathOp::Log1P => Ok(hir::SollyaFn::Log1P),
+            ast::MathOp::Erf => Ok(hir::SollyaFn::Erf),
+            ast::MathOp::ErfC => Ok(hir::SollyaFn::ErfC),
+            ast::MathOp::Sqrt => Ok(hir::SollyaFn::Sqrt),
+            _ => Err(()),
+        }
     }
 }
