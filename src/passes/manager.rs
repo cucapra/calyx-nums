@@ -28,7 +28,10 @@ pub fn run_passes(
         reporter,
     };
 
-    let passes = [transform::UnivariatePromotion::run];
+    let passes = [
+        transform::ConstantPropagation::run,
+        transform::UnivariatePromotion::run,
+    ];
 
     for pass in passes {
         pass(&mut ctx)?;
