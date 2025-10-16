@@ -6,9 +6,9 @@ use std::{io, iter};
 
 use calyx_libm::backend::{self, ImportPaths, Program};
 use calyx_libm::fpcore::{FPCoreParser, ast::Span};
-use calyx_libm::hir;
 use calyx_libm::opts::Opts;
 use calyx_libm::utils::{Diagnostic, Reporter};
+use calyx_libm::{hir, passes};
 
 fn read_input(file: &Option<PathBuf>) -> io::Result<(Cow<'_, str>, String)> {
     if let Some(file) = file {
@@ -72,6 +72,14 @@ fn main() -> ExitCode {
         }
     };
 
+    let Some(mut ctx) = hir::lower_ast(defs, &opts, &mut reporter) else {
+        return ExitCode::FAILURE;
+    };
+
+    if passes::run_passes(&mut ctx, &opts, &mut reporter).is_err() {
+        return ExitCode::FAILURE;
+    }
+
     let search_paths: Vec<_> = opts
         .lib_path
         .iter()
@@ -86,10 +94,6 @@ fn main() -> ExitCode {
 
             return ExitCode::FAILURE;
         }
-    };
-
-    let Some(ctx) = hir::lower_ast(defs, &opts, &mut reporter) else {
-        return ExitCode::FAILURE;
     };
 
     let Some(program) = backend::compile_hir(&ctx, &opts, &mut reporter, lib)
