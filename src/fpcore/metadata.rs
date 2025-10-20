@@ -130,8 +130,8 @@ pub struct CalyxDomain {
 }
 
 /// An implementation strategy and its parameters.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub enum CalyxImpl {
     Lut { size: u32 },
-    Poly { degree: u32 },
+    Poly { degree: u32, error: Option<Number> },
 }

@@ -1,5 +1,5 @@
 // Usage:
-//   sollya segment.sollya --args <fn> <degree> <left> <right> <center> <scale>
+//   sollya segment.sollya --args <fn> <degree> <left> <right> <center> <scale> <error>
 //
 
 dieonerrormode = on!;
@@ -11,6 +11,7 @@ a = parse(__argv[2]);
 b = parse(__argv[3]);
 c = parse(__argv[4]);
 s = parse(__argv[5]);
+t = parse(__argv[6]);
 
 procedure clog2(x) {
     var e, p;
@@ -72,6 +73,6 @@ procedure segments(error_target) {
     return count;
 };
 
-print(segments(2^(s - 2)));
+print(segments((max(t, 2^s) - 2^(s - 1)) * 0.5));
 
 quit;

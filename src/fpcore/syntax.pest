@@ -147,7 +147,7 @@ overflow = {
 }
 
 lut     = { open ~ "lut" ~ dec_digits ~ close }
-poly    = { open ~ "poly" ~ dec_digits ~ close }
+poly    = { open ~ "poly" ~ dec_digits ~ number? ~ close }
 
 strategy = { lut | poly }
 

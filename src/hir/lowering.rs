@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::fpcore::ast;
+use crate::fpcore::{ast, metadata as meta};
 use crate::hir::{self, EntityList, PackedOption, Pool};
 use crate::opts::Opts;
 use crate::sem::{self, PassManager};
@@ -342,7 +342,21 @@ impl<'ast> Builder<'_, 'ast, '_> {
                 hir::Property::Domain(hir::Domain { left, right })
             }
             ast::PropKind::CalyxImpl(strategy) => {
-                hir::Property::Impl(*strategy)
+                let strategy = match *strategy {
+                    meta::CalyxImpl::Lut { size } => {
+                        hir::Strategy::Lut { size }
+                    }
+                    meta::CalyxImpl::Poly { degree, ref error } => {
+                        hir::Strategy::Poly {
+                            degree,
+                            error: PackedOption::from(error.as_ref().map(
+                                |error| self.ctx.numbers.push(error.clone()),
+                            )),
+                        }
+                    }
+                };
+
+                hir::Property::Impl(strategy)
             }
             _ => {
                 return Ok(parent);

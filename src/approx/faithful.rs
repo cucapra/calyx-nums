@@ -8,7 +8,8 @@ use crate::utils::rational::{Dyadic, RoundBinary};
 use crate::utils::sollya::{self, ScriptError};
 
 /// Guesses the minimum number of subintervals needed to approximate `f` by
-/// polynomials of the given degree with an error less than 0.25 ulp.
+/// polynomials of the given degree and within the given error bound after
+/// evaluation and final rounding.
 ///
 /// Uniform segmentation is assumed. For each candidate division, the actual
 /// domain is chosen as if by [`TableDomain::from_hint`].
@@ -18,6 +19,7 @@ pub fn segment_domain(
     left: &Rational,
     right: &Rational,
     scale: i32,
+    error: &Rational,
 ) -> Result<u32, ScriptError> {
     let a = left.floor(i64::from(scale));
     let b = right.ceil(i64::from(scale));
@@ -31,6 +33,7 @@ pub fn segment_domain(
         &format!("{b}"),
         &format!("{}", TableDomain::center(a, b)),
         &format!("{scale}"),
+        &format!("{error}"),
     ];
 
     let result = sollya::sollya(cmd, &args)?;
@@ -48,8 +51,8 @@ pub struct PolynomialApprox {
 }
 
 /// Constructs a table of polynomials approximating `f` piecewise over the given
-/// domain, selecting the least precision needed to obtain an error less than
-/// 0.25 ulp.
+/// domain, selecting the least precision needed to meet the given error bound
+/// after evaluation and final rounding.
 ///
 /// Uniform segmentation is assumed, with `size` denoting the number of
 /// subintervals. The actual error achieved is reported along with the table.
@@ -59,6 +62,7 @@ pub fn build_table(
     domain: &TableDomain,
     size: u32,
     scale: i32,
+    error: &Rational,
 ) -> Result<PolynomialApprox, ScriptError> {
     let cmd = include_bytes!("scripts/faithful.sollya");
 
@@ -69,6 +73,7 @@ pub fn build_table(
         &format!("{}", domain.right.dyadic()),
         &format!("{size}"),
         &format!("{scale}"),
+        &format!("{error}"),
     ];
 
     let result = sollya::sollya(cmd, &args)?;

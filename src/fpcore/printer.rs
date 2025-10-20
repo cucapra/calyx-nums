@@ -557,7 +557,7 @@ impl Property {
                 )
                 .nest(STANDARD_INDENT)
                 .group(),
-            PropKind::CalyxImpl(CalyxImpl::Poly { degree }) => allocator
+            PropKind::CalyxImpl(CalyxImpl::Poly { degree, error }) => allocator
                 .text(":calyx-impl")
                 .append(allocator.line())
                 .append(
@@ -565,6 +565,12 @@ impl Property {
                         .text("poly")
                         .append(allocator.line())
                         .append(allocator.as_string(degree))
+                        .append(error.as_ref().map_or_else(
+                            || allocator.nil(),
+                            |error| {
+                                allocator.line().append(error.pretty(allocator))
+                            },
+                        ))
                         .nest(STANDARD_INDENT)
                         .group()
                         .parens(),

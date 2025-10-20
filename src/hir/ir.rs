@@ -1,6 +1,5 @@
 use super::arena::{EntityList, PackedOption};
 use super::index as idx;
-use crate::fpcore::metadata as meta;
 
 pub use super::sollya::{SollyaBinOp, SollyaExpr, SollyaFn};
 pub use crate::fpcore::ast::{
@@ -111,4 +110,13 @@ pub struct Domain {
     pub right: idx::NumIdx,
 }
 
-pub type Strategy = meta::CalyxImpl;
+#[derive(Clone, Copy)]
+pub enum Strategy {
+    Lut {
+        size: u32,
+    },
+    Poly {
+        degree: u32,
+        error: PackedOption<idx::NumIdx>,
+    },
+}

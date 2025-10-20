@@ -1,5 +1,5 @@
 // Usage:
-//   sollya faithful.sollya --args <fn> <degree> <left> <right> <count> <scale>
+//   sollya faithful.sollya --args <fn> <degree> <left> <right> <count> <scale> <error>
 //
 
 dieonerrormode = on!;
@@ -11,6 +11,7 @@ l = parse(__argv[2]);
 r = parse(__argv[3]);
 c = parse(__argv[4]);
 s = parse(__argv[5]);
+t = parse(__argv[6]);
 
 // Algorithm 1 (de Dinechin, 2015).
 procedure build_poly(g, I, error_target, scale) {
@@ -70,7 +71,7 @@ procedure build_table(count, error_target) {
     return { .scale = scale, .p = p, .err = err };
 };
 
-result = build_table(c, 2^(s - 2));
+result = build_table(c, (max(t, 2^s) - 2^(s - 1)) * 0.5);
 
 print(result.scale);
 print(result.err);

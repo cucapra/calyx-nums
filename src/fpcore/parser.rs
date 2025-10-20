@@ -5,7 +5,7 @@ use std::str::FromStr;
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest_consume::{Parser, match_nodes};
 
-use super::{ast, literals, metadata};
+use super::{ast, literals, metadata as meta};
 
 #[derive(Parser)]
 #[grammar = "fpcore/syntax.pest"]
@@ -379,7 +379,7 @@ impl FPCoreParser {
                 ast::PropKind::Example(bindings.collect())
             },
             [domain_kw(_), number(left), number(right)] => {
-                ast::PropKind::CalyxDomain(metadata::CalyxDomain {
+                ast::PropKind::CalyxDomain(meta::CalyxDomain {
                     left,
                     right,
                 })
@@ -395,12 +395,12 @@ impl FPCoreParser {
         Ok(ast::Property { kind, span })
     }
 
-    fn data(input: Node) -> ParseResult<metadata::Data> {
+    fn data(input: Node) -> ParseResult<meta::Data> {
         Ok(match_nodes!(input.into_children();
-            [symbol(sym)] => metadata::Data::Symbol(sym),
-            [number(num)] => metadata::Data::Num(num),
-            [string(s)] => metadata::Data::Str(s),
-            [data(data)..] => metadata::Data::List(data.collect()),
+            [symbol(sym)] => meta::Data::Symbol(sym),
+            [number(num)] => meta::Data::Num(num),
+            [string(s)] => meta::Data::Str(s),
+            [data(data)..] => meta::Data::List(data.collect()),
         ))
     }
 
@@ -426,15 +426,13 @@ impl FPCoreParser {
         Ok(input.as_str())
     }
 
-    fn precision(input: Node) -> ParseResult<metadata::Precision> {
+    fn precision(input: Node) -> ParseResult<meta::Precision> {
         Ok(match_nodes!(input.into_children();
-            [float((e, nbits))] => metadata::Precision::Float { e, nbits },
-            [posit((es, nbits))] => metadata::Precision::Posit { es, nbits },
-            [fixed((scale, nbits))] => {
-                metadata::Precision::Fixed { scale, nbits }
-            },
+            [float((e, nbits))] => meta::Precision::Float { e, nbits },
+            [posit((es, nbits))] => meta::Precision::Posit { es, nbits },
+            [fixed((scale, nbits))] => meta::Precision::Fixed { scale, nbits },
             [precision_shorthand(s)] => {
-                metadata::Precision::from_shorthand(s).unwrap()
+                meta::Precision::from_shorthand(s).unwrap()
             },
         ))
     }
@@ -453,16 +451,23 @@ impl FPCoreParser {
         )
     }
 
-    fn poly(input: Node) -> ParseResult<u32> {
-        match_nodes!(input.into_children();
-            [degree] => parse_node(&degree),
-        )
+    fn poly(input: Node) -> ParseResult<meta::CalyxImpl> {
+        Ok(match_nodes!(input.into_children();
+            [degree] => meta::CalyxImpl::Poly {
+                degree: parse_node(&degree)?,
+                error: None,
+            },
+            [degree, number(error)] => meta::CalyxImpl::Poly {
+                degree: parse_node(&degree)?,
+                error: Some(error),
+            },
+        ))
     }
 
-    fn strategy(input: Node) -> ParseResult<metadata::CalyxImpl> {
+    fn strategy(input: Node) -> ParseResult<meta::CalyxImpl> {
         Ok(match_nodes!(input.into_children();
-            [lut(size)] => metadata::CalyxImpl::Lut { size },
-            [poly(degree)] => metadata::CalyxImpl::Poly { degree },
+            [lut(size)] => meta::CalyxImpl::Lut { size },
+            [poly(strategy)] => strategy,
         ))
     }
 

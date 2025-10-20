@@ -2,13 +2,15 @@ use std::collections::HashMap;
 use std::slice;
 
 use calyx_ir as ir;
+use malachite::num::basic::traits::Zero;
 
 use super::components::{self as comp, ComponentManager};
 use crate::approx::{AddressSpec, Datapath, TableDomain, faithful, remez};
 use crate::hir::{self, Metadata, Pool, Visitor};
 use crate::opts::{Opts, RangeAnalysis as AnalysisMode};
 use crate::passes::analysis::RangeAnalysis;
-use crate::utils::{Diagnostic, Format, Mangle, Reporter};
+use crate::utils::mangling::{Hash, Mangle};
+use crate::utils::{Diagnostic, Format, Reporter};
 
 pub struct Prototype {
     pub name: ir::Id,
@@ -72,10 +74,10 @@ impl Visitor for Builder<'_, '_> {
         ctx: &hir::Context,
     ) -> Result<(), LibraryError> {
         if let hir::OpKind::Sollya(sollya) = op.kind {
-            let op = Operator::new(op, sollya, self.ctx);
+            let op = Operator::new(op, sollya, ctx);
 
             let prototype =
-                self.build(&self.ctx[idx], &op, args).map_err(|err| {
+                self.build(&ctx[idx], &op, args).map_err(|err| {
                     self.reporter.emit(&err);
 
                     LibraryError
@@ -95,6 +97,8 @@ impl<'a> Builder<'a, '_> {
         op: &Operator,
         args: hir::EntityList<hir::ExprIdx>,
     ) -> Result<Prototype, Diagnostic> {
+        static ZERO: hir::Rational = hir::Rational::ZERO;
+
         let domain = expr.props(self.ctx).find_map(|prop| match prop {
             hir::Property::Domain(domain) => Some(domain),
             _ => None,
@@ -108,11 +112,14 @@ impl<'a> Builder<'a, '_> {
         let domain = self.choose_domain(op, args, domain)?;
 
         match strategy {
-            Some(hir::Strategy::Lut { size }) => {
-                self.build_lut(op, &domain, *size)
+            Some(&hir::Strategy::Lut { size }) => {
+                self.build_lut(op, &domain, size)
             }
-            Some(hir::Strategy::Poly { degree }) => {
-                self.build_poly(op, &domain, *degree)
+            Some(&hir::Strategy::Poly { degree, error }) => {
+                let error =
+                    error.map(|error| &self.ctx[error].value).unwrap_or(&ZERO);
+
+                self.build_poly(op, &domain, degree, error)
             }
             None => Err(Diagnostic::error()
                 .with_message("operator with unspecified implementation")
@@ -157,21 +164,16 @@ impl<'a> Builder<'a, '_> {
     ) -> Result<Prototype, Diagnostic> {
         let (addr_spec, domain) = &domain.widen(op, self.format, size)?;
 
-        let degree = 0;
-        let scale = self.format.scale;
-
         let values =
-            &remez::build_table(&op.sollya, degree, domain, size, scale)
+            &remez::build_table(&op.sollya, 0, domain, size, self.format.scale)
                 .map_err(|err| {
                     Diagnostic::from_sollya_and_span(err, op.span)
                 })?;
 
-        let table_spec = TableSpec {
-            op: op.id(),
-            degree,
+        let table_spec = LutSpec {
+            op: op.mangle(),
             domain,
             size,
-            scale,
         };
 
         let data = comp::TableData {
@@ -191,7 +193,7 @@ impl<'a> Builder<'a, '_> {
 
         Ok(Prototype {
             name,
-            prefix_hint: op.prefix_hint(self.ctx),
+            prefix_hint: op.prefix_hint,
             signature,
             is_comb: true,
         })
@@ -202,12 +204,14 @@ impl<'a> Builder<'a, '_> {
         op: &Operator,
         domain: &DomainHint,
         degree: u32,
+        error: &hir::Rational,
     ) -> Result<Prototype, Diagnostic> {
+        let f = op.sollya.as_str();
         let DomainHint { left, right } = domain;
         let scale = self.format.scale;
 
         let size =
-            faithful::segment_domain(&op.sollya, degree, left, right, scale)
+            faithful::segment_domain(f, degree, left, right, scale, error)
                 .map_err(|err| {
                     Diagnostic::from_sollya_and_span(err, op.span)
                 })?;
@@ -215,19 +219,20 @@ impl<'a> Builder<'a, '_> {
         let (addr_spec, domain) = &domain.widen(op, self.format, size)?;
 
         let approx =
-            faithful::build_table(&op.sollya, degree, domain, size, scale)
+            faithful::build_table(f, degree, domain, size, scale, error)
                 .map_err(|err| {
                     Diagnostic::from_sollya_and_span(err, op.span)
                 })?;
 
-        let datapath = Datapath::from_approx(&approx, degree, scale);
+        let datapath = Datapath::from_approx(&approx, degree, scale, error);
 
-        let table_spec = TableSpec {
-            op: op.id(),
+        let table_spec = CoefficientSpec {
+            op: op.mangle(),
             degree,
             domain,
             size,
             scale: datapath.lut_scale,
+            error,
         };
 
         let data = comp::TableData {
@@ -250,23 +255,28 @@ impl<'a> Builder<'a, '_> {
 
         Ok(Prototype {
             name,
-            prefix_hint: op.prefix_hint(self.ctx),
+            prefix_hint: op.prefix_hint,
             signature,
             is_comb: false,
         })
     }
 }
 
-#[derive(Clone, Copy, Mangle)]
-struct OperatorId(u32);
+#[derive(Mangle)]
+struct LutSpec<'a> {
+    op: Hash,
+    domain: &'a TableDomain,
+    size: u32,
+}
 
 #[derive(Mangle)]
-struct TableSpec<'a> {
-    op: OperatorId,
+struct CoefficientSpec<'a> {
+    op: Hash,
     degree: u32,
     domain: &'a TableDomain,
     size: u32,
     scale: i32,
+    error: &'a hir::Rational,
 }
 
 struct DomainHint<'a> {
@@ -293,7 +303,7 @@ impl DomainHint<'_> {
 
 struct Operator {
     sollya: String,
-    idx: hir::SollyaIdx,
+    prefix_hint: ir::Id,
     span: hir::Span,
 }
 
@@ -305,16 +315,12 @@ impl Operator {
     ) -> Operator {
         Operator {
             sollya: idx.sollya(ctx).to_string(),
-            idx,
+            prefix_hint: idx.name(ctx).unwrap_or("f").into(),
             span: op.span,
         }
     }
 
-    fn id(&self) -> OperatorId {
-        OperatorId(self.idx.as_u32())
-    }
-
-    fn prefix_hint(&self, ctx: &hir::Context) -> ir::Id {
-        self.idx.name(ctx).unwrap_or("f").into()
+    fn mangle(&self) -> Hash {
+        Hash::new(&self.sollya)
     }
 }

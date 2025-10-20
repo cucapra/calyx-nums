@@ -27,9 +27,10 @@ impl Datapath {
         approx: &PolynomialApprox,
         degree: u32,
         scale: i32,
+        error: &Rational,
     ) -> Datapath {
         let lut_widths = table_ranges(&approx.table, degree, approx.scale);
-        let sum_scale = horner_precision(approx, degree, scale);
+        let sum_scale = horner_precision(approx, degree, scale, error);
 
         let HornerRanges {
             product_width,
@@ -62,14 +63,17 @@ pub fn horner_precision(
     approx: &PolynomialApprox,
     degree: u32,
     scale: i32,
+    error: &Rational,
 ) -> i32 {
-    assert!(approx.error.floor_log_base_2() < i64::from(scale) - 2);
-
     if degree == 0 {
         approx.scale
     } else {
+        let ulp = Rational::power_of_2(i64::from(scale));
+
         let error_target =
-            Rational::power_of_2(i64::from(scale) - 1) - &approx.error;
+            cmp::max(error, &ulp) - &approx.error - (ulp >> 1u32);
+
+        assert!(error_target > approx.error);
 
         let scale = (error_target / Rational::from(degree)).floor_log_base_2();
         let scale = i32::exact_from(scale);
