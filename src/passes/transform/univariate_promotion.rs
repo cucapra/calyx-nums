@@ -26,10 +26,10 @@ impl Visitor for UnivariatePromotion {
 
             for i in 0..=1 {
                 if let hir::ExprKind::Num(num) = ctx[ctx[args][i]].kind {
-                    let var = ctx.ops.push(hir::SollyaExpr::Variable);
-                    let num = ctx.ops.push(hir::SollyaExpr::Number(num));
+                    let var = ctx.ops.intern(hir::SollyaExpr::Variable);
+                    let num = ctx.ops.intern(hir::SollyaExpr::Number(num));
 
-                    let op = ctx.ops.push(if i == 0 {
+                    let op = ctx.ops.intern(if i == 0 {
                         hir::SollyaExpr::Binary(hir::SollyaBinOp::Pow, num, var)
                     } else {
                         hir::SollyaExpr::Binary(hir::SollyaBinOp::Pow, var, num)

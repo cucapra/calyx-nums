@@ -1,5 +1,6 @@
 mod context;
 mod index;
+mod interned;
 mod ir;
 mod lowering;
 mod sollya;

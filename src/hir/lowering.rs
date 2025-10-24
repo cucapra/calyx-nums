@@ -311,8 +311,8 @@ impl<'ast> Builder<'_, 'ast, '_> {
         if let Ok(op) = hir::ArithOp::try_from(kind) {
             Ok(hir::OpKind::Arith(op))
         } else if let Ok(f) = hir::SollyaFn::try_from(kind) {
-            let var = self.ctx.ops.push(hir::SollyaExpr::Variable);
-            let idx = self.ctx.ops.push(hir::SollyaExpr::Call(f, var));
+            let var = self.ctx.ops.intern(hir::SollyaExpr::Variable);
+            let idx = self.ctx.ops.intern(hir::SollyaExpr::Call(f, var));
 
             Ok(hir::OpKind::Sollya(idx))
         } else {

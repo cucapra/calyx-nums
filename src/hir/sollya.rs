@@ -3,6 +3,7 @@ use std::fmt;
 use super::Context;
 use super::index as idx;
 
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum SollyaExpr {
     Variable,
     Number(idx::NumIdx),
@@ -11,7 +12,7 @@ pub enum SollyaExpr {
     Call(SollyaFn, idx::SollyaIdx),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SollyaBinOp {
     Add,
     Sub,
@@ -32,7 +33,7 @@ impl SollyaBinOp {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[rustfmt::skip]
 pub enum SollyaFn {
     Sin,  Cos,   Tan,  Sinh,  Cosh,  Tanh,
